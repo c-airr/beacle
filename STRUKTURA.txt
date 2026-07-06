@@ -1,0 +1,225 @@
+================================================================================
+BEACLE — MAPA PROJEKTU (czytaj to PRZED grzebaniem w kodzie)
+================================================================================
+
+Czym jest Beacle:
+  Panel desktop do zarządzania VPS (monitoring, mapa, Docker, systemd,
+  reverse proxy). Trzy komponenty: Flutter app + Go backend + Go agent.
+
+Model działania (LOCAL-FIRST, zero zewnętrznego SaaS):
+  1. User pobiera beacle.exe (+ beacle-backend.exe w tym samym folderze)
+  2. Aplikacja uruchamia lokalny backend przy starcie (127.0.0.1:8930)
+  3. Na VPS: curl -sSL <hub-url>/install/<token> | bash  LUB  beacle set <token>
+  4. Token paruje VPS z kontem (pairing); agent łączy się outbound do HUB
+  Każdy user ma izolowane środowisko (własny backend, własne VPS).
+  NIE MA: centralnego hosted backendu, cross-user registry.
+
+================================================================================
+STRUKTURA MONOREPO
+================================================================================
+
+beacle/
+├── shared/          Wspólne typy Go (DTO, protokół wire) — ŹRÓDŁO PRAWDY dla API
+├── backend/         Serwer centralny (REST + WebSocket + registry + alerty)
+├── agent/           Agent na Linux VPS (monitoring, docker, proxy, systemd…)
+├── app/             Flutter desktop (Windows + Linux)
+├── scripts/         build.ps1, build.sh, start-dev.ps1
+├── go.work          Go workspace (shared + backend + agent)
+├── README.md        Szybki start dla człowieka
+├── STRUKTURA.txt    ← TEN PLIK
+└── shared/PROTOCOL.md  Szczegóły endpointów HTTP (dla agentów/devów)
+
+IGNORUJ (nie czytaj, nie edytuj):
+  app/build/, app/.dart_tool/, backend/data/state.json (runtime),
+  agent/dev-config*.json (lokalne dev), *.log, backend/data/bin/* (binarki)
+
+================================================================================
+ARCHITEKTURA KOMUNIKACJI (CGNAT-safe, outbound-only)
+================================================================================
+
+  [beacle.exe]  ──startuje──►  [beacle-backend :8930 lokalnie]
+       │                              │
+       │  REST + WS localhost         │  AgentHub (WS outbound od agentów)
+       └──────────────────────────────┤
+                                      │
+  [agent na VPS]  ──outbound WS/HTTP──┘
+       │
+       └── Docker, systemd, Caddy/NPM, /proc, porty… (lokalnie)
+
+  HUB = jeden VPS z publicznym IP (auto-wybór). Bez HUB → alert, brak sieci agentów.
+  Panel łączy się z lokalnym backendem; agenci łączą się outbound do HUB URL.
+  - Backend = jedyny punkt wejścia sieciowego; NIE inicjuje połączeń do agentów
+  - Agent utrzymuje outbound WebSocket do backendu; komendy idą przez ten kanał
+  - UI NIGDY nie łączy się bezpośrednio z agentem
+  - Brak inbound HTTP na agencie (port 8931 nie jest wymagany)
+  - VPS powstaje TYLKO przez auto-rejestrację agenta (POST /api/agents/register)
+  - POST /api/vps NIE ISTNIEJE (405) — nie dodawaj manual create
+  - Config agenta (/opt/beacle-agent/config.json) NIGDY nie jest nadpisywany
+    przez instalator ani update (tylko agent zapisuje token po 1. rejestracji)
+  - Panel zawsze łączy się z lokalnym backendem (127.0.0.1:8930)
+  - Backend bundlowany obok exe (app/lib/backend/embedded_backend.dart)
+  - Agent URL dla VPS: auto public IP lub override w Settings → VPS
+
+================================================================================
+shared/  — modele i protokół
+================================================================================
+
+  models.go       Wszystkie structy: VPS, metrics, docker, proxy, alerty, WS…
+  thresholds.go   Progi alertów (CPU 85%, RAM 90%…)
+  PROTOCOL.md     Tabela endpointów HTTP (agent↔backend, UI↔backend)
+
+  Flutter mirror: app/lib/models/models.dart (te same pola JSON)
+
+================================================================================
+backend/  — serwer Go
+================================================================================
+
+  main.go           Start serwera, CORS, addr :8930, BEACLE_PUBLIC_URL
+  api.go            WSZYSTKIE handlery HTTP + routing (Routes())
+  agent_hub.go      WebSocket hub agentów (komendy/reporty, outbound tunnel)
+  store.go          Registry VPS (JSON na dysku), snapshots w RAM, linki, alerty
+  hub.go            WebSocket fan-out do UI (WSMessage)
+  alerts.go         Silnik alertów (przejścia stanów, nie spam co 5s)
+  install_script.go Bash installer (GET /install) — uniwersalny, bez tokena
+  netutil.go        localIP()
+
+  data/
+    state.json      Persisted VPS registry (auto-generated, nie commituj)
+    bin/            beacle-agent-linux-amd64/arm64 + VERSION (dystrybucja)
+
+  tools/wstest/     Mały tester WebSocket (dev)
+
+  Endpointy UI (najważniejsze):
+    GET  /api/vps              lista VPS
+    GET  /api/vps/{id}         snapshot (GET) / edycja metadanych (PATCH) / delete
+    GET  /api/install-command  → "curl -sSL <base>/install | bash"
+    GET  /api/overview         vps + snapshots + alerts + actions + links
+    GET  /ws                   live updates (vps_update, vps_list, alert…)
+    GET  /install              bash installer
+    GET  /download/agent       binarka Linux
+
+  Endpointy agenta:
+    POST /api/agents/register  auto-register (bez tokena 1. raz) lub re-register
+    POST /api/agents/report    heartbeat + metryki (fallback HTTP outbound)
+    GET  /agent/ws             outbound WebSocket tunnel (raporty + komendy)
+
+================================================================================
+agent/  — agent Go (produkcja: Linux only)
+================================================================================
+
+  main.go           Start: register + outbound WS (brak inbound HTTP)
+  ws_client.go      WebSocket do backendu (raporty + dispatch komend)
+  config.go         Config JSON (backend_url; vps_id/token po rejestracji)
+  reporter.go       Register() auto-register + BuildReport()
+  api.go            Logika API agenta + Dispatch() (wywoływane z WS)
+  collector.go      Interfejs Collector
+  system_linux.go   Metryki z /proc, procesy, ping
+  docker_linux.go   Docker Engine API (unix socket)
+  services_linux.go systemd + screen
+  ports_linux.go    Kto używa portu + health check
+  proxy.go          ProxyManager (adapter pattern)
+  proxy_caddy.go    Adapter Caddy (pliki w /etc/caddy/beacle.d/)
+  proxy_npm.go      Adapter Nginx Proxy Manager (REST API)
+  updater.go        Self-update + rollback (config nietknięty)
+  system_other.go   Symulator dev (Windows/macOS — NIE produkcja)
+
+  Build Linux:  GOOS=linux GOARCH=amd64 go build -o ../backend/data/bin/…
+
+================================================================================
+app/  — Flutter desktop
+================================================================================
+
+  lib/
+    main.dart              Entry; EmbeddedBackend + AppShell
+    config.dart            localBackendUrl (127.0.0.1:8930)
+    backend/embedded_backend.dart  Uruchamia beacle-backend przy starcie
+    local_settings.dart    agent_public_url override (APPDATA)
+    theme.dart             Dark theme (BeacleColors)
+    api/api_client.dart    REST klient (wszystko przez backend proxy)
+    state/app_state.dart   Provider: VPS list, snapshots, WS, hub status, alerty
+    models/models.dart     Dart DTO (mirror shared/models.go)
+
+    screens/
+      shell.dart           Nawigacja boczna + top bar + alert toasty
+      overview_screen.dart Dashboard
+      metrics_screen.dart  CPU/RAM/disk per VPS
+      alerts_screen.dart   Alerty (CPU, down, offline, hub)
+      map/map_screen.dart  Mapa infrastruktury (dokładne współrzędne, linki latency)
+      servers_screen.dart  Szczegóły VPS (CPU/RAM/disk/procesy/porty)
+      docker_screen.dart   Kontenery, images, compose
+      proxy_screen.dart    Reverse proxy GUI + port checker
+      services_screen.dart systemd + screen
+      settings_screen.dart VPS pairing, updates, status
+
+    widgets/common.dart    PanelCard, MetricBar, CopyField, HoverRow…
+    widgets/alerts_panel.dart
+    update/app_updater.dart  GitHub Releases self-update
+
+  assets/world.json        GeoJSON mapy (Natural Earth 110m)
+
+  Build: flutter build windows --release
+  Output: app/build/windows/x64/runner/Release/beacle.exe
+
+================================================================================
+GDZIE SZUKAĆ PRZY ZMIANACH (szybki lookup)
+================================================================================
+
+  Zmiana                          Pliki
+  ─────────────────────────────────────────────────────────────────────────
+  Nowy endpoint API               backend/api.go (+ shared/models.go jeśli DTO)
+  Nowy typ wire / JSON            shared/models.go + app/lib/models/models.dart
+  Auto-rejestracja agenta         backend/api.go handleAgentRegister
+                                  agent/reporter.go Register()
+  Installer bash                  backend/install_script.go
+  Nowa metryka systemowa          agent/system_linux.go + shared/models.go
+  Docker operacja                 agent/docker_linux.go + agent/api.go
+  Reverse proxy provider          agent/proxy_*.go (nowy adapter w proxy.go)
+  Alert nowy typ                  backend/alerts.go + shared/models.go
+  WebSocket event                 backend/hub.go + shared/models.go WSMessageType
+  Nowy ekran UI                   app/lib/screens/ + shell.dart (nav item)
+  Pairing token / install         backend/pairing.go, install_script.go
+                                  app/widgets/add_vps_dialog.dart
+                                  api_client.dart createPairingToken()
+  Hub election                    backend/hub_elect.go, hub_elect on register
+  Mapa (markery, linki)           app/lib/screens/map/map_screen.dart
+  Backend URL appki               app/lib/config.dart (localhost, embedded)
+  Embedded backend                app/lib/backend/embedded_backend.dart
+  Agent URL (VPS install)         Settings → VPS, local_settings.dart
+  Protokół dokumentacja           shared/PROTOCOL.md
+
+================================================================================
+BUILD & URUCHOMIENIE (Windows dev)
+================================================================================
+
+  Backend:
+    cd backend && go build -o beacle-backend.exe .
+    $env:BEACLE_PUBLIC_URL='http://127.0.0.1:8930'
+    .\beacle-backend.exe -addr :8930
+
+  Agent dev (symulator na Windows):
+    cd agent && go build -o beacle-agent.exe .
+    .\beacle-agent.exe -config dev-config.json
+    (config: tylko backend_url — reszta auto; brak inbound portu)
+
+  Flutter:
+    cd app && flutter pub get
+    flutter run -d windows --dart-define=BEACLE_BACKEND=http://127.0.0.1:8930
+    # lub gotowy exe:
+    app\build\windows\x64\runner\Release\beacle.exe
+
+  Wszystko naraz: scripts\start-dev.ps1
+
+================================================================================
+KONWENCJE
+================================================================================
+
+  - JSON tagi w shared/ = kontrakt wire, nie zmieniaj bez bumpu protokołu
+  - Go moduły: beacle/shared, beacle/backend, beacle/agent (go.work)
+  - Flutter state: Provider (AppState), nie BLoC
+  - Proxy: adapter pattern (Caddy primary, NPM secondary), wspólne UI
+  - Edycja VPS (PATCH): tylko metadane (name, location, lat/lon) — nie tworzenie
+  - Commituj kod, nie commituj: backend/data/, build/, dev-config*, *.log
+
+================================================================================
+KONIEC — przy większości zadań wystarczy ten plik + 2-4 pliki z lookup powyżej
+================================================================================

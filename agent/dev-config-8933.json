@@ -1,0 +1,5 @@
+{
+  "backend_url": "http://127.0.0.1:8930",
+  "listen_port": 8933,
+  "report_interval_seconds": 3
+}
