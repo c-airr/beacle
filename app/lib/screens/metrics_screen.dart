@@ -46,17 +46,6 @@ class _VpsMetricsCard extends StatelessWidget {
                 StatusDot(vps.status),
                 const SizedBox(width: 10),
                 Text(vps.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                if (vps.isHub) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: BeacleColors.borderGlow),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text('HUB', style: TextStyle(fontSize: 9, letterSpacing: 1)),
-                  ),
-                ],
                 const Spacer(),
                 Text(vps.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
               ],

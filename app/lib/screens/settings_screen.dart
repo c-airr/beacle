@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../backend/embedded_backend.dart';
 import '../config.dart';
-import '../local_settings.dart';
+import '../paths.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../update/app_updater.dart';
@@ -70,19 +69,22 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const _HubStatusCard(),
-        const SizedBox(height: 16),
-        const _AgentUrlCard(),
+        PanelCard(
+          title: 'TAILSCALE',
+          child: const Text(
+            'VPS are discovered via your Tailscale network. Each server must have Tailscale and the Beacle agent installed.',
+            style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+          ),
+        ),
         const SizedBox(height: 16),
         PanelCard(
           title: 'ADD VPS',
-          trailing: SmallButton('Generate token', icon: Icons.add_link, onPressed: () => showAddVpsDialog(context)),
+          trailing: SmallButton('Add VPS', icon: Icons.add, onPressed: () => showAddVpsDialog(context)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Generate a pairing token, then run the install command on your Linux VPS as root. '
-                'The agent registers itself and appears in Overview / Servers.',
+                'Select a Tailscale device, then run the install command on that VPS as root.',
                 style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
               const SizedBox(height: 14),
@@ -249,8 +251,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Panel API: $localBackendUrl (embedded, starts with the app)',
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                'Data: ${BeaclePaths.dataDir}',
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
               ),
               const SizedBox(height: 8),
               Text(
@@ -261,134 +263,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HubStatusCard extends StatelessWidget {
-  const _HubStatusCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final color = state.hubActive ? BeacleColors.ok : BeacleColors.warn;
-    return PanelCard(
-      title: 'NETWORK HUB',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(state.hubActive ? Icons.hub : Icons.warning_amber_outlined, size: 16, color: color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  state.hubActive ? 'Hub active' : 'No hub node',
-                  style: TextStyle(fontSize: 13, color: color),
-                ),
-              ),
-            ],
-          ),
-          if (state.hubUrl != null && state.hubUrl!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('Hub URL: ${state.hubUrl}', style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim)),
-          ],
-          if (state.hubMessage != null) ...[
-            const SizedBox(height: 8),
-            Text(state.hubMessage!, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _AgentUrlCard extends StatefulWidget {
-  const _AgentUrlCard();
-
-  @override
-  State<_AgentUrlCard> createState() => _AgentUrlCardState();
-}
-
-class _AgentUrlCardState extends State<_AgentUrlCard> {
-  late final TextEditingController _ctrl =
-      TextEditingController(text: LocalSettings.agentPublicUrlOverride ?? '');
-  String? _detected;
-  bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshDetected();
-  }
-
-  Future<void> _refreshDetected() async {
-    final url = await LocalSettings.resolveAgentPublicUrl();
-    if (mounted) setState(() => _detected = url);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PanelCard(
-      title: 'AGENT CONNECTION URL',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Remote VPS agents connect outbound to this URL (your local Beacle backend). '
-            'Auto-detected from your public IP. Override if you use port forwarding or a tunnel.',
-            style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
-          ),
-          if (_detected != null) ...[
-            const SizedBox(height: 10),
-            Text('Active: $_detected', style: const TextStyle(fontSize: 12, fontFamily: 'Consolas')),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: _ctrl,
-            decoration: const InputDecoration(
-              labelText: 'Override URL (optional)',
-              hintText: 'http://your-public-ip:8930',
-            ),
-            style: const TextStyle(fontSize: 12, fontFamily: 'Consolas'),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            children: [
-              SmallButton('Save & restart backend', icon: Icons.save, onPressed: _busy ? null : () async {
-                setState(() => _busy = true);
-                LocalSettings.agentPublicUrlOverride =
-                    _ctrl.text.trim().isEmpty ? null : _ctrl.text.trim();
-                await EmbeddedBackend.instance.restart();
-                await _refreshDetected();
-                if (context.mounted) {
-                  context.read<AppState>().refreshAll();
-                  setState(() => _busy = false);
-                  showToast(context, 'Backend restarted with new agent URL');
-                }
-              }),
-              SmallButton('Auto-detect', icon: Icons.refresh, onPressed: _busy ? null : () async {
-                setState(() => _busy = true);
-                LocalSettings.agentPublicUrlOverride = null;
-                _ctrl.clear();
-                await EmbeddedBackend.instance.restart();
-                await _refreshDetected();
-                if (context.mounted) {
-                  context.read<AppState>().refreshAll();
-                  setState(() => _busy = false);
-                }
-              }),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

@@ -1,7 +1,0 @@
-{
-    "vps_id":  "2606dd6c692b6ee0",
-    "backend_url":  "http://127.0.0.1:8930",
-    "report_interval_seconds":  3,
-    "token":  "ce01ec1e7ed87b0408b898ced282dbdb5346ec8e4ba2b5ad",
-    "listen_port":  8932
-}

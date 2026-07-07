@@ -248,15 +248,15 @@ class PingResult {
 }
 
 class Vps {
-  final String id, name, host, location, status, agentVersion;
+  final String id, name, host, tailscaleName, location, status, agentVersion;
   final double latitude, longitude;
   final int weight, agentPort;
-  final bool isHub, hasPublicIp;
   final DateTime createdAt, lastSeen;
   Vps.fromJson(Map<String, dynamic> j)
       : id = _s(j['id']),
         name = _s(j['name']),
         host = _s(j['host']),
+        tailscaleName = _s(j['tailscale_name']),
         location = _s(j['location']),
         status = _s(j['status']),
         agentVersion = _s(j['agent_version']),
@@ -264,8 +264,6 @@ class Vps {
         longitude = _d(j['longitude']),
         weight = _i(j['weight']),
         agentPort = _i(j['agent_port']),
-        isHub = _b(j['is_hub']),
-        hasPublicIp = _b(j['has_public_ip']),
         createdAt = _dt(j['created_at']),
         lastSeen = _dt(j['last_seen']);
 

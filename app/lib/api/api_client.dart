@@ -4,11 +4,26 @@ import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
 
-class PairingInfo {
-  final String token;
-  final String installCommand;
-  final String setCommand;
-  PairingInfo({required this.token, required this.installCommand, required this.setCommand});
+class TailscaleDevice {
+  final String name, dns, os;
+  final List<String> ips;
+  final bool online, self;
+  TailscaleDevice({
+    required this.name,
+    required this.dns,
+    required this.ips,
+    required this.os,
+    required this.online,
+    required this.self,
+  });
+  factory TailscaleDevice.fromJson(Map<String, dynamic> j) => TailscaleDevice(
+        name: j['name'] as String? ?? '',
+        dns: j['dns'] as String? ?? '',
+        ips: ((j['ips'] as List?) ?? []).map((e) => e as String).toList(),
+        os: j['os'] as String? ?? '',
+        online: j['online'] == true,
+        self: j['self'] == true,
+      );
 }
 
 class ApiException implements Exception {
@@ -53,8 +68,6 @@ class ApiClient {
   Future<dynamic> put(String path, {Object? body}) => _req('PUT', path, body: body);
   Future<dynamic> delete(String path) => _req('DELETE', path);
 
-  // --- backend ---
-
   Future<bool> health() async {
     try {
       final r = await get('/api/health');
@@ -63,6 +76,21 @@ class ApiClient {
       return false;
     }
   }
+
+  Future<List<TailscaleDevice>> tailscaleDevices() async =>
+      ((await get('/api/tailscale/devices')) as List? ?? [])
+          .map((e) => TailscaleDevice.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+  Future<Vps> createVps({required String name, required String tailscaleName, required String tailscaleIp}) async =>
+      Vps.fromJson(await post('/api/vps', body: {
+        'name': name,
+        'tailscale_name': tailscaleName,
+        'tailscale_ip': tailscaleIp,
+      }));
+
+  Future<String> installCommand() async =>
+      ((await get('/api/install-command')) as Map)['install_command'] as String;
 
   Future<List<Vps>> listVps() async =>
       ((await get('/api/vps')) as List? ?? []).map((e) => Vps.fromJson(e)).toList();
@@ -74,19 +102,6 @@ class ApiClient {
 
   Future<VpsSnapshot> snapshot(String id) async =>
       VpsSnapshot.fromJson(await get('/api/vps/$id'));
-
-  Future<PairingInfo> createPairingToken() async {
-    final j = (await post('/api/pairing/tokens', body: {})) as Map<String, dynamic>;
-    return PairingInfo(
-      token: j['token'] as String,
-      installCommand: j['install_command'] as String,
-      setCommand: j['set_command'] as String,
-    );
-  }
-
-  @Deprecated('use createPairingToken')
-  Future<String> installCommand() async =>
-      (await createPairingToken()).installCommand;
 
   Future<Map<String, dynamic>> overview() async =>
       (await get('/api/overview')) as Map<String, dynamic>;
@@ -103,8 +118,6 @@ class ApiClient {
       VpsLink.fromJson(await post('/api/links', body: {'from_vps_id': from, 'to_vps_id': to}));
 
   Future<void> deleteLink(String id) => delete('/api/links/$id');
-
-  // --- agent proxy ---
 
   String _a(String vpsId, String rest) => '/api/vps/$vpsId/agent/$rest';
 

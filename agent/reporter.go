@@ -69,13 +69,13 @@ func (r *Reporter) postBody(path string, v any) ([]byte, error) {
 func (r *Reporter) Register() {
 	hostname, _ := os.Hostname()
 	req := shared.RegisterRequest{
-		VPSID:        r.cfg.VPSID,
-		PairingToken: r.cfg.PairingToken,
-		Hostname:     hostname,
-		AgentVersion: AgentVersion,
-		AgentPort:    0,
-		PublicIP:     fetchPublicIP(),
-		OS:           runtime.GOOS + "/" + runtime.GOARCH,
+		VPSID:         r.cfg.VPSID,
+		Hostname:      hostname,
+		TailscaleName: tailscaleName(),
+		TailscaleIP:   tailscaleIPv4(),
+		AgentVersion:  AgentVersion,
+		AgentPort:     0,
+		OS:            runtime.GOOS + "/" + runtime.GOARCH,
 	}
 	for {
 		body, err := r.postBody("/api/agents/register", req)
@@ -90,10 +90,9 @@ func (r *Reporter) Register() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		if resp.Token != "" { // first registration: persist assigned credentials
+		if resp.Token != "" {
 			r.cfg.VPSID = resp.VPSID
 			r.cfg.Token = resp.Token
-			r.cfg.PairingToken = ""
 			if err := r.cfg.Save(); err != nil {
 				log.Printf("warning: could not persist credentials: %v", err)
 			}

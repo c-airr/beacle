@@ -230,13 +230,13 @@ type ProxyValidateResult struct {
 // and returns the assigned ID + token. Returning agents authenticate with
 // their token (Authorization: Bearer).
 type RegisterRequest struct {
-	VPSID         string `json:"vps_id,omitempty"`
-	PairingToken  string `json:"pairing_token,omitempty"`
-	Hostname      string `json:"hostname"`
-	AgentVersion  string `json:"agent_version"`
-	AgentPort     int    `json:"agent_port"`
-	PublicIP      string `json:"public_ip"`
-	OS            string `json:"os"`
+	VPSID          string `json:"vps_id,omitempty"`
+	Hostname       string `json:"hostname"`
+	TailscaleName  string `json:"tailscale_name"`
+	TailscaleIP    string `json:"tailscale_ip"`
+	AgentVersion   string `json:"agent_version"`
+	AgentPort      int    `json:"agent_port"`
+	OS             string `json:"os"`
 }
 
 type RegisterResponse struct {
@@ -317,20 +317,26 @@ const (
 )
 
 type VPS struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Host        string    `json:"host"` // IP or domain
-	Latitude    float64   `json:"latitude"`
-	Longitude   float64   `json:"longitude"`
-	Location    string    `json:"location"` // label, e.g. "Frankfurt"
-	Weight      int       `json:"weight"`   // importance, affects marker size
-	Status      VPSStatus `json:"status"`
-	AgentPort   int       `json:"agent_port"`
-	AgentVer    string    `json:"agent_version"`
-	IsHub       bool      `json:"is_hub"`
-	HasPublicIP bool      `json:"has_public_ip"`
-	CreatedAt   time.Time `json:"created_at"`
-	LastSeen    time.Time `json:"last_seen"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Host          string    `json:"host"` // Tailscale IPv4
+	TailscaleName string    `json:"tailscale_name"`
+	Latitude      float64   `json:"latitude"`
+	Longitude     float64   `json:"longitude"`
+	Location      string    `json:"location"`
+	Weight        int       `json:"weight"`
+	Status        VPSStatus `json:"status"`
+	AgentPort     int       `json:"agent_port"`
+	AgentVer      string    `json:"agent_version"`
+	CreatedAt     time.Time `json:"created_at"`
+	LastSeen      time.Time `json:"last_seen"`
+}
+
+// CreateVPSRequest adds a server from the Tailscale device list (onboarding).
+type CreateVPSRequest struct {
+	Name          string `json:"name"`
+	TailscaleName string `json:"tailscale_name"`
+	TailscaleIP   string `json:"tailscale_ip"`
 }
 
 // UpdateVPSRequest edits metadata of an auto-registered VPS (display name,
@@ -378,7 +384,6 @@ const (
 	AlertDockerCrash  AlertType = "docker_crash"
 	AlertProxyError   AlertType = "proxy_error"
 	AlertAgentOffline AlertType = "agent_offline"
-	AlertHubMissing   AlertType = "hub_missing"
 )
 
 type Alert struct {

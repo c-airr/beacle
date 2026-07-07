@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 )
 
 func main() {
 	var (
 		addr    = flag.String("addr", ":8930", "listen address")
-		baseURL = flag.String("base-url", "", "public URL of this backend (used in install commands); overrides BEACLE_PUBLIC_URL")
+		baseURL = flag.String("base-url", "", "Tailscale URL of this backend for install commands")
 		dataDir = flag.String("data", "./data", "data directory")
 	)
 	flag.Parse()
@@ -24,14 +23,14 @@ func main() {
 	alerts := NewAlertEngine(store, hub)
 	agentHub := NewAgentHub(store, hub, alerts)
 
-	base := os.Getenv("BEACLE_PUBLIC_URL")
-	if *baseURL != "" {
-		base = *baseURL
-	}
+	base := *baseURL
 	if base == "" {
-		// Local-first: install commands use LAN/public best-effort URL.
-		base = fmt.Sprintf("http://%s%s", localIP(), *addr)
-		log.Printf("beacle: no public URL set, using %s for agent install commands", base)
+		if ip := tailscaleSelfIPv4(); ip != "" {
+			base = fmt.Sprintf("http://%s:8930", ip)
+		} else {
+			base = fmt.Sprintf("http://127.0.0.1%s", *addr)
+			log.Printf("beacle: tailscale not available, install commands use %s", base)
+		}
 	}
 
 	srv := &Server{
@@ -46,7 +45,7 @@ func main() {
 	go alerts.WatchOffline()
 	go srv.LinkMonitor()
 
-	log.Printf("beacle backend listening on %s (public URL %s)", *addr, base)
+	log.Printf("beacle backend listening on %s (agents via Tailscale: %s)", *addr, base)
 	if err := http.ListenAndServe(*addr, withCORS(srv.Routes())); err != nil {
 		log.Fatal(err)
 	}

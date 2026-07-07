@@ -145,23 +145,6 @@ class AppShellState extends State<AppShell> {
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 4, color: BeacleColors.text),
             ),
           ),
-          if (!state.hubActive)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: BeacleColors.warn.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: BeacleColors.warn.withValues(alpha: 0.25)),
-                ),
-                child: const Text(
-                  'No hub node — add a VPS with public IP',
-                  style: TextStyle(fontSize: 10, color: BeacleColors.warn, height: 1.35),
-                ),
-              ),
-            ),
           for (var i = 0; i < _items.length; i++)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
@@ -195,7 +178,7 @@ class AppShellState extends State<AppShell> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    state.connected ? 'Hub connected' : 'Offline',
+                    state.connected ? 'Connected' : 'Offline',
                     style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                   ),
                 ),
@@ -218,9 +201,6 @@ class AppShellState extends State<AppShell> {
         children: [
           Text(_items[index].$2, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
           const Spacer(),
-          if (state.hubUrl != null)
-            Text(state.hubUrl!, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
-          const SizedBox(width: 12),
           Text(
             '${state.vpsList.where((v) => v.online).length}/${state.vpsList.length} online',
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),

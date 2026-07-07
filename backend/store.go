@@ -19,13 +19,10 @@ type VPSEntry struct {
 }
 
 type persistedState struct {
-	VPS       map[string]*VPSEntry       `json:"vps"`
-	Links     map[string]*shared.VPSLink `json:"links"`
-	Alerts    []shared.Alert             `json:"alerts"`
-	Actions   []shared.ActionLog         `json:"actions"`
-	HubVPSID  string                     `json:"hub_vps_id,omitempty"`
-	HubURL    string                     `json:"hub_url,omitempty"`
-	Pairing   map[string]*pairingEntry   `json:"pairing,omitempty"`
+	VPS     map[string]*VPSEntry       `json:"vps"`
+	Links   map[string]*shared.VPSLink `json:"links"`
+	Alerts  []shared.Alert             `json:"alerts"`
+	Actions []shared.ActionLog         `json:"actions"`
 }
 
 // Store keeps the registry on disk (JSON file) and live snapshots in memory.
@@ -60,6 +57,12 @@ func NewStore(dataDir string) (*Store, error) {
 	return s, nil
 }
 
+func (s *Store) Persist() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.persistLocked()
+}
+
 func (s *Store) persistLocked() {
 	b, err := json.MarshalIndent(&s.state, "", "  ")
 	if err != nil {
@@ -84,6 +87,53 @@ func newToken() string {
 }
 
 // --- VPS registry ----------------------------------------------------------
+
+// CreateVPS adds a server from Tailscale (onboarding). Agent connects later.
+func (s *Store) CreateVPS(name, tailscaleName, tailscaleIP string) *VPSEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.state.VPS {
+		if e.VPS.TailscaleName == tailscaleName || (tailscaleIP != "" && e.VPS.Host == tailscaleIP) {
+			return e
+		}
+	}
+	entry := &VPSEntry{
+		VPS: shared.VPS{
+			ID:            newID(),
+			Name:          name,
+			Host:          tailscaleIP,
+			TailscaleName: tailscaleName,
+			Weight:        1,
+			Status:        shared.VPSPending,
+			AgentPort:     shared.DefaultAgentPort,
+			CreatedAt:     time.Now().UTC(),
+			LastSeen:      time.Now().UTC(),
+		},
+	}
+	s.state.VPS[entry.VPS.ID] = entry
+	s.persistLocked()
+	return entry
+}
+
+// FindPendingByTailscale matches a pre-added VPS waiting for its agent.
+func (s *Store) FindPendingByTailscale(name, ip string) *VPSEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, e := range s.state.VPS {
+		if e.AgentToken != "" {
+			continue
+		}
+		if name != "" && e.VPS.TailscaleName == name {
+			c := *e
+			return &c
+		}
+		if ip != "" && e.VPS.Host == ip {
+			c := *e
+			return &c
+		}
+	}
+	return nil
+}
 
 // AutoRegisterVPS creates a VPS entry for a first-time agent registration.
 // This is the ONLY way VPS entries come into existence - there is no manual

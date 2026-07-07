@@ -3,58 +3,88 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../config.dart';
-import '../local_settings.dart';
+import '../paths.dart';
 
-/// Starts the bundled Go backend alongside the desktop app (local-first).
+/// Starts the bundled Go backend with the desktop app; shuts down on exit.
 class EmbeddedBackend {
   EmbeddedBackend._();
   static final EmbeddedBackend instance = EmbeddedBackend._();
 
   Process? _process;
-  bool _weStarted = false;
 
   Future<void> ensureRunning() async {
-    if (await _healthy()) return;
+    await _stopStaleBackend();
+
+    if (_process != null && await _healthy()) return;
 
     final bin = _findBinary();
     if (bin == null) {
-      debugPrint('beacle: embedded backend binary not found');
+      debugPrint('beacle: backend binary not found');
       return;
     }
 
-    final dataDir = _dataDir();
-    Directory(dataDir).createSync(recursive: true);
+    BeaclePaths.ensureDirs();
+    _seedAgentBinaries(bin.parent.path);
 
-    final publicUrl = await LocalSettings.resolveAgentPublicUrl();
-    final args = ['-addr', ':8930', '-data', dataDir, '-base-url', publicUrl];
+    final args = ['-addr', ':8930', '-data', BeaclePaths.dataDir];
 
-    debugPrint('beacle: starting embedded backend ($publicUrl)');
+    debugPrint('beacle: starting backend (${BeaclePaths.dataDir})');
     _process = await Process.start(
       bin.path,
       args,
       workingDirectory: bin.parent.path,
     );
-    _weStarted = true;
 
-    for (var i = 0; i < 40; i++) {
+    for (var i = 0; i < 60; i++) {
       await Future.delayed(const Duration(milliseconds: 250));
-      if (await _healthy()) return;
+      if (await _healthy()) {
+        debugPrint('beacle: backend ready');
+        return;
+      }
     }
-    debugPrint('beacle: embedded backend did not become healthy in time');
+    debugPrint('beacle: backend did not become healthy in time');
   }
 
-  Future<void> restart() async {
-    await stop();
-    await ensureRunning();
+  /// Stops a leftover backend from a previous session so we never talk to stale API.
+  Future<void> _stopStaleBackend() async {
+    if (_process != null) return;
+    if (!await _healthy()) return;
+
+    debugPrint('beacle: stopping stale backend on :8930');
+    try {
+      final client = HttpClient();
+      final req = await client.postUrl(Uri.parse('$localBackendUrl/api/shutdown'));
+      req.headers.set('Content-Type', 'application/json');
+      await req.close().timeout(const Duration(seconds: 2));
+      client.close();
+      await Future.delayed(const Duration(milliseconds: 400));
+    } catch (_) {}
+
+    if (await _healthy() && Platform.isWindows) {
+      try {
+        await Process.run('taskkill', ['/IM', 'beacle-backend.exe', '/F'], runInShell: true);
+        await Future.delayed(const Duration(milliseconds: 400));
+      } catch (_) {}
+    }
   }
 
   Future<void> stop() async {
-    if (_process != null) {
+    if (_process == null) return;
+    try {
+      final client = HttpClient();
+      final req = await client.postUrl(Uri.parse('$localBackendUrl/api/shutdown'));
+      req.headers.set('Content-Type', 'application/json');
+      await req.close().timeout(const Duration(seconds: 2));
+      client.close();
+    } catch (_) {}
+
+    try {
+      await _process!.exitCode.timeout(const Duration(seconds: 5));
+    } catch (_) {
       _process!.kill();
-      await _process!.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => 0);
-      _process = null;
+      await _process!.exitCode.timeout(const Duration(seconds: 2), onTimeout: () => 0);
     }
-    _weStarted = false;
+    _process = null;
   }
 
   Future<bool> _healthy() async {
@@ -70,12 +100,10 @@ class EmbeddedBackend {
   }
 
   File? _findBinary() {
-    final name = Platform.isWindows ? 'beacle-backend.exe' : 'beacle-backend';
-    final exeDir = File(Platform.resolvedExecutable).parent;
     final candidates = <String>[
-      '${exeDir.path}${Platform.pathSeparator}$name',
-      '${Directory.current.path}${Platform.pathSeparator}backend${Platform.pathSeparator}$name',
-      '${Directory.current.path}${Platform.pathSeparator}..${Platform.pathSeparator}backend${Platform.pathSeparator}$name',
+      BeaclePaths.backendBinary,
+      '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}${BeaclePaths.backendBinaryName()}',
+      '${Directory.current.path}${Platform.pathSeparator}backend${Platform.pathSeparator}${BeaclePaths.backendBinaryName()}',
     ];
     for (final p in candidates) {
       final f = File(p);
@@ -84,10 +112,30 @@ class EmbeddedBackend {
     return null;
   }
 
-  String _dataDir() {
-    final exeDir = File(Platform.resolvedExecutable).parent;
-    final bundled = '${exeDir.path}${Platform.pathSeparator}data';
-    if (Directory(bundled).existsSync()) return bundled;
-    return '${Directory.current.path}${Platform.pathSeparator}backend${Platform.pathSeparator}data';
+  void _seedAgentBinaries(String backendDir) {
+    final dest = '${BeaclePaths.dataDir}${Platform.pathSeparator}bin';
+    Directory(dest).createSync(recursive: true);
+
+    final sources = <String>[
+      '$backendDir${Platform.pathSeparator}data${Platform.pathSeparator}bin',
+      '${Directory.current.path}${Platform.pathSeparator}dist${Platform.pathSeparator}agent',
+    ];
+  // Also try repo dist relative to executable (dev builds from Release/)
+    final exeParent = File(Platform.resolvedExecutable).parent.path;
+    sources.addAll([
+      '$exeParent${Platform.pathSeparator}data${Platform.pathSeparator}bin',
+      '$exeParent${Platform.pathSeparator}..${Platform.pathSeparator}..${Platform.pathSeparator}..${Platform.pathSeparator}..${Platform.pathSeparator}dist${Platform.pathSeparator}agent',
+    ]);
+
+    for (final src in sources) {
+      if (!Directory(src).existsSync()) continue;
+      for (final f in Directory(src).listSync(recursive: true)) {
+        if (f is! File) continue;
+        final name = f.uri.pathSegments.last;
+        if (!name.contains('beacle-agent') && name != 'VERSION') continue;
+        final out = File('$dest${Platform.pathSeparator}$name');
+        if (!out.existsSync()) f.copySync(out.path);
+      }
+    }
   }
 }

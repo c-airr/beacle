@@ -15,7 +15,6 @@ type Config struct {
 	BackendURL     string `json:"backend_url"`
 	VPSID          string `json:"vps_id,omitempty"`
 	Token          string `json:"token,omitempty"`
-	PairingToken   string `json:"pairing_token,omitempty"`
 	ListenPort     int    `json:"listen_port"`
 	ReportInterval int    `json:"report_interval_seconds"`
 

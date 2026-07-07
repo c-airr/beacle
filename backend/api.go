@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -82,7 +83,7 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 					e.VPS.AgentPort = req.AgentPort
 				}
 				if e.VPS.Host == "" {
-					e.VPS.Host = agentHost(r, req.PublicIP)
+					e.VPS.Host = agentHost(r, req.TailscaleIP)
 				}
 			})
 			log.Printf("agent re-registered: %s (%s) v%s", updated.VPS.Name, req.Hostname, req.AgentVersion)
@@ -96,22 +97,35 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// First-time agent: requires valid pairing token.
-	if req.PairingToken == "" {
-		writeErr(w, http.StatusUnauthorized, "pairing token required")
+	// First-time agent: must match a VPS added in Beacle (Tailscale identity).
+	tsIP := req.TailscaleIP
+	if tsIP == "" {
+		tsIP = agentHost(r, "")
+	}
+	tsName := req.TailscaleName
+	if tsName == "" {
+		tsName = req.Hostname
+	}
+	pending := s.store.FindPendingByTailscale(tsName, tsIP)
+	if pending == nil {
+		writeErr(w, http.StatusUnauthorized, "no matching VPS — add this server in Beacle first")
 		return
 	}
-	if !s.store.consumePairingToken(req.PairingToken) {
-		writeErr(w, http.StatusUnauthorized, "invalid or expired pairing token")
-		return
-	}
-	host := agentHost(r, req.PublicIP)
-	entry := s.store.AutoRegisterVPS(req.Hostname, host, req.AgentPort, req.AgentVersion)
-	s.store.MarkPublicIP(entry.VPS.ID, host)
-	s.store.TryElectHub(entry.VPS.ID, host)
-	s.checkHubAlert()
-	log.Printf("agent auto-registered: %s (%s) -> vps %s", req.Hostname, host, entry.VPS.ID)
-	s.logAction(entry.VPS, "vps_register", "VPS auto-registered by agent", true)
+	entry := s.store.UpdateVPS(pending.VPS.ID, func(e *VPSEntry) {
+		if e.AgentToken == "" {
+			e.AgentToken = newToken()
+		}
+		e.VPS.Status = shared.VPSOnline
+		e.VPS.LastSeen = time.Now().UTC()
+		e.VPS.AgentVer = req.AgentVersion
+		e.VPS.Host = tsIP
+		e.VPS.TailscaleName = tsName
+		if req.AgentPort > 0 {
+			e.VPS.AgentPort = req.AgentPort
+		}
+	})
+	log.Printf("agent registered: %s (%s) -> vps %s", req.Hostname, tsIP, entry.VPS.ID)
+	s.logAction(entry.VPS, "vps_register", "Agent connected via Tailscale", true)
 	s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
 	writeJSON(w, http.StatusOK, shared.RegisterResponse{
 		OK:             "registered",
@@ -213,26 +227,52 @@ func (s *Server) handleVPSByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleInstallCommand returns the universal one-line installer. It is the
-// same for every VPS - agents auto-register, so no per-VPS token is baked in.
+func (s *Server) handleCreateVPS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "POST only")
+		return
+	}
+	var req shared.CreateVPSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	if req.TailscaleName == "" && req.TailscaleIP == "" {
+		writeErr(w, http.StatusBadRequest, "tailscale_name or tailscale_ip required")
+		return
+	}
+	name := req.Name
+	if name == "" {
+		name = req.TailscaleName
+	}
+	entry := s.store.CreateVPS(name, req.TailscaleName, req.TailscaleIP)
+	s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
+	writeJSON(w, http.StatusOK, entry.VPS)
+}
+
 func (s *Server) handleInstallCommand(w http.ResponseWriter, r *http.Request) {
-	writeErr(w, http.StatusGone, "generate a pairing token via POST /api/pairing/tokens")
+	base := s.backendURL()
+	writeJSON(w, http.StatusOK, map[string]string{
+		"install_command": vpsInstallCommand(base),
+		"backend_url":     base,
+		"agent_url":       agentBinaryURL,
+	})
+}
+
+func (s *Server) backendURL() string {
+	if ip := tailscaleSelfIPv4(); ip != "" {
+		return fmt.Sprintf("http://%s:8930", ip)
+	}
+	return s.baseURL
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	hubID, hubURL := s.store.HubInfo()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vps":       s.store.ListVPS(),
 		"snapshots": s.store.ListSnapshots(),
 		"alerts":    s.store.ListAlerts(),
 		"actions":   s.store.ListActions(),
 		"links":     s.store.ListLinks(),
-		"hub": map[string]any{
-			"active":     hubID != "",
-			"hub_vps_id": hubID,
-			"hub_url":    hubURL,
-			"message":    s.store.HubMessage(),
-		},
 	})
 }
 
@@ -385,7 +425,21 @@ func (s *Server) logAction(v shared.VPS, action, detail string, ok bool) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) handleInstallScript(w http.ResponseWriter, r *http.Request) {
-	writeErr(w, http.StatusBadRequest, "use GET /install/{pairing_token}")
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	_, _ = w.Write([]byte(installScript(s.backendURL())))
+}
+
+func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "POST only")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	go func() {
+		s.store.Persist()
+		time.Sleep(100 * time.Millisecond)
+		os.Exit(0)
+	}()
 }
 
 func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
@@ -393,7 +447,23 @@ func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
 	if arch == "" {
 		arch = "amd64"
 	}
-	path := filepath.Join(s.dataDir, "bin", "beacle-agent-linux-"+arch)
+	candidates := []string{
+		filepath.Join(s.dataDir, "bin", "beacle-agent-linux-"+arch),
+		filepath.Join("dist", "agent", "linux-"+arch, "beacle-agent"),
+		filepath.Join("dist", "agent", "beacle-agent-linux-"+arch),
+	}
+	var path string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			path = c
+			break
+		}
+	}
+	if path == "" {
+		writeErr(w, http.StatusNotFound,
+			fmt.Sprintf("agent binary missing for linux/%s — run scripts/build.ps1", arch))
+		return
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "agent binary not available on backend (build agent for linux/"+arch+" into "+path+")")
@@ -429,9 +499,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/agents/report", s.handleAgentReport)
 	mux.HandleFunc("GET /agent/ws", s.handleAgentWS)
 
-	mux.HandleFunc("POST /api/pairing/tokens", s.handleCreatePairingToken)
-	mux.HandleFunc("GET /api/pairing/{token}", s.handlePairingBootstrap)
-	mux.HandleFunc("GET /api/hub/status", s.handleHubStatus)
+	mux.HandleFunc("POST /api/vps", s.handleCreateVPS)
+	mux.HandleFunc("GET /api/tailscale/devices", s.handleTailscaleDevices)
+	mux.HandleFunc("POST /api/shutdown", s.handleShutdown)
 
 	// ui
 	mux.HandleFunc("GET /api/vps", s.handleListVPS)
@@ -447,10 +517,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /ws", s.hub.ServeWS)
 
 	// distribution
-	mux.HandleFunc("GET /install/{token}", s.handleInstallScriptToken)
-	mux.HandleFunc("GET /install", func(w http.ResponseWriter, r *http.Request) {
-		writeErr(w, http.StatusBadRequest, "use /install/{pairing_token}")
-	})
+	mux.HandleFunc("GET /install", s.handleInstallScript)
 	mux.HandleFunc("GET /download/agent", s.handleDownloadAgent)
 	mux.HandleFunc("GET /download/agent/version", s.handleAgentVersion)
 

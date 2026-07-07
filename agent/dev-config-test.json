@@ -1,9 +1,0 @@
-{
-  "backend_url": "http://127.0.0.1:8930",
-  "vps_id": "5091efce4d62cc2f",
-  "token": "1d1aba155cf5aa9ea12199ed6c88c963a0b152bf0cc5954a",
-  "listen_port": 8941,
-  "report_interval_seconds": 3,
-  "npm_url": "http://127.0.0.1:81",
-  "caddy_dir": "/etc/caddy/beacle.d"
-}

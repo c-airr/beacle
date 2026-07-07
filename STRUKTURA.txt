@@ -6,13 +6,15 @@ Czym jest Beacle:
   Panel desktop do zarządzania VPS (monitoring, mapa, Docker, systemd,
   reverse proxy). Trzy komponenty: Flutter app + Go backend + Go agent.
 
-Model działania (LOCAL-FIRST, zero zewnętrznego SaaS):
-  1. User pobiera beacle.exe (+ beacle-backend.exe w tym samym folderze)
-  2. Aplikacja uruchamia lokalny backend przy starcie (127.0.0.1:8930)
-  3. Na VPS: curl -sSL <hub-url>/install/<token> | bash  LUB  beacle set <token>
-  4. Token paruje VPS z kontem (pairing); agent łączy się outbound do HUB
-  Każdy user ma izolowane środowisko (własny backend, własne VPS).
-  NIE MA: centralnego hosted backendu, cross-user registry.
+Model działania (LOCAL-FIRST + Tailscale):
+  1. Instalacja: %LocalAppData%\Beacle\ (beacle.exe, backend.exe, plugins\)
+  2. Konfiguracja: %AppData%\Beacle\ (config.json, servers.json, settings.json, data/)
+  3. beacle.exe uruchamia backend.exe w tle; przy zamknięciu POST /api/shutdown
+  4. Pierwsze uruchomienie → kreator (onboarding_screen.dart)
+  5. VPS dodawane z listy urządzeń Tailscale (POST /api/vps)
+  6. Na VPS: curl -sSL http://<tailscale-ip>:8930/install | bash
+  7. Agent łączy się po adresach Tailscale (100.x.x.x)
+  Wymagane: Tailscale na PC i każdym VPS. Beacle NIE zarządza VPN.
 
 ================================================================================
 STRUKTURA MONOREPO
@@ -37,28 +39,19 @@ IGNORUJ (nie czytaj, nie edytuj):
 ARCHITEKTURA KOMUNIKACJI (CGNAT-safe, outbound-only)
 ================================================================================
 
-  [beacle.exe]  ──startuje──►  [beacle-backend :8930 lokalnie]
+  [beacle.exe]  ──startuje──►  [backend.exe :8930, tylko gdy app działa]
        │                              │
        │  REST + WS localhost         │  AgentHub (WS outbound od agentów)
        └──────────────────────────────┤
                                       │
-  [agent na VPS]  ──outbound WS/HTTP──┘
+  [agent na VPS]  ──Tailscale IP───────┘
        │
        └── Docker, systemd, Caddy/NPM, /proc, porty… (lokalnie)
 
-  HUB = jeden VPS z publicznym IP (auto-wybór). Bez HUB → alert, brak sieci agentów.
-  Panel łączy się z lokalnym backendem; agenci łączą się outbound do HUB URL.
-  - Backend = jedyny punkt wejścia sieciowego; NIE inicjuje połączeń do agentów
-  - Agent utrzymuje outbound WebSocket do backendu; komendy idą przez ten kanał
-  - UI NIGDY nie łączy się bezpośrednio z agentem
-  - Brak inbound HTTP na agencie (port 8931 nie jest wymagany)
-  - VPS powstaje TYLKO przez auto-rejestrację agenta (POST /api/agents/register)
-  - POST /api/vps NIE ISTNIEJE (405) — nie dodawaj manual create
-  - Config agenta (/opt/beacle-agent/config.json) NIGDY nie jest nadpisywany
-    przez instalator ani update (tylko agent zapisuje token po 1. rejestracji)
-  - Panel zawsze łączy się z lokalnym backendem (127.0.0.1:8930)
-  - Backend bundlowany obok exe (app/lib/backend/embedded_backend.dart)
-  - Agent URL dla VPS: auto public IP lub override w Settings → VPS
+  - Backend istnieje TYLKO gdy działa Beacle (nie Windows Service)
+  - Komunikacja agent↔backend wyłącznie po Tailscale
+  - VPS dodawane w UI z listy Tailscale; agent rejestruje się dopasowując identity
+  - Dane użytkownika w %AppData%\Beacle\data\state.json
 
 ================================================================================
 shared/  — modele i protokół
@@ -130,10 +123,11 @@ app/  — Flutter desktop
 ================================================================================
 
   lib/
-    main.dart              Entry; EmbeddedBackend + AppShell
+    main.dart              Entry; EmbeddedBackend + onboarding lub AppShell
+    paths.dart             %LocalAppData% / %AppData% ścieżki
+    user_config.dart       config.json, servers.json, settings.json
     config.dart            localBackendUrl (127.0.0.1:8930)
-    backend/embedded_backend.dart  Uruchamia beacle-backend przy starcie
-    local_settings.dart    agent_public_url override (APPDATA)
+    backend/embedded_backend.dart  backend.exe lifecycle + shutdown
     theme.dart             Dark theme (BeacleColors)
     api/api_client.dart    REST klient (wszystko przez backend proxy)
     state/app_state.dart   Provider: VPS list, snapshots, WS, hub status, alerty
@@ -141,7 +135,7 @@ app/  — Flutter desktop
 
     screens/
       shell.dart           Nawigacja boczna + top bar + alert toasty
-      overview_screen.dart Dashboard
+      onboarding/onboarding_screen.dart  Kreator pierwszego uruchomienia (3 kroki)
       metrics_screen.dart  CPU/RAM/disk per VPS
       alerts_screen.dart   Alerty (CPU, down, offline, hub)
       map/map_screen.dart  Mapa infrastruktury (dokładne współrzędne, linki latency)
@@ -149,7 +143,7 @@ app/  — Flutter desktop
       docker_screen.dart   Kontenery, images, compose
       proxy_screen.dart    Reverse proxy GUI + port checker
       services_screen.dart systemd + screen
-      settings_screen.dart VPS pairing, updates, status
+      settings_screen.dart VPS / Tailscale, updates, status
 
     widgets/common.dart    PanelCard, MetricBar, CopyField, HoverRow…
     widgets/alerts_panel.dart
@@ -177,10 +171,9 @@ GDZIE SZUKAĆ PRZY ZMIANACH (szybki lookup)
   Alert nowy typ                  backend/alerts.go + shared/models.go
   WebSocket event                 backend/hub.go + shared/models.go WSMessageType
   Nowy ekran UI                   app/lib/screens/ + shell.dart (nav item)
-  Pairing token / install         backend/pairing.go, install_script.go
-                                  app/widgets/add_vps_dialog.dart
-                                  api_client.dart createPairingToken()
-  Hub election                    backend/hub_elect.go, hub_elect on register
+  Tailscale devices               backend/tailscale.go, GET /api/tailscale/devices
+  Dodawanie VPS                   POST /api/vps, onboarding + add_vps_dialog.dart
+  Installer                       backend/install_script.go, GET /install
   Mapa (markery, linki)           app/lib/screens/map/map_screen.dart
   Backend URL appki               app/lib/config.dart (localhost, embedded)
   Embedded backend                app/lib/backend/embedded_backend.dart

@@ -19,9 +19,6 @@ class AppState extends ChangeNotifier {
   List<VpsLink> links = [];
 
   bool connected = false;
-  bool hubActive = false;
-  String? hubUrl;
-  String? hubMessage;
   String? lastError;
 
   IOWebSocketChannel? _ws;
@@ -50,10 +47,6 @@ class AppState extends ChangeNotifier {
       alerts = ((o['alerts'] as List?) ?? []).map((e) => Alert.fromJson(e)).toList().reversed.toList();
       actions = ((o['actions'] as List?) ?? []).map((e) => ActionLog.fromJson(e)).toList().reversed.toList();
       links = ((o['links'] as List?) ?? []).map((e) => VpsLink.fromJson(e)).toList();
-      final hub = o['hub'] as Map<String, dynamic>?;
-      hubActive = hub?['active'] == true;
-      hubUrl = hub?['hub_url'] as String?;
-      hubMessage = hub?['message'] as String?;
       connected = true;
       lastError = null;
     } catch (e) {
