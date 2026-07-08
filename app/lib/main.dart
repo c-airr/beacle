@@ -58,6 +58,9 @@ class _BeacleAppState extends State<BeacleApp> with WidgetsBindingObserver {
     switch (lifecycle) {
       case AppLifecycleState.resumed:
         state.bumpActivity();
+      case AppLifecycleState.inactive:
+        // Lost focus (e.g. alt-tab). Keep WS alive but slow down slightly.
+        state.enterEcoMode();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
         state.enterSleepMode();

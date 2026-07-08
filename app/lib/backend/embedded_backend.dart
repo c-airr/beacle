@@ -146,7 +146,9 @@ class EmbeddedBackend {
         final name = f.uri.pathSegments.last;
         if (!name.contains('beacle-agent') && name != 'VERSION') continue;
         final out = File('$dest${Platform.pathSeparator}$name');
-        if (!out.existsSync()) f.copySync(out.path);
+        if (!out.existsSync() || f.lastModifiedSync().isAfter(out.lastModifiedSync())) {
+          f.copySync(out.path);
+        }
       }
     }
   }

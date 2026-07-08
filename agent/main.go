@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -23,6 +24,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
+	log.Printf("beacle agent %s starting (backend %s)", AgentVersion, cfg.BackendURL)
 	col := newCollector(cfg)
 	proxy := NewProxyManager(cfg)
 	updater := NewUpdater(cfg)

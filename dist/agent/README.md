@@ -1,25 +1,19 @@
-# Agent binary (VPS, amd64)
+# Beacle agent (Linux)
 
-**Agent download:**
-```
-https://github.com/c-airr/beacle/releases/download/BETA/beacle-agent-amd
-```
-
-**Install script:**
-```
-https://github.com/c-airr/beacle/releases/download/BETA/install.sh
-```
-
-Upload both to the GitHub **BETA** release.
-
-## Install from Beacle app
-
-After adding a VPS, copy the install command shown in the app:
+Install on a VPS in your Tailscale tailnet:
 
 ```bash
-curl -fsSL https://github.com/c-airr/beacle/releases/download/BETA/install.sh | sudo bash -s http://<your-tailscale-ip>:8930
+curl -fsSL http://<desktop-tailscale-ip>:8930/install | sudo bash
 ```
 
-Curl hits GitHub only. The Tailscale IP is just the agent's `backend_url` config (your desktop), not the download host.
+The install script and agent binary are served by the Beacle desktop backend.
+No GitHub release required.
 
-Build local copy: `.\scripts\build.ps1`
+After install:
+
+```bash
+systemctl status beacle-agent
+journalctl -u beacle-agent -f
+```
+
+Agent config: `/opt/beacle-agent/config.json`

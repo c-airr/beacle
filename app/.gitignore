@@ -33,6 +33,18 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# github merge
+*.exe
+backend/data/
+agent/dev-config.json
+agent/*.log
+backend/*.log
+app/build/
+app/.dart_tool/
+app/.idea/
+app/*.iml
+dist/
+
 # Symbolication related
 app.*.symbols
 

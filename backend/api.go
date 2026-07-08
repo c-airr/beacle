@@ -156,7 +156,8 @@ func (s *Server) handleInstallCommand(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"install_command": vpsInstallCommand(base),
 		"backend_url":     base,
-		"agent_url":       agentBinaryURL,
+		"install_url":     base + "/install",
+		"agent_url":       base + "/download/agent?arch=amd64",
 	})
 }
 

@@ -5,6 +5,7 @@ $releaseDir = "$root\app\build\windows\x64\runner\Release"
 $distAgent = "$root\dist\agent"
 
 Write-Host '[1/5] backend (bundled with app, no console)' -ForegroundColor Cyan
+Copy-Item "$root\scripts\install-agent.sh" "$root\backend\install-agent.sh" -Force
 Push-Location "$root\backend"
 go build -ldflags "-H windowsgui" -o beacle-backend.exe .
 Pop-Location
@@ -40,6 +41,7 @@ Pop-Location
 
 Write-Host '[4/5] bundle backend + agent into release folder' -ForegroundColor Cyan
 Copy-Item "$root\backend\beacle-backend.exe" "$releaseDir\beacle-backend.exe" -Force
+Copy-Item "$root\scripts\install-agent.sh" "$releaseDir\install.sh" -Force
 $dataDest = "$releaseDir\data"
 New-Item -ItemType Directory -Force -Path "$dataDest\bin" | Out-Null
 Copy-Item "$root\backend\data\bin\*" "$dataDest\bin\" -Force -ErrorAction SilentlyContinue
@@ -52,5 +54,5 @@ Get-ChildItem $distAgent -Recurse -File | ForEach-Object { Write-Host "  $($_.Fu
 
 Write-Host 'Done.' -ForegroundColor Green
 Write-Host "  Run: $releaseDir\beacle.exe"
-Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/BETA/install.sh | sudo bash -s <tailscale-ip>:8930'
+Write-Host '  VPS install: curl -fsSL http://<desktop-tailscale-ip>:8930/install | sudo bash'
 Write-Host '  GitHub agent: dist/agent/beacle-agent-linux-amd64'
