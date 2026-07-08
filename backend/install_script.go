@@ -33,7 +33,7 @@ chmod +x "$INSTALL_DIR/beacle-agent.new"
 [ -f "$BIN" ] && cp -f "$BIN" "$INSTALL_DIR/versions/beacle-agent.prev"
 mv -f "$INSTALL_DIR/beacle-agent.new" "$BIN"
 if [ ! -f "$CONFIG" ]; then
-  printf '%%s\n' "{\"backend_url\":\"$BACKEND_URL\",\"report_interval_seconds\":5}" > "$CONFIG"
+  printf '%%s\n' "{\"backend_url\":\"$BACKEND_URL\",\"report_interval_seconds\":3}" > "$CONFIG"
   chmod 600 "$CONFIG"
 fi
 cat > /etc/systemd/system/beacle-agent.service <<'SVCEOF'

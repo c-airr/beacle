@@ -98,6 +98,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     Future<void> act(SystemdUnit u, String action) async {
       try {
+        state.onUserAction();
         await state.api.systemdAction(vps.id, u.name, action);
         if (mounted) showToast(context, '${u.name}: $action ok');
       } catch (e) {

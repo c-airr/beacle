@@ -231,6 +231,12 @@ func (s *Store) ListVPS() []shared.VPS {
 
 // --- Snapshots (live, in-memory) -------------------------------------------
 
+func (s *Store) ClearSnapshot(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.snapshots, id)
+}
+
 func (s *Store) SetSnapshot(snap *shared.VPSSnapshot) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

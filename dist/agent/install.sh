@@ -34,7 +34,7 @@ if [ ! -f "$CONFIG" ]; then
   cat > "$CONFIG" <<EOF
 {
   "backend_url": "$BACKEND_URL",
-  "report_interval_seconds": 5
+  "report_interval_seconds": 3
 }
 EOF
   chmod 600 "$CONFIG"

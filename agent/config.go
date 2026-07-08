@@ -15,8 +15,7 @@ type Config struct {
 	BackendURL     string `json:"backend_url"`
 	VPSID          string `json:"vps_id,omitempty"`
 	Token          string `json:"token,omitempty"`
-	ListenPort     int    `json:"listen_port"`
-	ReportInterval int    `json:"report_interval_seconds"`
+	ListenPort int    `json:"listen_port"`
 
 	// Reverse proxy adapter settings (optional)
 	NPMURL      string `json:"npm_url,omitempty"`      // default http://127.0.0.1:81
@@ -39,9 +38,6 @@ func LoadConfig(path string) (*Config, error) {
 	c.path = path
 	if c.ListenPort == 0 {
 		c.ListenPort = 8931
-	}
-	if c.ReportInterval == 0 {
-		c.ReportInterval = 5
 	}
 	if c.NPMURL == "" {
 		c.NPMURL = "http://127.0.0.1:81"

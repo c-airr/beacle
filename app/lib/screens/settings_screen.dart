@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../config.dart';
 import '../paths.dart';
+import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../update/app_updater.dart';
@@ -72,7 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         PanelCard(
           title: 'TAILSCALE',
           child: const Text(
-            'VPS are discovered via your Tailscale network. Each server must have Tailscale and the Beacle agent installed.',
+            tailscaleRequirement,
             style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
           ),
         ),
@@ -84,8 +85,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Select a Tailscale device, then run the install command on that VPS as root.',
+                'Pick a device from your tailnet, then run the install command on that VPS as root.',
                 style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Download: $installScriptUrl',
+                style: const TextStyle(fontSize: 10, color: BeacleColors.textDim, fontFamily: 'Consolas'),
               ),
               const SizedBox(height: 14),
               const AddVpsCommand(),
@@ -110,8 +116,31 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       children: [
                         StatusDot(v.status, size: 8),
                         const SizedBox(width: 10),
-                        Expanded(child: Text(v.name, style: const TextStyle(fontSize: 13))),
-                        Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(v.name, style: const TextStyle(fontSize: 13)),
+                              Text(
+                                [
+                                  if (v.tailscaleName.isNotEmpty) v.tailscaleName,
+                                  v.host,
+                                  v.status,
+                                ].where((s) => s.isNotEmpty).join(' · '),
+                                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete VPS',
+                          icon: const Icon(Icons.delete_outline, size: 18, color: BeacleColors.err),
+                          onPressed: () async {
+                            if (!await confirmDeleteVps(context, v)) return;
+                            await state.api.deleteVps(v.id);
+                            await state.refreshAll();
+                          },
+                        ),
                       ],
                     ),
                   ),

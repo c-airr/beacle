@@ -54,6 +54,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
               const Spacer(),
               SmallButton('Validate config', icon: Icons.rule, onPressed: () async {
                 try {
+                  state.onUserAction();
                   final r = await state.api.proxyValidate(vps.id);
                   if (!context.mounted) return;
                   showToast(context, r['valid'] == true ? 'Config valid: ${r['output']}' : 'Invalid: ${r['output']}',
@@ -65,6 +66,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
               const SizedBox(width: 8),
               SmallButton('Reload', icon: Icons.refresh, onPressed: () async {
                 try {
+                  state.onUserAction();
                   await state.api.proxyReload(vps.id);
                   if (context.mounted) showToast(context, 'Proxy reloaded');
                 } catch (e) {
@@ -182,6 +184,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
                       );
                       if (ok == true) {
                         try {
+                          state.onUserAction();
                           await state.api.proxyDeleteSite(vps.id, s.id);
                           if (mounted) showToast(context, 'Site deleted');
                           state.refreshAll();
@@ -288,6 +291,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
                               'extra': {'websockets': websockets.toString()},
                             };
                             try {
+                              state.onUserAction();
                               if (existing == null) {
                                 await state.api.proxyAddSite(vps.id, req);
                               } else {

@@ -268,6 +268,12 @@ class Vps {
         lastSeen = _dt(j['last_seen']);
 
   bool get online => status == 'online' || status == 'high_load';
+
+  /// True when agent reports stopped arriving (metrics/processes may be stale).
+  bool get reportStale {
+    if (!online) return true;
+    return DateTime.now().difference(lastSeen.toLocal()).inSeconds > 12;
+  }
 }
 
 class VpsLink {
@@ -319,6 +325,7 @@ class VpsSnapshot {
   final DockerState docker;
   final ServicesState services;
   final ProxyState proxy;
+  final List<PortInfo> ports;
   final DateTime updated;
   VpsSnapshot.fromJson(Map<String, dynamic> j)
       : vps = Vps.fromJson(j['vps'] as Map<String, dynamic>? ?? const {}),
@@ -326,6 +333,7 @@ class VpsSnapshot {
         docker = DockerState.fromJson(j['docker'] as Map<String, dynamic>? ?? const {}),
         services = ServicesState.fromJson(j['services'] as Map<String, dynamic>? ?? const {}),
         proxy = ProxyState.fromJson(j['proxy'] as Map<String, dynamic>? ?? const {}),
+        ports = _list(j['ports'], PortInfo.fromJson),
         updated = _dt(j['updated']);
 }
 
@@ -346,4 +354,13 @@ String fmtUptime(int seconds) {
   if (d > 0) return '${d}d ${h}h';
   if (h > 0) return '${h}h ${m}m';
   return '${m}m';
+}
+
+String fmtAgo(DateTime when) {
+  final sec = DateTime.now().difference(when.toLocal()).inSeconds;
+  if (sec < 5) return 'just now';
+  if (sec < 60) return '${sec}s ago';
+  if (sec < 3600) return '${sec ~/ 60}m ago';
+  if (sec < 86400) return '${sec ~/ 3600}h ago';
+  return '${sec ~/ 86400}d ago';
 }

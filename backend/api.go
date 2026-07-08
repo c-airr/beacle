@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"beacle/shared"
@@ -23,6 +22,9 @@ type Server struct {
 	alerts   *AlertEngine
 	baseURL  string // public URL of this backend, used in install commands
 	dataDir  string
+
+	uiPowerMu   sync.RWMutex
+	uiPowerMode shared.PowerMode
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -65,109 +67,8 @@ func (s *Server) authAgent(w http.ResponseWriter, r *http.Request) *VPSEntry {
 // agent registers without credentials and receives its VPS ID + token; the
 // backend creates the VPS entry on the spot. Returning agents authenticate
 // with their existing token.
-func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
-	var req shared.RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "bad json")
-		return
-	}
-
-	// Returning agent: valid token present.
-	if tok := bearer(r); tok != "" {
-		if entry := s.store.FindByToken(tok); entry != nil {
-			updated := s.store.UpdateVPS(entry.VPS.ID, func(e *VPSEntry) {
-				e.VPS.Status = shared.VPSOnline
-				e.VPS.LastSeen = time.Now().UTC()
-				e.VPS.AgentVer = req.AgentVersion
-				if req.AgentPort > 0 {
-					e.VPS.AgentPort = req.AgentPort
-				}
-				if e.VPS.Host == "" {
-					e.VPS.Host = agentHost(r, req.TailscaleIP)
-				}
-			})
-			log.Printf("agent re-registered: %s (%s) v%s", updated.VPS.Name, req.Hostname, req.AgentVersion)
-			s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
-			writeJSON(w, http.StatusOK, shared.RegisterResponse{
-				OK: "registered", VPSID: updated.VPS.ID, ReportInterval: shared.DefaultReportIntervalSec,
-			})
-			return
-		}
-		writeErr(w, http.StatusUnauthorized, "invalid token")
-		return
-	}
-
-	// First-time agent: must match a VPS added in Beacle (Tailscale identity).
-	tsIP := req.TailscaleIP
-	if tsIP == "" {
-		tsIP = agentHost(r, "")
-	}
-	tsName := req.TailscaleName
-	if tsName == "" {
-		tsName = req.Hostname
-	}
-	pending := s.store.FindPendingByTailscale(tsName, tsIP)
-	if pending == nil {
-		writeErr(w, http.StatusUnauthorized, "no matching VPS — add this server in Beacle first")
-		return
-	}
-	entry := s.store.UpdateVPS(pending.VPS.ID, func(e *VPSEntry) {
-		if e.AgentToken == "" {
-			e.AgentToken = newToken()
-		}
-		e.VPS.Status = shared.VPSOnline
-		e.VPS.LastSeen = time.Now().UTC()
-		e.VPS.AgentVer = req.AgentVersion
-		e.VPS.Host = tsIP
-		e.VPS.TailscaleName = tsName
-		if req.AgentPort > 0 {
-			e.VPS.AgentPort = req.AgentPort
-		}
-	})
-	log.Printf("agent registered: %s (%s) -> vps %s", req.Hostname, tsIP, entry.VPS.ID)
-	s.logAction(entry.VPS, "vps_register", "Agent connected via Tailscale", true)
-	s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
-	writeJSON(w, http.StatusOK, shared.RegisterResponse{
-		OK:             "registered",
-		VPSID:          entry.VPS.ID,
-		Token:          entry.AgentToken,
-		ReportInterval: shared.DefaultReportIntervalSec,
-	})
-}
-
-// agentHost picks the best host for reaching the agent: the IP it reported,
-// falling back to the source address of the request.
-func agentHost(r *http.Request, reported string) string {
-	if reported != "" {
-		return reported
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
-func (s *Server) handleAgentReport(w http.ResponseWriter, r *http.Request) {
-	entry := s.authAgent(w, r)
-	if entry == nil {
-		return
-	}
-	var rep shared.AgentReport
-	if err := json.NewDecoder(r.Body).Decode(&rep); err != nil {
-		writeErr(w, http.StatusBadRequest, "bad json")
-		return
-	}
-	applyAgentReport(s.store, s.hub, s.alerts, entry, rep)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
 func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
-	entry := s.authAgent(w, r)
-	if entry == nil {
-		return
-	}
-	s.agentHub.ServeAgent(w, r, entry)
+	s.agentHub.ServeAgentWS(w, r, s)
 }
 
 // ---------------------------------------------------------------------------
@@ -399,6 +300,9 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
 	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && code >= 200 && code < 300 {
+		s.agentHub.RequestRefresh(entry.VPS.ID)
+	}
 	if r.Method != http.MethodGet {
 		ok := code >= 200 && code < 300
 		s.logAction(entry.VPS, r.Method+" "+path, string(truncate(respBody, 200)), ok)
@@ -495,8 +399,6 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	// agent
-	mux.HandleFunc("POST /api/agents/register", s.handleAgentRegister)
-	mux.HandleFunc("POST /api/agents/report", s.handleAgentReport)
 	mux.HandleFunc("GET /agent/ws", s.handleAgentWS)
 
 	mux.HandleFunc("POST /api/vps", s.handleCreateVPS)
@@ -508,6 +410,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/vps/{id}", s.handleVPSByID)
 	mux.HandleFunc("GET /api/install-command", s.handleInstallCommand)
 	mux.HandleFunc("/api/vps/{id}/agent/{rest...}", s.handleAgentProxy)
+	mux.HandleFunc("POST /api/ui/power-mode", s.handleUIPowerMode)
 	mux.HandleFunc("GET /api/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/alerts", s.handleAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.handleResolveAlert)

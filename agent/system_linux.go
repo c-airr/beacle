@@ -130,6 +130,23 @@ func readMeminfo() (total, avail, swapTotal, swapFree uint64) {
 
 // --- Disks -------------------------------------------------------------------
 
+// isPhysicalDisk reports block devices worth showing in the panel (skip snap/loop/tmpfs).
+func isPhysicalDisk(dev, mount, fstype string) bool {
+	switch fstype {
+	case "squashfs", "tmpfs", "devtmpfs", "overlay", "autofs", "cifs", "fuse", "fuse.sshfs", "proc", "sysfs":
+		return false
+	}
+	if strings.HasPrefix(mount, "/snap") || strings.HasPrefix(dev, "/dev/loop") {
+		return false
+	}
+	for _, p := range []string{"/dev/sd", "/dev/nvme", "/dev/vd", "/dev/xvd", "/dev/mmcblk", "/dev/md", "/dev/mapper/"} {
+		if strings.HasPrefix(dev, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func diskUsage() []shared.DiskUsage {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
@@ -145,7 +162,7 @@ func diskUsage() []shared.DiskUsage {
 			continue
 		}
 		dev, mount, fstype := fields[0], fields[1], fields[2]
-		if !strings.HasPrefix(dev, "/dev/") || seen[dev] {
+		if !isPhysicalDisk(dev, mount, fstype) || seen[dev] {
 			continue
 		}
 		var st syscall.Statfs_t
@@ -188,7 +205,7 @@ func (c *linuxCollector) networkStats() []shared.NetworkStats {
 			continue
 		}
 		iface := strings.TrimSpace(line[:i])
-		if iface == "lo" {
+		if iface == "lo" || strings.HasPrefix(iface, "veth") || strings.HasPrefix(iface, "br-") || iface == "docker0" {
 			continue
 		}
 		fields := strings.Fields(line[i+1:])

@@ -1,139 +1,71 @@
-package main
-
-import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"os"
-	"runtime"
-	"time"
-
-	"beacle/shared"
-)
-
-// Reporter registers with the backend and pushes AgentReports periodically.
-type Reporter struct {
-	cfg   *Config
-	col   Collector
-	proxy *ProxyManager
-	http  *http.Client
-}
-
-func NewReporter(cfg *Config, col Collector, proxy *ProxyManager) *Reporter {
-	return &Reporter{cfg: cfg, col: col, proxy: proxy, http: &http.Client{Timeout: 10 * time.Second}}
-}
-
-func (r *Reporter) post(path string, v any) error {
-	body, err := r.postBody(path, v)
-	if err != nil {
-		return err
-	}
-	_ = body
-	return nil
-}
-
-func (r *Reporter) postBody(path string, v any) ([]byte, error) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost, r.cfg.BackendURL+path, bytes.NewReader(b))
-	if err != nil {
-		return nil, err
-	}
-	if r.cfg.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+r.cfg.Token)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := r.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	out, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode >= 400 {
-		return out, fmt.Errorf("backend %d: %s", resp.StatusCode, string(out))
-	}
-	return out, nil
-}
-
-// Register performs auto-registration. First-time agents (no credentials in
-// config) receive a VPS ID + token from the backend and persist them; the
-// VPS entry appears in the panel automatically.
-func (r *Reporter) Register() {
-	hostname, _ := os.Hostname()
-	req := shared.RegisterRequest{
-		VPSID:         r.cfg.VPSID,
-		Hostname:      hostname,
-		TailscaleName: tailscaleName(),
-		TailscaleIP:   tailscaleIPv4(),
-		AgentVersion:  AgentVersion,
-		AgentPort:     0,
-		OS:            runtime.GOOS + "/" + runtime.GOARCH,
-	}
-	for {
-		body, err := r.postBody("/api/agents/register", req)
-		if err != nil {
-			log.Printf("register failed (retrying in 10s): %v", err)
-			time.Sleep(10 * time.Second)
-			continue
-		}
-		var resp shared.RegisterResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
-			log.Printf("register: bad response (retrying in 10s): %v", err)
-			time.Sleep(10 * time.Second)
-			continue
-		}
-		if resp.Token != "" {
-			r.cfg.VPSID = resp.VPSID
-			r.cfg.Token = resp.Token
-			if err := r.cfg.Save(); err != nil {
-				log.Printf("warning: could not persist credentials: %v", err)
-			}
-			log.Printf("auto-registered as vps %s", resp.VPSID)
-		} else {
-			log.Printf("registered with backend %s", r.cfg.BackendURL)
-		}
-		return
-	}
-}
-
-func (r *Reporter) BuildReport() shared.AgentReport {
-	metrics, err := r.col.Metrics()
-	if err != nil {
-		log.Printf("metrics: %v", err)
-	}
-	units, _ := r.col.SystemdUnits()
-	screens, _ := r.col.ScreenSessions()
-	return shared.AgentReport{
-		VPSID:   r.cfg.VPSID,
-		Version: AgentVersion,
-		Metrics: metrics,
-		Docker:  r.col.Docker(),
-		Services: shared.ServicesState{
-			Systemd: units,
-			Screen:  screens,
-		},
-		Proxy:  r.proxy.State(),
-		SentAt: time.Now().UTC(),
-	}
-}
-
-func (r *Reporter) Run() {
-	interval := time.Duration(r.cfg.ReportInterval) * time.Second
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		rep := r.BuildReport()
-		if err := r.post("/api/agents/report", rep); err != nil {
-			log.Printf("report failed: %v", err)
-		}
-		<-ticker.C
-	}
-}
+package main
+
+import (
+	"log"
+	"os"
+	"runtime"
+
+	"beacle/shared"
+)
+
+// Reporter collects VPS state for WebSocket snapshot frames.
+type Reporter struct {
+	cfg   *Config
+	col   Collector
+	proxy *ProxyManager
+}
+
+func NewReporter(cfg *Config, col Collector, proxy *ProxyManager) *Reporter {
+	return &Reporter{cfg: cfg, col: col, proxy: proxy}
+}
+
+func (r *Reporter) RegisterRequest() shared.RegisterRequest {
+	hostname, _ := os.Hostname()
+	return shared.RegisterRequest{
+		VPSID:         r.cfg.VPSID,
+		Hostname:      hostname,
+		TailscaleName: tailscaleName(),
+		TailscaleIP:   tailscaleIPv4(),
+		AgentVersion:  AgentVersion,
+		AgentPort:     0,
+		OS:            runtime.GOOS + "/" + runtime.GOARCH,
+	}
+}
+
+func (r *Reporter) Metrics() (shared.SystemMetrics, error) {
+	return r.col.Metrics()
+}
+
+func (r *Reporter) Ports() ([]shared.PortInfo, error) {
+	return r.col.Ports()
+}
+
+func (r *Reporter) Docker() shared.DockerState {
+	return r.col.Docker()
+}
+
+func (r *Reporter) Systemd() shared.ServicesState {
+	units, _ := r.col.SystemdUnits()
+	screens, _ := r.col.ScreenSessions()
+	return shared.ServicesState{
+		Systemd: units,
+		Screen:  screens,
+	}
+}
+
+func (r *Reporter) Proxy() shared.ProxyState {
+	return r.proxy.State()
+}
+
+func (r *Reporter) ApplyRegisterAck(ack shared.RegisterResponse) {
+	if ack.VPSID != "" {
+		r.cfg.VPSID = ack.VPSID
+	}
+	if ack.Token != "" {
+		r.cfg.Token = ack.Token
+		if err := r.cfg.Save(); err != nil {
+			log.Printf("warning: could not persist credentials: %v", err)
+		}
+		log.Printf("registered as vps %s", ack.VPSID)
+	}
+}

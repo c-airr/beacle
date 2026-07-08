@@ -9,7 +9,7 @@ import (
 
 func main() {
 	var (
-		addr    = flag.String("addr", ":8930", "listen address")
+		addr    = flag.String("addr", "0.0.0.0:8930", "listen address (0.0.0.0 for Tailscale agents)")
 		baseURL = flag.String("base-url", "", "Tailscale URL of this backend for install commands")
 		dataDir = flag.String("data", "./data", "data directory")
 	)

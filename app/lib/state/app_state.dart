@@ -21,19 +21,88 @@ class AppState extends ChangeNotifier {
   bool connected = false;
   String? lastError;
 
+  /// UI power mode sent to backend: active, eco, or sleep.
+  String uiPowerMode = 'active';
+
   IOWebSocketChannel? _ws;
   Timer? _reconnect;
+  Timer? _staleCheck;
+  Timer? _idleTimer;
+
+  static const _idleTimeout = Duration(seconds: 45);
 
   DateTime alertsSeenAt = DateTime.now();
   int get unseenAlerts =>
       alerts.where((a) => !a.resolved && a.createdAt.isAfter(alertsSeenAt)).length;
   int get activeAlerts => alerts.where((a) => !a.resolved).length;
 
+  bool get powerSaveMode => uiPowerMode != 'active';
+
+  int get portsRefreshSeconds => switch (uiPowerMode) {
+        'sleep' => 120,
+        'eco' => 45,
+        _ => 10,
+      };
+
+  int get staleThresholdSeconds => switch (uiPowerMode) {
+        'sleep' => 130,
+        'eco' => 50,
+        _ => 12,
+      };
+
   final StreamController<Alert> alertStream = StreamController.broadcast();
 
   Future<void> start() async {
     await refreshAll();
     _connectWs();
+    _staleCheck?.cancel();
+    _staleCheck = Timer.periodic(const Duration(seconds: 10), (_) {
+      _pruneSnapshots();
+      notifyListeners();
+    });
+    _scheduleIdleTimer();
+  }
+
+  bool isReportStale(Vps v) {
+    if (!v.online) return true;
+    return DateTime.now().difference(v.lastSeen.toLocal()).inSeconds > staleThresholdSeconds;
+  }
+
+  void bumpActivity() {
+    if (uiPowerMode != 'active') {
+      uiPowerMode = 'active';
+      unawaited(_applyPowerMode());
+      unawaited(refreshAll());
+    }
+    _scheduleIdleTimer();
+    notifyListeners();
+  }
+
+  void enterEcoMode() {
+    if (uiPowerMode == 'eco' || uiPowerMode == 'sleep') return;
+    uiPowerMode = 'eco';
+    unawaited(_applyPowerMode());
+    notifyListeners();
+  }
+
+  void enterSleepMode() {
+    if (uiPowerMode == 'sleep') return;
+    uiPowerMode = 'sleep';
+    unawaited(_applyPowerMode());
+    notifyListeners();
+  }
+
+  void onUserAction() => bumpActivity();
+
+  void _scheduleIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(_idleTimeout, enterEcoMode);
+  }
+
+  Future<void> _applyPowerMode() async {
+    try {
+      await api.setPowerMode(uiPowerMode);
+    } catch (_) {}
   }
 
   Future<void> refreshAll() async {
@@ -100,6 +169,7 @@ class AppState extends ChangeNotifier {
         break;
       case 'vps_list':
         vpsList = ((payload as List?) ?? []).map((e) => Vps.fromJson(e)).toList();
+        _pruneSnapshots();
         break;
       case 'alert':
         final a = Alert.fromJson(payload as Map<String, dynamic>);
@@ -123,6 +193,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _pruneSnapshots() {
+    final live = vpsList.where((v) => v.online && !isReportStale(v)).map((v) => v.id).toSet();
+    snapshots.removeWhere((id, _) => !live.contains(id));
+  }
+
   void markAlertsSeen() {
     alertsSeenAt = DateTime.now();
     notifyListeners();
@@ -144,6 +219,8 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _ws?.sink.close();
     _reconnect?.cancel();
+    _staleCheck?.cancel();
+    _idleTimer?.cancel();
     alertStream.close();
     super.dispose();
   }

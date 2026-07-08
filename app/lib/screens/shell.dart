@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/alerts_panel.dart';
 import 'alerts_screen.dart';
@@ -34,6 +35,9 @@ class AppShellState extends State<AppShell> {
   bool alertsOpen = false;
   final List<Alert> _toasts = [];
   StreamSubscription? _alertSub;
+  final _serversKey = GlobalKey<ServersScreenState>();
+
+  late final List<Widget> _screens;
 
   static const _items = [
     (Icons.space_dashboard_outlined, 'Overview'),
@@ -50,6 +54,17 @@ class AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _screens = [
+      const OverviewScreen(),
+      ServersScreen(key: _serversKey),
+      const MetricsScreen(),
+      const DockerScreen(),
+      const ServicesScreen(),
+      const ProxyScreen(),
+      const MapScreen(),
+      const AlertsScreen(),
+      const SettingsScreen(),
+    ];
     final state = context.read<AppState>();
     _alertSub = state.alertStream.stream.listen((a) {
       setState(() => _toasts.add(a));
@@ -66,28 +81,20 @@ class AppShellState extends State<AppShell> {
   }
 
   void goToServer(String vpsId) {
+    context.read<AppState>().bumpActivity();
     setState(() {
       focusedVpsId = vpsId;
       index = 1;
     });
+    _serversKey.currentState?.selectVps(vpsId);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final screens = [
-      const OverviewScreen(),
-      ServersScreen(initialVpsId: focusedVpsId),
-      const MetricsScreen(),
-      const DockerScreen(),
-      const ServicesScreen(),
-      const ProxyScreen(),
-      const MapScreen(),
-      const AlertsScreen(),
-      const SettingsScreen(),
-    ];
 
-    return Scaffold(
+    return ActivityScope(
+      child: Scaffold(
       backgroundColor: BeacleColors.bg,
       body: Stack(
         children: [
@@ -98,7 +105,7 @@ class AppShellState extends State<AppShell> {
                 child: Column(
                   children: [
                     _buildTopBar(state),
-                    Expanded(child: screens[index]),
+                    Expanded(child: IndexedStack(index: index, children: _screens)),
                   ],
                 ),
               ),
@@ -125,6 +132,7 @@ class AppShellState extends State<AppShell> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -153,10 +161,13 @@ class AppShellState extends State<AppShell> {
                 label: _items[i].$2,
                 selected: index == i,
                 badge: i == 7 ? state.activeAlerts : 0,
-                onTap: () => setState(() {
-                  if (i != 1) focusedVpsId = null;
-                  index = i;
-                }),
+                onTap: () {
+                  context.read<AppState>().bumpActivity();
+                  setState(() {
+                    if (i != 1) focusedVpsId = null;
+                    index = i;
+                  });
+                },
               ),
             ),
           const Spacer(),

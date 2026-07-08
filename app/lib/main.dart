@@ -31,13 +31,14 @@ class BeacleApp extends StatefulWidget {
   State<BeacleApp> createState() => _BeacleAppState();
 }
 
-class _BeacleAppState extends State<BeacleApp> {
+class _BeacleAppState extends State<BeacleApp> with WidgetsBindingObserver {
   late final AppState state = AppState();
   late final UserConfig userConfig = UserConfigStore.load();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (userConfig.onboardingComplete) {
       state.start();
     }
@@ -45,9 +46,24 @@ class _BeacleAppState extends State<BeacleApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     EmbeddedBackend.instance.stop();
     state.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (!userConfig.onboardingComplete) return;
+    switch (lifecycle) {
+      case AppLifecycleState.resumed:
+        state.bumpActivity();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        state.enterSleepMode();
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   @override

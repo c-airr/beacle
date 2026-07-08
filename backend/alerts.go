@@ -45,12 +45,12 @@ func (e *AlertEngine) clear(vpsID string, t shared.AlertType, key string) {
 	delete(e.active, vpsID+"|"+string(t)+"|"+key)
 }
 
-// Evaluate is called for every AgentReport.
-func (e *AlertEngine) Evaluate(vps shared.VPS, rep *shared.AgentReport) {
+// EvaluateSnapshot is called when any agent snapshot frame updates backend state.
+func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	m := rep.Metrics
+	m := snap.Metrics
 	if m.CPUPercent >= shared.CPUHighPercent {
 		e.fire(vps, shared.AlertCPUHigh, shared.SeverityWarning, "",
 			fmt.Sprintf("CPU usage %.0f%% (threshold %.0f%%)", m.CPUPercent, shared.CPUHighPercent))
@@ -75,7 +75,7 @@ func (e *AlertEngine) Evaluate(vps shared.VPS, rep *shared.AgentReport) {
 	// Docker: exited with non-zero code, or restart count increased.
 	prev := e.prevContainers[vps.ID]
 	cur := map[string]shared.ContainerInfo{}
-	for _, c := range rep.Docker.Containers {
+	for _, c := range snap.Docker.Containers {
 		cur[c.ID] = c
 		if prev != nil {
 			if p, ok := prev[c.ID]; ok {
@@ -99,7 +99,7 @@ func (e *AlertEngine) Evaluate(vps shared.VPS, rep *shared.AgentReport) {
 	// systemd: unit transitioned active -> failed
 	prevSvc := e.prevServices[vps.ID]
 	curSvc := map[string]string{}
-	for _, u := range rep.Services.Systemd {
+	for _, u := range snap.Services.Systemd {
 		curSvc[u.Name] = u.ActiveState
 		if prevSvc != nil {
 			if was, ok := prevSvc[u.Name]; ok && was == "active" && u.ActiveState == "failed" {
@@ -114,15 +114,15 @@ func (e *AlertEngine) Evaluate(vps shared.VPS, rep *shared.AgentReport) {
 	e.prevServices[vps.ID] = curSvc
 
 	// Proxy errors
-	if rep.Proxy.Provider != shared.ProxyProviderNone {
-		if !rep.Proxy.Running {
+	if snap.Proxy.Provider != shared.ProxyProviderNone {
+		if !snap.Proxy.Running {
 			e.fire(vps, shared.AlertProxyError, shared.SeverityCritical, "down",
-				fmt.Sprintf("Reverse proxy (%s) is not running", rep.Proxy.Provider))
+				fmt.Sprintf("Reverse proxy (%s) is not running", snap.Proxy.Provider))
 		} else {
 			e.clear(vps.ID, shared.AlertProxyError, "down")
 		}
-		if rep.Proxy.LastError != "" {
-			e.fire(vps, shared.AlertProxyError, shared.SeverityWarning, "err", rep.Proxy.LastError)
+		if snap.Proxy.LastError != "" {
+			e.fire(vps, shared.AlertProxyError, shared.SeverityWarning, "err", snap.Proxy.LastError)
 		} else {
 			e.clear(vps.ID, shared.AlertProxyError, "err")
 		}
@@ -140,6 +140,7 @@ func (e *AlertEngine) WatchOffline() {
 				updated := e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
 					en.VPS.Status = shared.VPSOffline
 				})
+				e.store.ClearSnapshot(v.ID)
 				e.mu.Lock()
 				e.fire(updated.VPS, shared.AlertAgentOffline, shared.SeverityCritical, "",
 					"Agent stopped reporting - VPS offline")

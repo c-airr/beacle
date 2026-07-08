@@ -13,7 +13,7 @@ $backend = Get-Process beacle-backend -ErrorAction SilentlyContinue
 if (-not $backend) {
     Push-Location "$root\backend"
     if (-not (Test-Path .\beacle-backend.exe)) { go build -o beacle-backend.exe . }
-    Start-Process -FilePath .\beacle-backend.exe -ArgumentList '-addr',':8930','-data',"$root\backend\data" -WorkingDirectory "$root\backend" -WindowStyle Hidden
+    Start-Process -FilePath .\beacle-backend.exe -ArgumentList '-addr','0.0.0.0:8930','-data',"$root\backend\data" -WorkingDirectory "$root\backend" -WindowStyle Hidden
     Pop-Location
     Start-Sleep 2
 }

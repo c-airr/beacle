@@ -29,7 +29,6 @@ func main() {
 	reporter := NewReporter(cfg, col, proxy)
 	api := &APIServer{cfg: cfg, col: col, proxy: proxy, upd: updater}
 	go updater.AutoUpdateLoop()
-	reporter.Register()
 	ws := NewWSClient(cfg, api, reporter)
 	ws.Run()
 }

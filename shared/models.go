@@ -240,21 +240,10 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	OK             string `json:"ok"`
-	VPSID          string `json:"vps_id"`
-	Token          string `json:"token,omitempty"` // set on first registration
-	ReportInterval int    `json:"report_interval_seconds"`
-}
-
-// AgentReport is the periodic push from agent to backend.
-type AgentReport struct {
-	VPSID    string        `json:"vps_id"`
-	Version  string        `json:"agent_version"`
-	Metrics  SystemMetrics `json:"metrics"`
-	Docker   DockerState   `json:"docker"`
-	Services ServicesState `json:"services"`
-	Proxy    ProxyState    `json:"proxy"`
-	SentAt   time.Time     `json:"sent_at"`
+	OK        string    `json:"ok"`
+	VPSID     string    `json:"vps_id"`
+	Token     string    `json:"token,omitempty"` // set on first registration
+	PowerMode PowerMode `json:"power_mode,omitempty"`
 }
 
 type PingResult struct {
@@ -268,37 +257,70 @@ type PingResult struct {
 // Agent ↔ Backend WebSocket tunnel (outbound from agent, CGNAT-safe)
 // ---------------------------------------------------------------------------
 
+// PowerMode is set by the backend; the agent owns all sync intervals per mode.
+type PowerMode string
+
+const (
+	PowerModeActive PowerMode = "active"
+	PowerModeEco    PowerMode = "eco"
+	PowerModeSleep  PowerMode = "sleep"
+)
+
 type AgentWSMessageType string
 
 const (
-	AgentWSCommand       AgentWSMessageType = "command"
-	AgentWSCommandResult AgentWSMessageType = "command_result"
-	AgentWSReport        AgentWSMessageType = "report"
-	AgentWSPing          AgentWSMessageType = "ping"
-	AgentWSPong          AgentWSMessageType = "pong"
+	AgentWSRegister        AgentWSMessageType = "register"
+	AgentWSRegisterAck     AgentWSMessageType = "register_ack"
+	AgentWSHeartbeat       AgentWSMessageType = "heartbeat"
+	AgentWSMetrics         AgentWSMessageType = "metrics"
+	AgentWSDockerSnapshot  AgentWSMessageType = "docker_snapshot"
+	AgentWSSystemdSnapshot AgentWSMessageType = "systemd_snapshot"
+	AgentWSPortsSnapshot   AgentWSMessageType = "ports_snapshot"
+	AgentWSProxySnapshot   AgentWSMessageType = "proxy_snapshot"
+	AgentWSAlert           AgentWSMessageType = "alert"
+	AgentWSCommand         AgentWSMessageType = "command"
+	AgentWSCommandResult   AgentWSMessageType = "command_result"
+	AgentWSPowerMode       AgentWSMessageType = "power_mode"
+	AgentWSRefresh         AgentWSMessageType = "refresh"
+	AgentWSLogStream       AgentWSMessageType = "log_stream"
+	AgentWSFileTransfer    AgentWSMessageType = "file_transfer"
+	AgentWSError           AgentWSMessageType = "error"
 )
 
 // AgentWSMessage is the envelope on GET /agent/ws. The agent maintains an
-// outbound WebSocket; the backend pushes commands and receives reports/results
+// outbound WebSocket; the backend pushes commands and receives snapshots/results
 // on that single connection — no inbound connections to the agent.
 type AgentWSMessage struct {
-	Type    AgentWSMessageType `json:"type"`
-	Command *AgentCommand      `json:"command,omitempty"`
-	Result  *AgentCommandResult `json:"result,omitempty"`
-	Report  *AgentReport       `json:"report,omitempty"`
+	Type     AgentWSMessageType `json:"type"`
+	Mode     PowerMode          `json:"mode,omitempty"`
+	VPSID    string             `json:"vps_id,omitempty"`
+	AgentVer string             `json:"agent_version,omitempty"`
+
+	Register    *RegisterRequest    `json:"register,omitempty"`
+	RegisterAck *RegisterResponse   `json:"register_ack,omitempty"`
+	Command     *AgentCommand       `json:"command,omitempty"`
+	Result      *AgentCommandResult `json:"result,omitempty"`
+
+	Metrics  *SystemMetrics  `json:"metrics,omitempty"`
+	Docker   *DockerState    `json:"docker,omitempty"`
+	Services *ServicesState  `json:"services,omitempty"`
+	Ports    []PortInfo      `json:"ports,omitempty"`
+	Proxy    *ProxyState     `json:"proxy,omitempty"`
+
+	Error string `json:"error,omitempty"`
 }
 
 // AgentCommand is sent backend→agent over the existing WS connection.
 type AgentCommand struct {
-	ID     string          `json:"id"`
-	Method string          `json:"method"`
-	Path   string          `json:"path"` // e.g. /api/system/processes?lines=200
-	Body   json.RawMessage `json:"body,omitempty"`
+	RequestID string          `json:"request_id"`
+	Method    string          `json:"method"`
+	Path      string          `json:"path"` // e.g. /api/system/processes?lines=200
+	Body      json.RawMessage `json:"body,omitempty"`
 }
 
 // AgentCommandResult is the agent's HTTP-equivalent response to a command.
 type AgentCommandResult struct {
-	ID         string          `json:"id"`
+	RequestID  string          `json:"request_id"`
 	StatusCode int             `json:"status_code"`
 	Body       json.RawMessage `json:"body"`
 }
@@ -438,6 +460,7 @@ type VPSSnapshot struct {
 	Docker   DockerState   `json:"docker"`
 	Services ServicesState `json:"services"`
 	Proxy    ProxyState    `json:"proxy"`
+	Ports    []PortInfo    `json:"ports,omitempty"`
 	Updated  time.Time     `json:"updated"`
 }
 

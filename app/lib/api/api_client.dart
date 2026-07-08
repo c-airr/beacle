@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../config.dart';
 import '../models/models.dart';
 
 class TailscaleDevice {
@@ -89,8 +90,15 @@ class ApiClient {
         'tailscale_ip': tailscaleIp,
       }));
 
-  Future<String> installCommand() async =>
-      ((await get('/api/install-command')) as Map)['install_command'] as String;
+  Future<String> installCommand() async {
+    final r = (await get('/api/install-command')) as Map;
+    final backend = (r['backend_url'] as String? ?? '').trim();
+    if (backend.isEmpty) {
+      throw ApiException(tailscaleNotOnPc, 503);
+    }
+    // Always build from config.dart — never trust stale backend.exe install_command text.
+    return vpsInstallCommand(backend);
+  }
 
   Future<List<Vps>> listVps() async =>
       ((await get('/api/vps')) as List? ?? []).map((e) => Vps.fromJson(e)).toList();
@@ -172,4 +180,7 @@ class ApiClient {
 
   Future<String> agentRollback(String vpsId) async =>
       ((await post(_a(vpsId, 'rollback'))) as Map)['result'] as String? ?? '';
+
+  Future<void> setPowerMode(String mode) =>
+      post('/api/ui/power-mode', body: {'mode': mode});
 }

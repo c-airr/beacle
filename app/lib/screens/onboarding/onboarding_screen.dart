@@ -5,6 +5,8 @@ import '../../api/api_client.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../user_config.dart';
+import '../../config.dart';
+import '../../widgets/add_vps_dialog.dart';
 import '../../widgets/common.dart';
 import '../shell.dart';
 
@@ -146,18 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: [
         const Text('Add VPS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: BeacleColors.surfaceHi,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: BeacleColors.border),
-          ),
-          child: const Text(
-            'At least one VPS with a public IPv4 address or a computer with a public IPv4 address is required for Tailscale mesh connectivity. Each VPS must have Tailscale installed.',
-            style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
-          ),
-        ),
+        tailscaleRequirementBanner(),
         const SizedBox(height: 16),
         if (_servers.isEmpty)
           const Text('No servers yet', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
@@ -169,12 +160,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   const Icon(Icons.dns_outlined, size: 14, color: BeacleColors.textDim),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(s.name, style: const TextStyle(fontSize: 13))),
-                  Text(s.tailscaleIp, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.name, style: const TextStyle(fontSize: 13)),
+                        Text(s.tailscaleIp, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.close, size: 16, color: BeacleColors.textDim),
+                    onPressed: _finishing
+                        ? null
+                        : () async {
+                            try {
+                              await context.read<AppState>().api.deleteVps(s.id);
+                            } catch (_) {}
+                            if (mounted) setState(() => _servers.remove(s));
+                          },
+                  ),
                 ],
               ),
             ),
-            _InstallBlock(serverName: s.name),
+            _InstallBlock(),
             const SizedBox(height: 10),
           ],
         ],
@@ -206,32 +216,46 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       devices = await state.api.tailscaleDevices();
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = e is ApiException && e.status == 503 ? tailscaleNotOnPc : '$e');
       return;
     }
     final available = devices.where((d) => !d.self).toList();
     if (!mounted) return;
+    if (available.isEmpty) {
+      setState(() => _error = tailscaleNoPeers);
+      return;
+    }
     final picked = await showDialog<TailscaleDevice>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Select Tailscale device'),
         content: SizedBox(
           width: 400,
-          child: available.isEmpty
-              ? const Text('No remote devices found. Install Tailscale on your VPS first.',
-                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
-              : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final d in available)
-                      ListTile(
-                        title: Text(d.name),
-                        subtitle: Text(d.ips.isNotEmpty ? d.ips.first : d.dns,
-                            style: const TextStyle(fontSize: 11, fontFamily: 'Consolas')),
-                        onTap: () => Navigator.pop(ctx, d),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              tailscaleRequirementBanner(),
+              const SizedBox(height: 12),
+              ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final d in available)
+                    ListTile(
+                      title: Text(d.name),
+                      subtitle: Text(
+                        [
+                          if (d.ips.isNotEmpty) d.ips.first,
+                          if (!d.online) 'offline',
+                        ].where((s) => s.isNotEmpty).join(' · '),
+                        style: const TextStyle(fontSize: 11, fontFamily: 'Consolas'),
                       ),
-                  ],
-                ),
+                      onTap: () => Navigator.pop(ctx, d),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -256,7 +280,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Run on the VPS as root:', style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                const Text(
+                  'Run on the VPS as root. Downloads from GitHub only.',
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                ),
                 const SizedBox(height: 8),
                 CopyField(cmd),
               ],
@@ -272,12 +299,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _InstallBlock extends StatelessWidget {
-  final String serverName;
-  const _InstallBlock({required this.serverName});
+  const _InstallBlock();
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
@@ -286,19 +311,12 @@ class _InstallBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: BeacleColors.border),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Install on $serverName', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-          const SizedBox(height: 6),
-          FutureBuilder<String>(
-            future: state.api.installCommand(),
-            builder: (ctx, snap) {
-              if (snap.hasError) return Text('${snap.error}', style: const TextStyle(fontSize: 11, color: BeacleColors.err));
-              if (!snap.hasData) return const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
-              return CopyField(snap.data!);
-            },
-          ),
+          Text('Install command', style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+          SizedBox(height: 6),
+          AddVpsCommand(),
         ],
       ),
     );

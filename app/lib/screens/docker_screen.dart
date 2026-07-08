@@ -167,6 +167,7 @@ class _ContainersTab extends StatelessWidget {
   Widget _actions(BuildContext context, AppState state, ContainerInfo c) {
     Future<void> act(String action) async {
       try {
+        state.onUserAction();
         await state.api.dockerAction(vps.id, c.id, action);
         if (context.mounted) showToast(context, '${c.name}: $action ok');
       } catch (e) {

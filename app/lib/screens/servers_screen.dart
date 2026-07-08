@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
 
 /// Detailed per-VPS view: CPU, RAM, disk, network, processes, open ports,
@@ -15,27 +16,34 @@ class ServersScreen extends StatefulWidget {
   const ServersScreen({super.key, this.initialVpsId});
 
   @override
-  State<ServersScreen> createState() => _ServersScreenState();
+  State<ServersScreen> createState() => ServersScreenState();
 }
 
-class _ServersScreenState extends State<ServersScreen> {
+class ServersScreenState extends State<ServersScreen> {
   String? selectedId;
   List<ProcessInfo> processes = [];
   List<PortInfo> ports = [];
   bool loadingDetail = false;
   Timer? _detailTimer;
+  int _detailRefreshSec = 10;
+
+  void selectVps(String id) {
+    context.read<AppState>().bumpActivity();
+    setState(() => selectedId = id);
+    _loadDetail();
+  }
 
   @override
   void initState() {
     super.initState();
     selectedId = widget.initialVpsId;
-    _detailTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadDetail(silent: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resetDetailTimer());
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDetail());
   }
 
   @override
-  void didUpdateWidget(covariant ServersScreen old) {
-    super.didUpdateWidget(old);
+  void didUpdateWidget(covariant ServersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
     if (widget.initialVpsId != null && widget.initialVpsId != selectedId) {
       selectedId = widget.initialVpsId;
       _loadDetail();
@@ -48,13 +56,21 @@ class _ServersScreenState extends State<ServersScreen> {
     super.dispose();
   }
 
+  void _resetDetailTimer() {
+    final sec = context.read<AppState>().portsRefreshSeconds;
+    if (sec == _detailRefreshSec && _detailTimer != null) return;
+    _detailRefreshSec = sec;
+    _detailTimer?.cancel();
+    _detailTimer = Timer.periodic(Duration(seconds: sec), (_) => _loadDetail(silent: true));
+  }
+
   Future<void> _loadDetail({bool silent = false}) async {
     final state = context.read<AppState>();
     final id = selectedId ?? (state.vpsList.isNotEmpty ? state.vpsList.first.id : null);
     if (id == null) return;
     selectedId ??= id;
     final vps = state.vpsList.where((v) => v.id == id).firstOrNull;
-    if (vps == null || !vps.online) {
+    if (vps == null || !vps.online || state.isReportStale(vps)) {
       setState(() {
         processes = [];
         ports = [];
@@ -62,9 +78,18 @@ class _ServersScreenState extends State<ServersScreen> {
       return;
     }
     if (!silent) setState(() => loadingDetail = true);
+    final snap = state.snapshots[id];
+    if (snap != null && snap.ports.isNotEmpty) {
+      if (mounted && selectedId == id) {
+        setState(() => ports = snap.ports);
+      }
+    }
     try {
       final p = await state.api.processes(id);
-      final pr = await state.api.ports(id);
+      List<PortInfo> pr = snap?.ports ?? [];
+      if (pr.isEmpty) {
+        pr = await state.api.ports(id);
+      }
       if (mounted && selectedId == id) {
         setState(() {
           processes = p;
@@ -73,19 +98,31 @@ class _ServersScreenState extends State<ServersScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => loadingDetail = false);
+      if (mounted) {
+        setState(() {
+          processes = [];
+          ports = [];
+          loadingDetail = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    if (state.portsRefreshSeconds != _detailRefreshSec) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _resetDetailTimer();
+      });
+    }
     if (state.vpsList.isEmpty) {
       return const Center(child: Text('No VPS registered', style: TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= state.vpsList.first.id;
     final vps = state.vpsList.where((v) => v.id == selectedId).firstOrNull ?? state.vpsList.first;
     final snap = state.snapshots[vps.id];
+    final showDetail = snap != null && vps.online && !state.isReportStale(vps);
 
     return Row(
       children: [
@@ -100,6 +137,7 @@ class _ServersScreenState extends State<ServersScreen> {
                 HoverRow(
                   selected: v.id == selectedId,
                   onTap: () {
+                    context.read<AppState>().bumpActivity();
                     setState(() => selectedId = v.id);
                     _loadDetail();
                   },
@@ -128,15 +166,15 @@ class _ServersScreenState extends State<ServersScreen> {
         const VerticalDivider(width: 1),
         // detail
         Expanded(
-          child: snap == null
-              ? _PendingView(vps: vps, state: state)
-              : _ServerDetail(
+          child: showDetail
+              ? _ServerDetail(
                   vps: vps,
                   snap: snap,
                   processes: processes,
                   ports: ports,
                   onRefresh: _loadDetail,
-                ),
+                )
+              : _PendingView(vps: vps, state: state, stale: state.isReportStale(vps)),
         ),
       ],
     );
@@ -146,26 +184,61 @@ class _ServersScreenState extends State<ServersScreen> {
 class _PendingView extends StatelessWidget {
   final Vps vps;
   final AppState state;
-  const _PendingView({required this.vps, required this.state});
+  final bool stale;
+  const _PendingView({required this.vps, required this.state, this.stale = false});
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.cloud_off, size: 40, color: BeacleColors.textDim),
-          const SizedBox(height: 12),
-          Text('${vps.name} has no agent data yet', style: const TextStyle(fontSize: 14)),
-          const SizedBox(height: 4),
-          const Text('Waiting for the agent to report. If it was just installed, data appears within seconds.',
-              style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
-          const SizedBox(height: 12),
-          SmallButton('Delete VPS', icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
-            await state.api.deleteVps(vps.id);
-            state.refreshAll();
-          }),
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  StatusDot(vps.status, size: 10),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      stale ? '${vps.name} — data outdated' : '${vps.name} — waiting for agent',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                vps.tailscaleName.isNotEmpty ? 'Tailscale: ${vps.tailscaleName} · ${vps.host}' : vps.host,
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+              ),
+              if (stale) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Last update ${fmtAgo(vps.lastSeen)}. Agent is not sending live metrics — showing no stale processes or disk data.',
+                  style: const TextStyle(fontSize: 12, color: BeacleColors.warn, height: 1.45),
+                ),
+              ] else ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Run the install command on the VPS as root. Data appears within seconds after the agent connects.',
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+                ),
+                const SizedBox(height: 10),
+                const AddVpsCommand(),
+              ],
+              const SizedBox(height: 16),
+              SmallButton('Delete VPS', icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
+                if (!await confirmDeleteVps(context, vps)) return;
+                await state.api.deleteVps(vps.id);
+                await state.refreshAll();
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -200,6 +273,8 @@ class _ServerDetail extends StatelessWidget {
             Text(vps.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(width: 12),
             Text(vps.host, style: const TextStyle(color: BeacleColors.textDim)),
+            const SizedBox(width: 12),
+            Text('updated ${fmtAgo(vps.lastSeen)}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const Spacer(),
             SmallButton('Update agent', icon: Icons.system_update_alt, onPressed: () async {
               try {
@@ -220,21 +295,9 @@ class _ServerDetail extends StatelessWidget {
             }),
             const SizedBox(width: 8),
             SmallButton('Delete', icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Delete VPS?'),
-                  content: Text('Remove ${vps.name} from Beacle? The agent on the server is not uninstalled.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
-                  ],
-                ),
-              );
-              if (ok == true) {
-                await state.api.deleteVps(vps.id);
-                state.refreshAll();
-              }
+              if (!await confirmDeleteVps(context, vps)) return;
+              await state.api.deleteVps(vps.id);
+              await state.refreshAll();
             }),
           ],
         ),
@@ -288,7 +351,10 @@ class _ServerDetail extends StatelessWidget {
               child: PanelCard(
                 title: 'DISKS',
                 child: Column(children: [
-                  for (final d in m.disks)
+                  if (m.disks.isEmpty)
+                    const Text('No disk data', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                  else
+                    for (final d in m.disks)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: MetricBar(

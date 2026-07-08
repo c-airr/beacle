@@ -12,7 +12,7 @@ Model działania (LOCAL-FIRST + Tailscale):
   3. beacle.exe uruchamia backend.exe w tle; przy zamknięciu POST /api/shutdown
   4. Pierwsze uruchomienie → kreator (onboarding_screen.dart)
   5. VPS dodawane z listy urządzeń Tailscale (POST /api/vps)
-  6. Na VPS: curl -sSL http://<tailscale-ip>:8930/install | bash
+  6. Na VPS: curl -fsSL https://github.com/c-airr/beacle/releases/download/BETA/install.sh | sudo bash -s http://<desktop-tailscale-ip>:8930
   7. Agent łączy się po adresach Tailscale (100.x.x.x)
   Wymagane: Tailscale na PC i każdym VPS. Beacle NIE zarządza VPN.
 
@@ -85,25 +85,26 @@ backend/  — serwer Go
   Endpointy UI (najważniejsze):
     GET  /api/vps              lista VPS
     GET  /api/vps/{id}         snapshot (GET) / edycja metadanych (PATCH) / delete
-    GET  /api/install-command  → "curl -sSL <base>/install | bash"
+    GET  /api/install-command  → backend_url + install.sh from GitHub (Flutter builds curl)
     GET  /api/overview         vps + snapshots + alerts + actions + links
     GET  /ws                   live updates (vps_update, vps_list, alert…)
     GET  /install              bash installer
     GET  /download/agent       binarka Linux
 
-  Endpointy agenta:
-    POST /api/agents/register  auto-register (bez tokena 1. raz) lub re-register
-    POST /api/agents/report    heartbeat + metryki (fallback HTTP outbound)
-    GET  /agent/ws             outbound WebSocket tunnel (raporty + komendy)
+  Endpointy agenta (WebSocket only — GET /agent/ws):
+    register / register_ack  pierwsza ramka po połączeniu
+    report                   metryki co 3 s
+    command / command_result komendy z UI (Docker, systemd, proxy…)
+    ping / pong              keepalive
 
 ================================================================================
 agent/  — agent Go (produkcja: Linux only)
 ================================================================================
 
-  main.go           Start: register + outbound WS (brak inbound HTTP)
-  ws_client.go      WebSocket do backendu (raporty + dispatch komend)
-  config.go         Config JSON (backend_url; vps_id/token po rejestracji)
-  reporter.go       Register() auto-register + BuildReport()
+  main.go           Start: jedno połączenie WS (register + raporty + komendy)
+  ws_client.go      WebSocket do backendu (reconnect, heartbeat, raporty co 3s)
+  config.go         Config JSON (backend_url; vps_id/token po rejestracji WS)
+  reporter.go       BuildReport() + RegisterRequest() dla ramek WS
   api.go            Logika API agenta + Dispatch() (wywoływane z WS)
   collector.go      Interfejs Collector
   system_linux.go   Metryki z /proc, procesy, ping
@@ -162,8 +163,7 @@ GDZIE SZUKAĆ PRZY ZMIANACH (szybki lookup)
   ─────────────────────────────────────────────────────────────────────────
   Nowy endpoint API               backend/api.go (+ shared/models.go jeśli DTO)
   Nowy typ wire / JSON            shared/models.go + app/lib/models/models.dart
-  Auto-rejestracja agenta         backend/api.go handleAgentRegister
-                                  agent/reporter.go Register()
+  Auto-rejestracja agenta         backend/agent_register.go, agent_hub.go (WS register)
   Installer bash                  backend/install_script.go
   Nowa metryka systemowa          agent/system_linux.go + shared/models.go
   Docker operacja                 agent/docker_linux.go + agent/api.go
@@ -177,7 +177,8 @@ GDZIE SZUKAĆ PRZY ZMIANACH (szybki lookup)
   Mapa (markery, linki)           app/lib/screens/map/map_screen.dart
   Backend URL appki               app/lib/config.dart (localhost, embedded)
   Embedded backend                app/lib/backend/embedded_backend.dart
-  Agent URL (VPS install)         Settings → VPS, local_settings.dart
+                                  tailscale serve (Windows) + windows_firewall.dart
+  Agent URL (VPS install)         app/lib/config.dart (installScriptUrl, vpsInstallCommand)
   Protokół dokumentacja           shared/PROTOCOL.md
 
 ================================================================================

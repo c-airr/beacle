@@ -7,7 +7,7 @@ const (
 	DiskHighPercent    = 90.0
 	HighLoadCPUPercent = 75.0 // marker turns yellow above this
 
-	DefaultReportIntervalSec = 5
-	OfflineAfterSec          = 20
-	DefaultAgentPort         = 8931
+	// OfflineAfterSec: agent may report metrics as slowly as 60 s in sleep mode.
+	OfflineAfterSec  = 90
+	DefaultAgentPort = 8931
 )
