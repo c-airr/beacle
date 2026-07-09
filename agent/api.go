@@ -249,10 +249,9 @@ func (s *APIServer) Dispatch(method, pathWithQuery string, body []byte) (int, []
 		b, _ := json.Marshal(shared.APIError{Error: "bad path"})
 		return http.StatusBadRequest, b
 	}
-	var bodyReader *bytes.Reader
-	if len(body) > 0 {
-		bodyReader = bytes.NewReader(body)
-	}
+	// Important: never pass a typed-nil *bytes.Reader to httptest.NewRequest.
+	// bytes.NewReader(nil) is safe and yields a reader with length 0.
+	bodyReader := bytes.NewReader(body)
 	req := httptest.NewRequest(method, u.Path, bodyReader)
 	if u.RawQuery != "" {
 		req.URL.RawQuery = u.RawQuery

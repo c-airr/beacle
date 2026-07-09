@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
 # Must match BEACLE_BACKEND dart-define when running Flutter.
-$base = 'http://127.0.0.1:8930'
+$base = 'http://127.0.0.1:9930'
 $env:BEACLE_PUBLIC_URL = $base
 
 Write-Host "Backend: $base" -ForegroundColor Cyan
@@ -13,7 +13,7 @@ $backend = Get-Process beacle-backend -ErrorAction SilentlyContinue
 if (-not $backend) {
     Push-Location "$root\backend"
     if (-not (Test-Path .\beacle-backend.exe)) { go build -o beacle-backend.exe . }
-    Start-Process -FilePath .\beacle-backend.exe -ArgumentList '-addr','0.0.0.0:8930','-data',"$root\backend\data" -WorkingDirectory "$root\backend" -WindowStyle Hidden
+    Start-Process -FilePath .\beacle-backend.exe -ArgumentList '-addr','0.0.0.0:9930','-data',"$root\backend\data" -WorkingDirectory "$root\backend" -WindowStyle Hidden
     Pop-Location
     Start-Sleep 2
 }

@@ -58,6 +58,8 @@ class _BeacleAppState extends State<BeacleApp> with WidgetsBindingObserver {
     switch (lifecycle) {
       case AppLifecycleState.resumed:
         state.bumpActivity();
+      case AppLifecycleState.inactive:
+        state.enterEcoMode();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
         state.enterSleepMode();

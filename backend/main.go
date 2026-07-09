@@ -9,7 +9,7 @@ import (
 
 func main() {
 	var (
-		addr    = flag.String("addr", "0.0.0.0:8930", "listen address (0.0.0.0 for Tailscale agents)")
+		addr    = flag.String("addr", "0.0.0.0:9930", "listen address (0.0.0.0 for Tailscale agents)")
 		baseURL = flag.String("base-url", "", "Tailscale URL of this backend for install commands")
 		dataDir = flag.String("data", "./data", "data directory")
 	)
@@ -26,7 +26,7 @@ func main() {
 	base := *baseURL
 	if base == "" {
 		if ip := tailscaleSelfIPv4(); ip != "" {
-			base = fmt.Sprintf("http://%s:8930", ip)
+			base = fmt.Sprintf("http://%s:9930", ip)
 		} else {
 			base = fmt.Sprintf("http://127.0.0.1%s", *addr)
 			log.Printf("beacle: tailscale not available, install commands use %s", base)

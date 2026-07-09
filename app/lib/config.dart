@@ -1,5 +1,5 @@
 /// Local-first: the panel always talks to the embedded backend on this machine.
-const String localBackendUrl = 'http://127.0.0.1:8930';
+const String localBackendUrl = 'http://127.0.0.1:9930';
 
 /// Agent binary on GitHub (amd64 VPS, BETA channel).
 const String agentBinaryUrl =

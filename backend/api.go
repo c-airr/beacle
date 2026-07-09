@@ -162,7 +162,7 @@ func (s *Server) handleInstallCommand(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) backendURL() string {
 	if ip := tailscaleSelfIPv4(); ip != "" {
-		return fmt.Sprintf("http://%s:8930", ip)
+		return fmt.Sprintf("http://%s:9930", ip)
 	}
 	return s.baseURL
 }

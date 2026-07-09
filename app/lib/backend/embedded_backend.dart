@@ -28,8 +28,8 @@ class EmbeddedBackend {
     BeaclePaths.ensureDirs();
     _seedAgentBinaries(bin.parent.path);
 
-    // Localhost only — tailnet agents reach us via `tailscale serve` on Windows.
-    final listenAddr = Platform.isWindows ? '127.0.0.1:8930' : '0.0.0.0:8930';
+    // Bind on all interfaces so Tailscale agents can reach us directly.
+    final listenAddr = '0.0.0.0:9930';
     final args = ['-addr', listenAddr, '-data', BeaclePaths.dataDir];
 
     debugPrint('beacle: starting backend on $listenAddr (${BeaclePaths.dataDir})');
@@ -70,7 +70,7 @@ class EmbeddedBackend {
     } catch (_) {}
 
     if (await _healthy() && Platform.isWindows) {
-      debugPrint('beacle: stopping stale backend on :8930');
+      debugPrint('beacle: stopping stale backend on :9930');
       try {
         await Process.run('taskkill', ['/IM', 'beacle-backend.exe', '/F'], runInShell: true);
         await Future.delayed(const Duration(milliseconds: 400));
