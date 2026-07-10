@@ -63,7 +63,7 @@ Future<bool> _addPortRule({required bool elevated}) async {
     'advfirewall', 'firewall', 'add', 'rule',
     'name=$_portRuleName',
     'dir=in', 'action=allow', 'protocol=TCP',
-    'localport=$backendPort', 'profile=any', 'enable=yes',
+    'localport=$backendPort', 'profile=any', 'enable=yes', 'edge=yes',
   ];
   return _runNetsh(args, elevated: elevated);
 }
