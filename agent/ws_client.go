@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"beacle/shared"
@@ -17,12 +18,12 @@ const (
 	wsHandshakeTimeout = 30 * time.Second
 	wsReadTimeout      = 90 * time.Second
 	wsWriteTimeout     = 15 * time.Second
-	heartbeatInterval  = 15 * time.Second
+	pingInterval       = 20 * time.Second
 	reconnectMin       = 1 * time.Second
 	reconnectMax       = 30 * time.Second
 )
 
-// WSClient is the only transport to the backend: register, snapshots, commands, heartbeat.
+// WSClient is the only transport to the backend: register, snapshots, commands, keepalive.
 type WSClient struct {
 	cfg      *Config
 	api      *APIServer
@@ -54,8 +55,12 @@ func agentWSURL(backend string) (string, error) {
 func (c *WSClient) Run() {
 	backoff := reconnectMin
 	for {
-		if err := c.session(); err != nil {
+		registered, err := c.session()
+		if err != nil {
 			log.Printf("agent ws session ended: %v", err)
+		}
+		if registered {
+			backoff = reconnectMin
 		}
 		log.Printf("agent ws reconnect in %s", backoff)
 		time.Sleep(backoff)
@@ -66,10 +71,11 @@ func (c *WSClient) Run() {
 	}
 }
 
-func (c *WSClient) session() error {
+// session returns registered=true once register_ack was received (backoff should reset).
+func (c *WSClient) session() (registered bool, err error) {
 	wsURL, err := agentWSURL(c.cfg.BackendURL)
 	if err != nil {
-		return err
+		return false, err
 	}
 	hdr := http.Header{}
 	if c.cfg.Token != "" {
@@ -79,42 +85,65 @@ func (c *WSClient) session() error {
 	dialer := websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout}
 	conn, _, err := dialer.Dial(wsURL, hdr)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Close()
+
+	var writeMu sync.Mutex
+	writeControl := func(messageType int, data []byte) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		deadline := time.Now().Add(wsWriteTimeout)
+		_ = conn.SetWriteDeadline(deadline)
+		return conn.WriteControl(messageType, data, deadline)
+	}
+	writeText := func(data []byte) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+		return conn.WriteMessage(websocket.TextMessage, data)
+	}
 
 	conn.SetPongHandler(func(string) error {
 		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 	})
+	conn.SetPingHandler(func(appData string) error {
+		if err := writeControl(websocket.PongMessage, []byte(appData)); err != nil {
+			return err
+		}
+		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	})
 
-	powerMode, err := c.handshake(conn)
+	powerMode, err := c.handshake(conn, writeText)
 	if err != nil {
-		return err
+		return false, err
 	}
+	registered = true
 	log.Printf("agent ws connected to %s (vps %s, mode %s)", wsURL, c.cfg.VPSID, powerMode)
 
 	writeCh := make(chan []byte, 64)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var writeOnce sync.Once
+	closeWrite := func() { writeOnce.Do(func() { close(writeCh) }) }
+	defer closeWrite()
+
 	sync := NewSyncEngine(c.cfg, c.reporter, writeCh)
 	sync.SetPowerMode(powerMode)
 
 	errCh := make(chan error, 4)
-	go c.writePump(conn, writeCh, errCh)
+	go c.writePump(ctx, writeCh, writeText, writeControl, errCh)
 	go func() { errCh <- c.readLoop(conn, writeCh, sync) }()
-	go func() { errCh <- c.heartbeatLoop(conn, writeCh) }()
-	go func() {
-		sync.Run(ctx)
-	}()
+	go sync.Run(ctx)
 
 	err = <-errCh
 	cancel()
-	close(writeCh)
-	return err
+	closeWrite()
+	return registered, err
 }
 
-func (c *WSClient) handshake(conn *websocket.Conn) (shared.PowerMode, error) {
+func (c *WSClient) handshake(conn *websocket.Conn, writeText func([]byte) error) (shared.PowerMode, error) {
 	reg, err := json.Marshal(shared.AgentWSMessage{
 		Type:     shared.AgentWSRegister,
 		Register: ptr(c.reporter.RegisterRequest()),
@@ -122,8 +151,7 @@ func (c *WSClient) handshake(conn *websocket.Conn) (shared.PowerMode, error) {
 	if err != nil {
 		return "", err
 	}
-	_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
-	if err := conn.WriteMessage(websocket.TextMessage, reg); err != nil {
+	if err := writeText(reg); err != nil {
 		return "", err
 	}
 
@@ -159,31 +187,34 @@ func (c *WSClient) handshake(conn *websocket.Conn) (shared.PowerMode, error) {
 	}
 }
 
-func (c *WSClient) writePump(conn *websocket.Conn, writeCh <-chan []byte, errCh chan<- error) {
-	for msg := range writeCh {
-		_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
-		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			errCh <- err
-			return
-		}
-	}
-}
-
-func (c *WSClient) heartbeatLoop(conn *websocket.Conn, writeCh chan<- []byte) error {
-	ticker := time.NewTicker(heartbeatInterval)
+func (c *WSClient) writePump(
+	ctx context.Context,
+	writeCh <-chan []byte,
+	writeText func([]byte) error,
+	writeControl func(int, []byte) error,
+	errCh chan<- error,
+) {
+	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
-	for range ticker.C {
-		out, err := json.Marshal(shared.AgentWSMessage{Type: shared.AgentWSHeartbeat})
-		if err != nil {
-			return err
-		}
+	for {
 		select {
-		case writeCh <- out:
-		default:
-			return fmt.Errorf("ws write buffer full (heartbeat)")
+		case <-ctx.Done():
+			return
+		case msg, ok := <-writeCh:
+			if !ok {
+				return
+			}
+			if err := writeText(msg); err != nil {
+				errCh <- err
+				return
+			}
+		case <-ticker.C:
+			if err := writeControl(websocket.PingMessage, []byte("ping")); err != nil {
+				errCh <- err
+				return
+			}
 		}
 	}
-	return nil
 }
 
 func (c *WSClient) readLoop(conn *websocket.Conn, writeCh chan<- []byte, sync *SyncEngine) error {
@@ -238,11 +269,7 @@ func (c *WSClient) readLoop(conn *websocket.Conn, writeCh chan<- []byte, sync *S
 		case shared.AgentWSRefresh:
 			sync.RequestRefresh()
 		case shared.AgentWSHeartbeat:
-			out, _ := json.Marshal(shared.AgentWSMessage{Type: shared.AgentWSHeartbeat})
-			select {
-			case writeCh <- out:
-			default:
-			}
+			// One-way keepalive from older peers — do not echo.
 		case shared.AgentWSCommandResult, shared.AgentWSRegisterAck,
 			shared.AgentWSMetrics, shared.AgentWSDockerSnapshot, shared.AgentWSSystemdSnapshot,
 			shared.AgentWSPortsSnapshot, shared.AgentWSProxySnapshot:

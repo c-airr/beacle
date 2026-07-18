@@ -12,8 +12,8 @@ import '../widgets/alerts_panel.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
 import 'map/map_screen.dart';
-import 'metrics_screen.dart';
 import 'overview_screen.dart';
+import 'processes_screen.dart';
 import 'proxy_screen.dart';
 import 'servers_screen.dart';
 import 'services_screen.dart';
@@ -41,12 +41,12 @@ class AppShellState extends State<AppShell> {
 
   static const _items = [
     (Icons.space_dashboard_outlined, 'Overview'),
+    (Icons.public_outlined, 'Map'),
     (Icons.dns_outlined, 'Servers'),
-    (Icons.monitor_heart_outlined, 'Metrics'),
+    (Icons.memory_outlined, 'Processes'),
     (Icons.view_in_ar_outlined, 'Docker'),
     (Icons.miscellaneous_services_outlined, 'Systemd'),
     (Icons.alt_route_outlined, 'Proxy'),
-    (Icons.public_outlined, 'Map'),
     (Icons.notifications_outlined, 'Alerts'),
     (Icons.tune_outlined, 'Settings'),
   ];
@@ -56,12 +56,12 @@ class AppShellState extends State<AppShell> {
     super.initState();
     _screens = [
       const OverviewScreen(),
+      const MapScreen(),
       ServersScreen(key: _serversKey),
-      const MetricsScreen(),
+      const ProcessesScreen(),
       const DockerScreen(),
       const ServicesScreen(),
       const ProxyScreen(),
-      const MapScreen(),
       const AlertsScreen(),
       const SettingsScreen(),
     ];
@@ -84,7 +84,7 @@ class AppShellState extends State<AppShell> {
     context.read<AppState>().bumpActivity();
     setState(() {
       focusedVpsId = vpsId;
-      index = 1;
+      index = 2; // Servers
     });
     _serversKey.currentState?.selectVps(vpsId);
   }
@@ -164,7 +164,7 @@ class AppShellState extends State<AppShell> {
                 onTap: () {
                   context.read<AppState>().bumpActivity();
                   setState(() {
-                    if (i != 1) focusedVpsId = null;
+                    if (i != 2) focusedVpsId = null;
                     index = i;
                   });
                 },

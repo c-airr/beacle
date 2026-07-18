@@ -14,7 +14,7 @@
 
 ### v1.0 (~1 week) — first release
 
-- Finish and polish the full UI (Overview, Servers, Metrics, Docker, Systemd, Proxy, Map, Alerts, Settings)
+- Finish and polish the full UI (Overview, Servers, Processes, Docker, Systemd, Proxy, Map, Alerts, Settings)
 - Onboarding and VPS install flow that “just works”
 - Adaptive refresh (active / eco / sleep) without dropping WebSocket
 - Documentation and release binaries

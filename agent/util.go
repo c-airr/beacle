@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func randomID() string {
@@ -15,7 +16,8 @@ func randomID() string {
 }
 
 func fetchPublicIP() string {
-	resp, err := http.Get("https://api.ipify.org")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://api.ipify.org")
 	if err != nil {
 		return ""
 	}

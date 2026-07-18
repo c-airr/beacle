@@ -54,11 +54,20 @@ func (c *devCollector) Metrics() (shared.SystemMetrics, error) {
 	cpu := c.wave(35, 25, 60)
 	mem := c.wave(55, 15, 90)
 	total := uint64(8 * 1 << 30)
+	used := uint64(float64(total) * mem / 100)
+	cached := uint64(float64(1200) * float64(1<<20))
+	cores := runtime.NumCPU()
+	perCore := make([]float64, cores)
+	for i := range perCore {
+		perCore[i] = math.Max(0, math.Min(100, cpu+(c.rng.Float64()-0.5)*20))
+	}
 	return shared.SystemMetrics{
 		Hostname: host, OS: "Beacle Dev Simulator (" + runtime.GOOS + ")",
 		Kernel: "6.8.0-sim", Arch: runtime.GOARCH,
-		CPUPercent: cpu, CPUCores: runtime.NumCPU(), CPUModel: "Simulated vCPU",
-		MemTotalBytes: total, MemUsedBytes: uint64(float64(total) * mem / 100), MemPercent: mem,
+		CPUPercent: cpu, CPUCores: cores, CPUModel: "Simulated vCPU", CPUPerCore: perCore,
+		MemTotalBytes: total, MemUsedBytes: used, MemPercent: mem,
+		MemCachedBytes: cached, MemUsedCachedBytes: used + cached,
+		MemPercentCached: float64(used+cached) / float64(total) * 100,
 		SwapTotal: 2 << 30, SwapUsed: 256 << 20,
 		Disks: []shared.DiskUsage{
 			{Mount: "/", Filesystem: "ext4", TotalBytes: 80 << 30, UsedBytes: 34 << 30, UsedPercent: 42.5},

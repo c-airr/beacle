@@ -39,18 +39,26 @@ type SystemMetrics struct {
 	CPUPercent    float64        `json:"cpu_percent"`
 	CPUCores      int            `json:"cpu_cores"`
 	CPUModel      string         `json:"cpu_model"`
-	MemTotalBytes uint64         `json:"mem_total_bytes"`
-	MemUsedBytes  uint64         `json:"mem_used_bytes"`
-	MemPercent    float64        `json:"mem_percent"`
-	SwapTotal     uint64         `json:"swap_total_bytes"`
-	SwapUsed      uint64         `json:"swap_used_bytes"`
-	Disks         []DiskUsage    `json:"disks"`
-	UptimeSeconds uint64         `json:"uptime_seconds"`
-	Load1         float64        `json:"load1"`
-	Load5         float64        `json:"load5"`
-	Load15        float64        `json:"load15"`
-	Network       []NetworkStats `json:"network"`
-	CollectedAt   time.Time      `json:"collected_at"`
+	// CPUPerCore is per-logical-CPU usage (0–100), same order as /proc/stat cpuN.
+	CPUPerCore []float64 `json:"cpu_per_core,omitempty"`
+	// MemUsedBytes / MemPercent: app usage (MemTotal − MemAvailable). Cache is reclaimable.
+	MemTotalBytes uint64  `json:"mem_total_bytes"`
+	MemUsedBytes  uint64  `json:"mem_used_bytes"`
+	MemPercent    float64 `json:"mem_percent"`
+	// MemCachedBytes: Buffers + Cached from /proc/meminfo.
+	MemCachedBytes uint64 `json:"mem_cached_bytes"`
+	// MemUsedCachedBytes / MemPercentCached: MemTotal − MemFree (includes buffers/cache).
+	MemUsedCachedBytes uint64  `json:"mem_used_cached_bytes"`
+	MemPercentCached   float64 `json:"mem_percent_cached"`
+	SwapTotal          uint64  `json:"swap_total_bytes"`
+	SwapUsed           uint64  `json:"swap_used_bytes"`
+	Disks              []DiskUsage    `json:"disks"`
+	UptimeSeconds      uint64         `json:"uptime_seconds"`
+	Load1              float64        `json:"load1"`
+	Load5              float64        `json:"load5"`
+	Load15             float64        `json:"load15"`
+	Network            []NetworkStats `json:"network"`
+	CollectedAt        time.Time      `json:"collected_at"`
 }
 
 type ProcessInfo struct {
@@ -230,13 +238,15 @@ type ProxyValidateResult struct {
 // and returns the assigned ID + token. Returning agents authenticate with
 // their token (Authorization: Bearer).
 type RegisterRequest struct {
-	VPSID          string `json:"vps_id,omitempty"`
-	Hostname       string `json:"hostname"`
-	TailscaleName  string `json:"tailscale_name"`
-	TailscaleIP    string `json:"tailscale_ip"`
-	AgentVersion   string `json:"agent_version"`
-	AgentPort      int    `json:"agent_port"`
-	OS             string `json:"os"`
+	VPSID         string `json:"vps_id,omitempty"`
+	Hostname      string `json:"hostname"`
+	TailscaleName string `json:"tailscale_name"`
+	TailscaleIP   string `json:"tailscale_ip"`
+	// PublicIP is the VPS egress address (e.g. from ipify) used for map geolocation.
+	PublicIP     string `json:"public_ip,omitempty"`
+	AgentVersion string `json:"agent_version"`
+	AgentPort    int    `json:"agent_port"`
+	OS           string `json:"os"`
 }
 
 type RegisterResponse struct {
@@ -343,6 +353,7 @@ type VPS struct {
 	Name          string    `json:"name"`
 	Host          string    `json:"host"` // Tailscale IPv4
 	TailscaleName string    `json:"tailscale_name"`
+	PublicIP      string    `json:"public_ip,omitempty"`
 	Latitude      float64   `json:"latitude"`
 	Longitude     float64   `json:"longitude"`
 	Location      string    `json:"location"`

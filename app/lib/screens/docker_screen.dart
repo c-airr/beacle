@@ -14,19 +14,15 @@ class DockerScreen extends StatefulWidget {
 }
 
 class _DockerScreenState extends State<DockerScreen> {
-  String? selectedId;
   int tab = 0; // 0 containers, 1 images, 2 compose
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final withAgent = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
-    if (withAgent.isEmpty) {
+    final hosts = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
+    if (hosts.isEmpty) {
       return const Center(child: Text('No VPS with agent data', style: TextStyle(color: BeacleColors.textDim)));
     }
-    selectedId ??= withAgent.first.id;
-    final vps = withAgent.where((v) => v.id == selectedId).firstOrNull ?? withAgent.first;
-    final docker = state.snapshots[vps.id]?.docker ?? DockerState.empty();
 
     return Column(
       children: [
@@ -34,13 +30,10 @@ class _DockerScreenState extends State<DockerScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              _vpsPicker(withAgent, vps),
-              const SizedBox(width: 16),
-              if (docker.available)
-                Text('Docker ${docker.version}', style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
-              else
-                Text('Docker unavailable: ${docker.error}',
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+              Text(
+                '${hosts.length} VPS',
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+              ),
               const Spacer(),
               SegmentedButton<int>(
                 showSelectedIcon: false,
@@ -61,50 +54,80 @@ class _DockerScreenState extends State<DockerScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: switch (tab) {
-            0 => _ContainersTab(vps: vps, docker: docker),
-            1 => _ImagesTab(docker: docker),
-            _ => _ComposeTab(docker: docker),
-          },
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              for (var i = 0; i < hosts.length; i++) ...[
+                if (i > 0) const SizedBox(height: 22),
+                _VpsSectionHeader(vps: hosts[i], docker: state.snapshots[hosts[i].id]!.docker),
+                const SizedBox(height: 10),
+                switch (tab) {
+                  0 => _ContainersBlock(vps: hosts[i], docker: state.snapshots[hosts[i].id]!.docker),
+                  1 => _ImagesBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                  _ => _ComposeBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                },
+              ],
+            ],
+          ),
         ),
       ],
     );
   }
+}
 
-  Widget _vpsPicker(List<Vps> list, Vps current) {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: current.id,
-        dropdownColor: BeacleColors.surfaceHi,
-        style: const TextStyle(fontSize: 13, color: BeacleColors.text),
-        items: [
-          for (final v in list)
-            DropdownMenuItem(
-              value: v.id,
-              child: Row(children: [StatusDot(v.status, size: 7), const SizedBox(width: 8), Text(v.name)]),
-            )
+class _VpsSectionHeader extends StatelessWidget {
+  final Vps vps;
+  final DockerState docker;
+  const _VpsSectionHeader({required this.vps, required this.docker});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: BeacleColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: BeacleColors.border),
+      ),
+      child: Row(
+        children: [
+          StatusDot(vps.status, size: 9),
+          const SizedBox(width: 10),
+          Text(vps.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 10),
+          Text(vps.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+          const Spacer(),
+          if (docker.available)
+            Text('Docker ${docker.version}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))
+          else
+            Text(
+              docker.error.isEmpty ? 'Docker unavailable' : docker.error,
+              style: const TextStyle(fontSize: 11, color: BeacleColors.err),
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
-        onChanged: (v) => setState(() => selectedId = v),
       ),
     );
   }
 }
 
-class _ContainersTab extends StatelessWidget {
+class _ContainersBlock extends StatelessWidget {
   final Vps vps;
   final DockerState docker;
-  const _ContainersTab({required this.vps, required this.docker});
+  const _ContainersBlock({required this.vps, required this.docker});
 
   ContainerStats? _stats(String id) => docker.stats.where((s) => s.id == id).firstOrNull;
 
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
-    if (docker.containers.isEmpty) {
-      return const Center(child: Text('No containers', style: TextStyle(color: BeacleColors.textDim)));
+    if (!docker.available) {
+      return const _EmptyNote('Docker not available on this VPS');
     }
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    if (docker.containers.isEmpty) {
+      return const _EmptyNote('No containers');
+    }
+    return Column(
       children: [
         for (final c in docker.containers)
           Padding(
@@ -116,7 +139,7 @@ class _ContainersTab extends StatelessWidget {
                   Icon(Icons.circle, size: 10, color: c.running ? BeacleColors.ok : BeacleColors.textDim),
                   const SizedBox(width: 12),
                   SizedBox(
-                    width: 220,
+                    width: 200,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(c.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       Text(c.image,
@@ -125,7 +148,7 @@ class _ContainersTab extends StatelessWidget {
                     ]),
                   ),
                   SizedBox(
-                    width: 150,
+                    width: 140,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(c.status, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                       if (c.restartCount > 0)
@@ -134,9 +157,11 @@ class _ContainersTab extends StatelessWidget {
                   ),
                   Expanded(child: _statsCells(c)),
                   SizedBox(
-                    width: 140,
+                    width: 120,
                     child: Text(
-                      c.ports.map((p) => p.publicPort > 0 ? '${p.publicPort}→${p.privatePort}' : '${p.privatePort}').join(', '),
+                      c.ports
+                          .map((p) => p.publicPort > 0 ? '${p.publicPort}→${p.privatePort}' : '${p.privatePort}')
+                          .join(', '),
                       style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -157,9 +182,7 @@ class _ContainersTab extends StatelessWidget {
     return Row(children: [
       Expanded(child: MetricBar(label: 'CPU', percent: s.cpuPercent)),
       const SizedBox(width: 12),
-      Expanded(
-          child: MetricBar(
-              label: 'MEM', percent: s.memPercent, detail: fmtBytes(s.memUsage))),
+      Expanded(child: MetricBar(label: 'MEM', percent: s.memPercent, detail: fmtBytes(s.memUsage))),
       const SizedBox(width: 12),
     ]);
   }
@@ -169,7 +192,7 @@ class _ContainersTab extends StatelessWidget {
       try {
         state.onUserAction();
         await state.api.dockerAction(vps.id, c.id, action);
-        if (context.mounted) showToast(context, '${c.name}: $action ok');
+        if (context.mounted) showToast(context, '${vps.name}/${c.name}: $action ok');
       } catch (e) {
         if (context.mounted) showToast(context, '$e', error: true);
       }
@@ -196,70 +219,78 @@ class _ContainersTab extends StatelessWidget {
       IconButton(
         icon: const Icon(Icons.article_outlined, size: 17),
         tooltip: 'Logs',
-        onPressed: () => showLogsDialog(context, 'Logs - ${c.name}',
+        onPressed: () => showLogsDialog(context, '${vps.name} · ${c.name}',
             () => state.api.dockerLogs(vps.id, c.id, tail: 300)),
       ),
     ]);
   }
 }
 
-class _ImagesTab extends StatelessWidget {
+class _ImagesBlock extends StatelessWidget {
   final DockerState docker;
-  const _ImagesTab({required this.docker});
+  const _ImagesBlock({required this.docker});
 
   @override
   Widget build(BuildContext context) {
+    if (!docker.available) {
+      return const _EmptyNote('Docker not available on this VPS');
+    }
     if (docker.images.isEmpty) {
-      return const Center(child: Text('No images', style: TextStyle(color: BeacleColors.textDim)));
+      return const _EmptyNote('No images');
     }
     const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          child: Row(children: [
-            Expanded(flex: 3, child: Text('TAGS', style: hdr)),
-            Expanded(flex: 2, child: Text('ID', style: hdr)),
-            SizedBox(width: 100, child: Text('SIZE', style: hdr, textAlign: TextAlign.right)),
-          ]),
-        ),
-        for (final im in docker.images)
-          HoverRow(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              child: Row(children: [
-                Expanded(
-                    flex: 3,
-                    child: Text(im.tags.isEmpty ? '<none>' : im.tags.join(', '),
-                        style: const TextStyle(fontSize: 12))),
-                Expanded(
-                    flex: 2,
-                    child: Text(im.id.replaceFirst('sha256:', '').substring(0, im.id.length > 20 ? 12 : im.id.length),
-                        style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim))),
-                SizedBox(
-                    width: 100,
-                    child: Text(fmtBytes(im.sizeBytes),
-                        style: const TextStyle(fontSize: 12), textAlign: TextAlign.right)),
-              ]),
-            ),
+    return PanelCard(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            child: Row(children: [
+              Expanded(flex: 3, child: Text('TAGS', style: hdr)),
+              Expanded(flex: 2, child: Text('ID', style: hdr)),
+              SizedBox(width: 100, child: Text('SIZE', style: hdr, textAlign: TextAlign.right)),
+            ]),
           ),
-      ],
+          for (final im in docker.images)
+            HoverRow(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                child: Row(children: [
+                  Expanded(
+                      flex: 3,
+                      child: Text(im.tags.isEmpty ? '<none>' : im.tags.join(', '),
+                          style: const TextStyle(fontSize: 12))),
+                  Expanded(
+                      flex: 2,
+                      child: Text(
+                          im.id.replaceFirst('sha256:', '').substring(0, im.id.length > 20 ? 12 : im.id.length),
+                          style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim))),
+                  SizedBox(
+                      width: 100,
+                      child: Text(fmtBytes(im.sizeBytes),
+                          style: const TextStyle(fontSize: 12), textAlign: TextAlign.right)),
+                ]),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
-class _ComposeTab extends StatelessWidget {
+class _ComposeBlock extends StatelessWidget {
   final DockerState docker;
-  const _ComposeTab({required this.docker});
+  const _ComposeBlock({required this.docker});
 
   @override
   Widget build(BuildContext context) {
-    if (docker.compose.isEmpty) {
-      return const Center(child: Text('No compose projects detected', style: TextStyle(color: BeacleColors.textDim)));
+    if (!docker.available) {
+      return const _EmptyNote('Docker not available on this VPS');
     }
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    if (docker.compose.isEmpty) {
+      return const _EmptyNote('No compose projects');
+    }
+    return Column(
       children: [
         for (final p in docker.compose)
           Padding(
@@ -268,8 +299,7 @@ class _ComposeTab extends StatelessWidget {
               title: p.name.toUpperCase(),
               trailing: Text('${p.running}/${p.total} running',
                   style: TextStyle(
-                      fontSize: 12,
-                      color: p.running == p.total ? BeacleColors.ok : BeacleColors.warn)),
+                      fontSize: 12, color: p.running == p.total ? BeacleColors.ok : BeacleColors.warn)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('dir: ${p.workingDir.isEmpty ? '-' : p.workingDir}',
                     style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
@@ -292,6 +322,19 @@ class _ComposeTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _EmptyNote extends StatelessWidget {
+  final String text;
+  const _EmptyNote(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Text(text, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
     );
   }
 }

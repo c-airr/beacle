@@ -19,6 +19,7 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP string, toke
 	if tsName == "" {
 		tsName = req.Hostname
 	}
+	publicIP := req.PublicIP
 
 	if tokenEntry != nil {
 		updated := s.store.UpdateVPS(tokenEntry.VPS.ID, func(e *VPSEntry) {
@@ -31,6 +32,7 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP string, toke
 			if e.VPS.Host == "" && host != "" {
 				e.VPS.Host = host
 			}
+			applyPublicIPGeo(e, publicIP)
 		})
 		return updated, shared.RegisterResponse{
 			OK:    "registered",
@@ -51,6 +53,7 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP string, toke
 				if e.VPS.Host == "" && host != "" {
 					e.VPS.Host = host
 				}
+				applyPublicIPGeo(e, publicIP)
 			})
 			return updated, shared.RegisterResponse{
 				OK:    "registered",
@@ -75,6 +78,7 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP string, toke
 		if req.AgentPort > 0 {
 			e.VPS.AgentPort = req.AgentPort
 		}
+		applyPublicIPGeo(e, publicIP)
 	})
 	s.logAction(entry.VPS, "vps_register", "Agent connected via WebSocket", true)
 	return entry, shared.RegisterResponse{

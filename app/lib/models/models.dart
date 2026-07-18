@@ -36,8 +36,10 @@ class NetworkStats {
 
 class SystemMetrics {
   final String hostname, os, kernel, arch, cpuModel;
-  final double cpuPercent, memPercent, load1, load5, load15;
-  final int cpuCores, memTotalBytes, memUsedBytes, swapTotal, swapUsed, uptimeSeconds;
+  final double cpuPercent, memPercent, memPercentCached, load1, load5, load15;
+  final int cpuCores, memTotalBytes, memUsedBytes, memCachedBytes, memUsedCachedBytes;
+  final int swapTotal, swapUsed, uptimeSeconds;
+  final List<double> cpuPerCore;
   final List<DiskUsage> disks;
   final List<NetworkStats> network;
   SystemMetrics.fromJson(Map<String, dynamic> j)
@@ -48,15 +50,19 @@ class SystemMetrics {
         cpuModel = _s(j['cpu_model']),
         cpuPercent = _d(j['cpu_percent']),
         memPercent = _d(j['mem_percent']),
+        memPercentCached = _d(j['mem_percent_cached']),
         load1 = _d(j['load1']),
         load5 = _d(j['load5']),
         load15 = _d(j['load15']),
         cpuCores = _i(j['cpu_cores']),
         memTotalBytes = _i(j['mem_total_bytes']),
         memUsedBytes = _i(j['mem_used_bytes']),
+        memCachedBytes = _i(j['mem_cached_bytes']),
+        memUsedCachedBytes = _i(j['mem_used_cached_bytes']),
         swapTotal = _i(j['swap_total_bytes']),
         swapUsed = _i(j['swap_used_bytes']),
         uptimeSeconds = _i(j['uptime_seconds']),
+        cpuPerCore = (j['cpu_per_core'] as List?)?.map((e) => _d(e)).toList() ?? const [],
         disks = _list(j['disks'], DiskUsage.fromJson),
         network = _list(j['network'], NetworkStats.fromJson);
   SystemMetrics.empty() : this.fromJson(const {});
@@ -248,7 +254,7 @@ class PingResult {
 }
 
 class Vps {
-  final String id, name, host, tailscaleName, location, status, agentVersion;
+  final String id, name, host, tailscaleName, publicIp, location, status, agentVersion;
   final double latitude, longitude;
   final int weight, agentPort;
   final DateTime createdAt, lastSeen;
@@ -257,6 +263,7 @@ class Vps {
         name = _s(j['name']),
         host = _s(j['host']),
         tailscaleName = _s(j['tailscale_name']),
+        publicIp = _s(j['public_ip']),
         location = _s(j['location']),
         status = _s(j['status']),
         agentVersion = _s(j['agent_version']),

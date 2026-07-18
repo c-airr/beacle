@@ -139,10 +139,10 @@ app/  — Flutter desktop
     screens/
       shell.dart           Nawigacja boczna + top bar + alert toasty
       onboarding/onboarding_screen.dart  Kreator pierwszego uruchomienia (3 kroki)
-      metrics_screen.dart  CPU/RAM/disk per VPS
+      servers_screen.dart   per-VPS CPU/RAM/disk/network stats
+      processes_screen.dart processes + open ports
       alerts_screen.dart   Alerty (CPU, down, offline, hub)
       map/map_screen.dart  Mapa infrastruktury (dokładne współrzędne, linki latency)
-      servers_screen.dart  Szczegóły VPS (CPU/RAM/disk/procesy/porty)
       docker_screen.dart   Kontenery, images, compose
       proxy_screen.dart    Reverse proxy GUI + port checker
       services_screen.dart systemd + screen

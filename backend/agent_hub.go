@@ -14,6 +14,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	agentWSReadTimeout  = 90 * time.Second
+	agentWSWriteTimeout = 15 * time.Second
+	agentWSPingInterval = 20 * time.Second
+)
+
 // AgentHub tracks outbound agent WebSocket connections and routes commands
 // to agents without the backend initiating any inbound TCP connections.
 type AgentHub struct {
@@ -31,6 +37,9 @@ type agentSession struct {
 	entry      *VPSEntry
 	conn       *websocket.Conn
 	send       chan []byte
+	done       chan struct{}
+	closeOnce  sync.Once
+	writeMu    sync.Mutex
 	registered bool
 	remoteIP   string
 	tokenEntry *VPSEntry
@@ -62,12 +71,12 @@ func (h *AgentHub) ServeAgentWS(w http.ResponseWriter, r *http.Request, srv *Ser
 	sess := &agentSession{
 		conn:       conn,
 		send:       make(chan []byte, 64),
+		done:       make(chan struct{}),
 		remoteIP:   agentRemoteIP(r),
 		tokenEntry: tokenEntry,
 	}
 
 	go h.writeLoop(sess)
-	go h.heartbeatLoop(sess)
 	h.readLoop(sess, srv)
 }
 
@@ -75,38 +84,70 @@ func (h *AgentHub) attachSession(sess *agentSession) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if old, ok := h.agents[sess.vpsID]; ok && old != sess {
-		close(old.send)
-		_ = old.conn.Close()
+		old.shutdown()
 	}
 	h.agents[sess.vpsID] = sess
 }
 
-func (h *AgentHub) writeLoop(sess *agentSession) {
-	for msg := range sess.send {
-		_ = sess.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
-		if err := sess.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			return
-		}
-	}
+func (s *agentSession) shutdown() {
+	s.closeOnce.Do(func() {
+		close(s.done)
+		_ = s.conn.Close()
+	})
 }
 
-func (h *AgentHub) heartbeatLoop(sess *agentSession) {
-	ticker := time.NewTicker(15 * time.Second)
+func (s *agentSession) writeText(data []byte) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	_ = s.conn.SetWriteDeadline(time.Now().Add(agentWSWriteTimeout))
+	return s.conn.WriteMessage(websocket.TextMessage, data)
+}
+
+func (s *agentSession) writeControl(messageType int, data []byte) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	deadline := time.Now().Add(agentWSWriteTimeout)
+	_ = s.conn.SetWriteDeadline(deadline)
+	return s.conn.WriteControl(messageType, data, deadline)
+}
+
+func (h *AgentHub) writeLoop(sess *agentSession) {
+	ticker := time.NewTicker(agentWSPingInterval)
 	defer ticker.Stop()
-	for range ticker.C {
-		if !sess.registered {
-			continue
+	for {
+		select {
+		case <-sess.done:
+			return
+		case msg, ok := <-sess.send:
+			if !ok {
+				return
+			}
+			if err := sess.writeText(msg); err != nil {
+				return
+			}
+		case <-ticker.C:
+			if !sess.registered {
+				continue
+			}
+			if err := sess.writeControl(websocket.PingMessage, []byte("ping")); err != nil {
+				return
+			}
 		}
-		h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSHeartbeat})
 	}
 }
 
 func (h *AgentHub) readLoop(sess *agentSession, srv *Server) {
 	defer h.disconnect(sess)
 
-	_ = sess.conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+	_ = sess.conn.SetReadDeadline(time.Now().Add(agentWSReadTimeout))
 	sess.conn.SetPongHandler(func(string) error {
-		return sess.conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+		return sess.conn.SetReadDeadline(time.Now().Add(agentWSReadTimeout))
+	})
+	sess.conn.SetPingHandler(func(appData string) error {
+		if err := sess.writeControl(websocket.PongMessage, []byte(appData)); err != nil {
+			return err
+		}
+		return sess.conn.SetReadDeadline(time.Now().Add(agentWSReadTimeout))
 	})
 
 	for {
@@ -114,7 +155,7 @@ func (h *AgentHub) readLoop(sess *agentSession, srv *Server) {
 		if err != nil {
 			return
 		}
-		_ = sess.conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+		_ = sess.conn.SetReadDeadline(time.Now().Add(agentWSReadTimeout))
 
 		var msg shared.AgentWSMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
@@ -133,8 +174,7 @@ func (h *AgentHub) disconnect(sess *agentSession) {
 		}
 	}
 	h.mu.Unlock()
-	close(sess.send)
-	_ = sess.conn.Close()
+	sess.shutdown()
 	if sess.vpsID != "" {
 		log.Printf("agent ws disconnected: %s", sess.vpsID)
 		h.hub.Broadcast(shared.WSVPSList, h.store.ListVPS())
@@ -219,7 +259,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		}
 
 	case shared.AgentWSHeartbeat:
-		h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSHeartbeat})
+		// Older agents may still send JSON heartbeats — treat as liveness only.
 	}
 }
 
@@ -267,11 +307,17 @@ func (h *AgentHub) send(sess *agentSession, msg shared.AgentWSMessage) {
 	if sess == nil {
 		return
 	}
+	select {
+	case <-sess.done:
+		return
+	default:
+	}
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return
 	}
 	select {
+	case <-sess.done:
 	case sess.send <- b:
 	default:
 		log.Printf("agent ws send buffer full for %s", sess.vpsID)
@@ -321,6 +367,11 @@ func (h *AgentHub) Request(vpsID, method, path string, body []byte, timeout time
 	h.mu.Unlock()
 
 	select {
+	case <-sess.done:
+		h.mu.Lock()
+		delete(h.pending, requestID)
+		h.mu.Unlock()
+		return nil, 0, fmt.Errorf("agent offline (no websocket)")
 	case sess.send <- frame:
 	default:
 		h.mu.Lock()

@@ -8,35 +8,50 @@ class PanelCard extends StatelessWidget {
   final String? title;
   final Widget? trailing;
   final EdgeInsets padding;
-  const PanelCard({super.key, required this.child, this.title, this.trailing, this.padding = const EdgeInsets.all(16)});
+  /// When true, fills parent height (use inside equal-height stretched rows).
+  final bool expand;
+  const PanelCard({
+    super.key,
+    required this.child,
+    this.title,
+    this.trailing,
+    this.padding = const EdgeInsets.all(16),
+    this.expand = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: BeacleColors.border),
-      ),
-      padding: padding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (title != null) ...[
-            Row(children: [
-              Expanded(
-                child: Text(title!,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.4)),
-              ),
-              if (trailing != null) trailing!,
-            ]),
-            const SizedBox(height: 12),
+    return LayoutBuilder(builder: (context, constraints) {
+      final fill = expand && constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
+      return Container(
+        height: fill ? constraints.maxHeight : null,
+        decoration: BoxDecoration(
+          color: BeacleColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: BeacleColors.border),
+        ),
+        padding: padding,
+        alignment: Alignment.topLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            if (title != null) ...[
+              Row(children: [
+                Expanded(
+                  child: Text(title!,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.4)),
+                ),
+                if (trailing != null) trailing!,
+              ]),
+              const SizedBox(height: 12),
+            ],
+            if (fill) Expanded(child: child) else child,
           ],
-          child,
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 }
 
