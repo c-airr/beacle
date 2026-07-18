@@ -1,6 +1,6 @@
 # Beacle
 
-**Status: BETA** — finishing infrastructure. **v1.0 target: ~1 week.**
+**Status: BETA** — finishing infrastructure. **v1.0 target: 1 week from July 18, 2026.**
 
 ## Roadmap
 
