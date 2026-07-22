@@ -90,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ),
               const SizedBox(height: 6),
               Text(
-                'Download: $installScriptUrl',
+                'GitHub $agentReleaseTag\n$installScriptUrl\n$agentBinaryAmdUrl',
                 style: const TextStyle(fontSize: 10, color: BeacleColors.textDim, fontFamily: 'Consolas'),
               ),
               const SizedBox(height: 14),

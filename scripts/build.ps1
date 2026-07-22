@@ -15,13 +15,17 @@ $env:GOOS = 'linux'
 New-Item -ItemType Directory -Force -Path "$distAgent\linux-amd64", "$distAgent\linux-arm64", "$root\backend\data\bin" | Out-Null
 foreach ($pair in @{ amd64 = 'linux-amd64'; arm64 = 'linux-arm64' }.GetEnumerator()) {
     $env:GOARCH = $pair.Key
+    $ghName = if ($pair.Key -eq 'arm64') { 'beacle-agent-arm64' } else { 'beacle-agent-amd64' }
     $outFolder = "$distAgent\$($pair.Value)\beacle-agent"
     $outFlat = "$distAgent\beacle-agent-linux-$($pair.Key)"
+    $outGh = "$distAgent\$ghName"
     $outBackend = "$root\backend\data\bin\beacle-agent-linux-$($pair.Key)"
     go build -o $outFolder .
     Copy-Item $outFolder $outFlat -Force
+    Copy-Item $outFolder $outGh -Force
+    Copy-Item $outFolder "$distAgent\$($pair.Value)\$ghName" -Force
     Copy-Item $outFolder $outBackend -Force
-    Write-Host "  built $($pair.Value) -> dist/agent/$($pair.Value)/beacle-agent"
+    Write-Host "  built $($pair.Value) -> dist/agent/$ghName (upload to GitHub agentbeta)"
 }
 Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
 $ver = & go run . -version 2>$null
@@ -52,5 +56,5 @@ Get-ChildItem $distAgent -Recurse -File | ForEach-Object { Write-Host "  $($_.Fu
 
 Write-Host 'Done.' -ForegroundColor Green
 Write-Host "  Run: $releaseDir\beacle.exe"
-Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/BETA/install.sh | sudo bash -s <tailscale-ip>:8930'
-Write-Host '  GitHub agent: dist/agent/beacle-agent-linux-amd64'
+Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh | sudo bash -s http://<tailscale-ip>:9930'
+Write-Host '  Upload to GitHub agentbeta: dist/agent/install.sh, beacle-agent-amd64, beacle-agent-arm64'

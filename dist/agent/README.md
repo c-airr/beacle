@@ -1,25 +1,22 @@
-# Agent binary (VPS, amd64)
+# Agent distribution — GitHub release [`agentbeta`](https://github.com/c-airr/beacle/releases/tag/agentbeta)
 
-**Agent download:**
-```
-https://github.com/c-airr/beacle/releases/download/BETA/beacle-agent-amd
-```
+| Asset | URL |
+|-------|-----|
+| install.sh | https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh |
+| amd64 | https://github.com/c-airr/beacle/releases/download/agentbeta/beacle-agent-amd64 |
+| arm64 | https://github.com/c-airr/beacle/releases/download/agentbeta/beacle-agent-arm64 |
 
-**Install script:**
-```
-https://github.com/c-airr/beacle/releases/download/BETA/install.sh
-```
+Upload `install.sh`, `beacle-agent-amd64`, `beacle-agent-arm64` to that release.
 
-Upload both to the GitHub **BETA** release.
-
-## Install from Beacle app
-
-After adding a VPS, copy the install command shown in the app:
+## Install / reinstall (from GitHub only)
 
 ```bash
-curl -fsSL https://github.com/c-airr/beacle/releases/download/BETA/install.sh | sudo bash -s http://<your-tailscale-ip>:8930
+curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh | sudo bash -s http://<desktop-tailscale-ip>:9930
 ```
 
-Curl hits GitHub only. The Tailscale IP is just the agent's `backend_url` config (your desktop), not the download host.
+## Manual binary refresh (no in-app Update)
 
-Build local copy: `.\scripts\build.ps1`
+```bash
+# amd64
+sudo bash -c 'curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/beacle-agent-amd64 -o /opt/beacle-agent/beacle-agent.new && chmod +x /opt/beacle-agent/beacle-agent.new && mkdir -p /opt/beacle-agent/versions && cp -f /opt/beacle-agent/beacle-agent /opt/beacle-agent/versions/beacle-agent.prev 2>/dev/null; mv -f /opt/beacle-agent/beacle-agent.new /opt/beacle-agent/beacle-agent && rm -f /opt/beacle-agent/versions/github.stamp && systemctl restart beacle-agent'
+```

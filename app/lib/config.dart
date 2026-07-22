@@ -1,13 +1,17 @@
 /// Local-first: the panel always talks to the embedded backend on this machine.
 const String localBackendUrl = 'http://127.0.0.1:9930';
 
-/// Agent binary on GitHub (amd64 VPS, BETA channel).
-const String agentBinaryUrl =
-    'https://github.com/c-airr/beacle/releases/download/BETA/beacle-agent-amd';
-
-/// Install script on GitHub (BETA channel).
+/// Public GitHub release that hosts VPS agent binaries + install.sh.
+const String agentReleaseTag = 'agentbeta';
+const String agentBinaryAmdUrl =
+    'https://github.com/c-airr/beacle/releases/download/$agentReleaseTag/beacle-agent-amd64';
+const String agentBinaryArmUrl =
+    'https://github.com/c-airr/beacle/releases/download/$agentReleaseTag/beacle-agent-arm64';
 const String installScriptUrl =
-    'https://github.com/c-airr/beacle/releases/download/BETA/install.sh';
+    'https://github.com/c-airr/beacle/releases/download/$agentReleaseTag/install.sh';
+
+/// Legacy alias (amd64).
+const String agentBinaryUrl = agentBinaryAmdUrl;
 
 const String githubRepo = 'c-airr/beacle';
 
@@ -35,6 +39,6 @@ String get backendUrl {
 
 bool get hasBackendUrl => true;
 
-/// One-liner to run on the VPS after picking it in Beacle (curl from GitHub only).
+/// One-liner: install.sh + agent binary both from GitHub agentbeta.
 String vpsInstallCommand(String backendPublicUrl) =>
     'curl -fsSL $installScriptUrl | sudo bash -s $backendPublicUrl';

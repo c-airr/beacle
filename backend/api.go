@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -156,7 +155,8 @@ func (s *Server) handleInstallCommand(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"install_command": vpsInstallCommand(base),
 		"backend_url":     base,
-		"agent_url":       agentBinaryURL,
+		"agent_url":       shared.AgentGitHubBinaryURL("amd64"),
+		"agent_tag":       shared.AgentReleaseTag,
 	})
 }
 
@@ -344,51 +344,6 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		os.Exit(0)
 	}()
-}
-
-func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
-	arch := r.URL.Query().Get("arch")
-	if arch == "" {
-		arch = "amd64"
-	}
-	candidates := []string{
-		filepath.Join(s.dataDir, "bin", "beacle-agent-linux-"+arch),
-		filepath.Join("dist", "agent", "linux-"+arch, "beacle-agent"),
-		filepath.Join("dist", "agent", "beacle-agent-linux-"+arch),
-	}
-	var path string
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			path = c
-			break
-		}
-	}
-	if path == "" {
-		writeErr(w, http.StatusNotFound,
-			fmt.Sprintf("agent binary missing for linux/%s — run scripts/build.ps1", arch))
-		return
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "agent binary not available on backend (build agent for linux/"+arch+" into "+path+")")
-		return
-	}
-	defer f.Close()
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("X-Beacle-Agent-Version", agentVersion(s.dataDir))
-	_, _ = io.Copy(w, f)
-}
-
-func (s *Server) handleAgentVersion(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"version": agentVersion(s.dataDir)})
-}
-
-func agentVersion(dataDir string) string {
-	b, err := os.ReadFile(filepath.Join(dataDir, "bin", "VERSION"))
-	if err != nil {
-		return "0.0.0"
-	}
-	return strings.TrimSpace(string(b))
 }
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import '../shell.dart';
 import 'world_geometry.dart';
 
 /// Aesthetic infrastructure map — no free pan/zoom.
-/// Continent list filters + animates camera; VPS opens a floating summary card.
+/// Left continent list zooms the camera; map clicks only open VPS cards (worldwide by default).
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -172,21 +172,19 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   void _selectContinent(String name, Size size) {
     context.read<AppState>().bumpActivity();
     if (selectedContinent == name) {
-      setState(() {
-        selectedContinent = null;
-        panelVps = null;
-      });
+      setState(() => selectedContinent = null);
       _animateCamera(_Camera.fitWorld(size));
       return;
     }
     final def = _continents.firstWhere((c) => c.name == name);
-    setState(() {
-      selectedContinent = name;
-      if (panelVps != null && _continentFor(panelVps!) != name) {
-        panelVps = null;
-      }
-    });
+    setState(() => selectedContinent = name);
     _animateCamera(_Camera.fitRect(size, def.worldRect));
+  }
+
+  void _resetToWorld(Size size) {
+    if (selectedContinent == null) return;
+    setState(() => selectedContinent = null);
+    _animateCamera(_Camera.fitWorld(size));
   }
 
   List<_Marker> _allMarkers(List<Vps> vpsList) {
@@ -206,13 +204,14 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     }
 
     return LayoutBuilder(builder: (ctx, constraints) {
-      final size = Size(constraints.maxWidth, constraints.maxHeight);
-      _ensureBaseCamera(size);
+      final full = Size(constraints.maxWidth, constraints.maxHeight);
+      const sideW = 176.0;
+      final mapSize = Size(math.max(full.width - sideW, 1), full.height);
+      _ensureBaseCamera(mapSize);
 
       final all = _allMarkers(state.vpsList);
-      final visible = selectedContinent == null
-          ? all
-          : all.where((m) => m.continent == selectedContinent).toList();
+      // Always show every VPS — continent list is zoom-only, not a filter.
+      final markers = all;
 
       final counts = {for (final c in _continents) c.name: 0};
       for (final m in all) {
@@ -225,102 +224,103 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         animation: _camCtrl,
         builder: (context, _) {
           final cam = _camera;
-          return Stack(
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Map canvas — no pan/zoom gestures
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapUp: (d) {
-                  for (final m in visible.reversed) {
-                    if ((_screen(m, cam) - d.localPosition).distance < 14) {
-                      context.read<AppState>().bumpActivity();
-                      setState(() => panelVps = m.vps);
-                      return;
-                    }
-                  }
-                  setState(() => panelVps = null);
-                },
-                child: CustomPaint(
-                  size: size,
-                  painter: _MapPainter(
-                    geo: geo!,
-                    camera: cam,
-                    markers: visible,
-                    selectedId: panelVps?.id,
-                    focusContinent: selectedContinent,
-                  ),
-                ),
-              ),
-
-              // Continent filter — left
-              Positioned(
-                left: 20,
-                top: 18,
+              // Continent list — own column, never overlays the map
+              Container(
+                width: sideW,
+                color: BeacleColors.bg,
+                padding: const EdgeInsets.fromLTRB(10, 14, 8, 14),
                 child: GlassCard(
                   padding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 168),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(12, 2, 12, 10),
-                          child: Text(
-                            'CONTINENTS',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                              color: BeacleColors.textDim,
-                            ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(12, 2, 12, 10),
+                        child: Text(
+                          'CONTINENTS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                            color: BeacleColors.textDim,
                           ),
                         ),
-                        for (final c in _continents)
-                          _ContinentRow(
-                            name: c.name,
-                            count: counts[c.name] ?? 0,
-                            selected: selectedContinent == c.name,
-                            onTap: () => _selectContinent(c.name, size),
-                          ),
-                        if (selectedContinent != null) ...[
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            child: Divider(height: 1, color: BeacleColors.border),
-                          ),
-                          _ContinentRow(
-                            name: 'World',
-                            count: all.length,
-                            selected: false,
-                            dim: true,
-                            onTap: () {
-                              context.read<AppState>().bumpActivity();
-                              setState(() {
-                                selectedContinent = null;
-                                panelVps = null;
-                              });
-                              _animateCamera(_Camera.fitWorld(size));
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                      for (final c in _continents)
+                        _ContinentRow(
+                          name: c.name,
+                          count: counts[c.name] ?? 0,
+                          selected: selectedContinent == c.name,
+                          onTap: () => _selectContinent(c.name, mapSize),
+                        ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: Divider(height: 1, color: BeacleColors.border),
+                      ),
+                      _ContinentRow(
+                        name: 'World',
+                        count: all.length,
+                        selected: selectedContinent == null,
+                        dim: selectedContinent != null,
+                        onTap: () {
+                          context.read<AppState>().bumpActivity();
+                          setState(() => selectedContinent = null);
+                          _animateCamera(_Camera.fitWorld(mapSize));
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              // Floating VPS summary — on the map, not a docked sidebar
-              if (panelVps != null)
-                Positioned(
-                  right: 20,
-                  top: 18,
-                  child: _VpsMapCard(
-                    vps: panelVps!,
-                    snap: state.snapshots[panelVps!.id],
-                    onClose: () => setState(() => panelVps = null),
-                    onStats: () => AppShell.of(context).goToServer(panelVps!.id),
-                  ),
+              // Map — VPS clicks only; empty tap clears card / returns to world
+              Expanded(
+                child: Stack(
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (d) {
+                        for (final m in markers.reversed) {
+                          if ((_screen(m, cam) - d.localPosition).distance < 14) {
+                            context.read<AppState>().bumpActivity();
+                            setState(() => panelVps = m.vps);
+                            return;
+                          }
+                        }
+                        // Empty map: keep / return to worldwide — never zoom to a continent.
+                        context.read<AppState>().bumpActivity();
+                        setState(() => panelVps = null);
+                        _resetToWorld(mapSize);
+                      },
+                      child: CustomPaint(
+                        size: mapSize,
+                        painter: _MapPainter(
+                          geo: geo!,
+                          camera: cam,
+                          markers: markers,
+                          selectedId: panelVps?.id,
+                          focusContinent: selectedContinent,
+                        ),
+                      ),
+                    ),
+                    if (panelVps != null)
+                      Positioned(
+                        right: 16,
+                        top: 14,
+                        child: _VpsMapCard(
+                          vps: panelVps!,
+                          snap: state.snapshots[panelVps!.id],
+                          onClose: () => setState(() => panelVps = null),
+                          onStats: () => AppShell.of(context).goToServer(panelVps!.id),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           );
         },

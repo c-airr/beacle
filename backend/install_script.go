@@ -1,17 +1,17 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
 
-const (
-	agentBinaryURL   = "https://github.com/c-airr/beacle/releases/download/BETA/beacle-agent-amd"
-	installScriptURL = "https://github.com/c-airr/beacle/releases/download/BETA/install.sh"
+	"beacle/shared"
 )
 
-// vpsInstallCommand — curl from GitHub only; backend URL is just config for the agent.
+// vpsInstallCommand — curl install.sh from GitHub; backend URL is only agent config.
 func vpsInstallCommand(backendURL string) string {
-	return fmt.Sprintf("curl -fsSL %s | sudo bash -s %s", installScriptURL, backendURL)
+	return fmt.Sprintf("curl -fsSL %s | sudo bash -s %s", shared.AgentGitHubInstallURL(), backendURL)
 }
 
+// installScript keeps GET /install as a fallback mirror of the GitHub script.
 func installScript(backendURL string) string {
 	return fmt.Sprintf(`#!/usr/bin/env bash
 set -euo pipefail
@@ -22,12 +22,21 @@ INNER
 }
 
 func installScriptBody(backendURL string) string {
+	amd := shared.AgentGitHubBinaryURL("amd64")
+	arm := shared.AgentGitHubBinaryURL("arm64")
 	return fmt.Sprintf(`BACKEND_URL=%q
-AGENT_BIN=%q
+AMD_URL=%q
+ARM_URL=%q
 INSTALL_DIR=/opt/beacle-agent
 CONFIG="$INSTALL_DIR/config.json"
 BIN="$INSTALL_DIR/beacle-agent"
 mkdir -p "$INSTALL_DIR/versions"
+ARCH="$(uname -m)"
+case "$ARCH" in
+  aarch64|arm64) AGENT_BIN="$ARM_URL" ;;
+  *) AGENT_BIN="$AMD_URL" ;;
+esac
+echo "[beacle] downloading $AGENT_BIN"
 curl -fsSL "$AGENT_BIN" -o "$INSTALL_DIR/beacle-agent.new"
 chmod +x "$INSTALL_DIR/beacle-agent.new"
 [ -f "$BIN" ] && cp -f "$BIN" "$INSTALL_DIR/versions/beacle-agent.prev"
@@ -53,6 +62,6 @@ SVCEOF
 systemctl daemon-reload
 systemctl enable beacle-agent
 systemctl restart beacle-agent
-echo "[beacle] agent running"
-`, backendURL, agentBinaryURL)
+echo "[beacle] agent running — backend $BACKEND_URL"
+`, backendURL, amd, arm)
 }
