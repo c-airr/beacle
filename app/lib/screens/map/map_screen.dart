@@ -224,101 +224,115 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         animation: _camCtrl,
         builder: (context, _) {
           final cam = _camera;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          return Stack(
             children: [
-              // Continent list — own column, never overlays the map
-              Container(
-                width: sideW,
-                color: BeacleColors.bg,
-                padding: const EdgeInsets.fromLTRB(10, 14, 8, 14),
-                child: GlassCard(
-                  padding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
+              // Map sits to the right of the continent rail and is hard-clipped.
+              Positioned(
+                left: sideW,
+                top: 0,
+                right: 0,
+                bottom: 0,
+                child: ClipRect(
+                  child: Stack(
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(12, 2, 12, 10),
-                        child: Text(
-                          'CONTINENTS',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.2,
-                            color: BeacleColors.textDim,
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapUp: (d) {
+                          for (final m in markers.reversed) {
+                            if ((_screen(m, cam) - d.localPosition).distance < 14) {
+                              context.read<AppState>().bumpActivity();
+                              setState(() => panelVps = m.vps);
+                              return;
+                            }
+                          }
+                          context.read<AppState>().bumpActivity();
+                          setState(() => panelVps = null);
+                          _resetToWorld(mapSize);
+                        },
+                        child: CustomPaint(
+                          size: mapSize,
+                          painter: _MapPainter(
+                            geo: geo!,
+                            camera: cam,
+                            markers: markers,
+                            selectedId: panelVps?.id,
+                            focusContinent: selectedContinent,
                           ),
                         ),
                       ),
-                      for (final c in _continents)
-                        _ContinentRow(
-                          name: c.name,
-                          count: counts[c.name] ?? 0,
-                          selected: selectedContinent == c.name,
-                          onTap: () => _selectContinent(c.name, mapSize),
+                      if (panelVps != null)
+                        Positioned(
+                          right: 16,
+                          top: 14,
+                          child: _VpsMapCard(
+                            vps: panelVps!,
+                            snap: state.snapshots[panelVps!.id],
+                            onClose: () => setState(() => panelVps = null),
+                            onStats: () => AppShell.of(context).goToServer(panelVps!.id),
+                          ),
                         ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: Divider(height: 1, color: BeacleColors.border),
-                      ),
-                      _ContinentRow(
-                        name: 'World',
-                        count: all.length,
-                        selected: selectedContinent == null,
-                        dim: selectedContinent != null,
-                        onTap: () {
-                          context.read<AppState>().bumpActivity();
-                          setState(() => selectedContinent = null);
-                          _animateCamera(_Camera.fitWorld(mapSize));
-                        },
-                      ),
                     ],
                   ),
                 ),
               ),
 
-              // Map — VPS clicks only; empty tap clears card / returns to world
-              Expanded(
-                child: Stack(
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapUp: (d) {
-                        for (final m in markers.reversed) {
-                          if ((_screen(m, cam) - d.localPosition).distance < 14) {
-                            context.read<AppState>().bumpActivity();
-                            setState(() => panelVps = m.vps);
-                            return;
-                          }
-                        }
-                        // Empty map: keep / return to worldwide — never zoom to a continent.
-                        context.read<AppState>().bumpActivity();
-                        setState(() => panelVps = null);
-                        _resetToWorld(mapSize);
-                      },
-                      child: CustomPaint(
-                        size: mapSize,
-                        painter: _MapPainter(
-                          geo: geo!,
-                          camera: cam,
-                          markers: markers,
-                          selectedId: panelVps?.id,
-                          focusContinent: selectedContinent,
+              // Continent rail — painted above the map, opaque background.
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: sideW,
+                child: Material(
+                  color: BeacleColors.bg,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 14, 8, 14),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: GlassCard(
+                        padding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(12, 2, 12, 10),
+                              child: Text(
+                                'CONTINENTS',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1.2,
+                                  color: BeacleColors.textDim,
+                                ),
+                              ),
+                            ),
+                            for (final c in _continents)
+                              _ContinentRow(
+                                name: c.name,
+                                count: counts[c.name] ?? 0,
+                                selected: selectedContinent == c.name,
+                                onTap: () => _selectContinent(c.name, mapSize),
+                              ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              child: Divider(height: 1, color: BeacleColors.border),
+                            ),
+                            _ContinentRow(
+                              name: 'World',
+                              count: all.length,
+                              selected: selectedContinent == null,
+                              dim: selectedContinent != null,
+                              onTap: () {
+                                context.read<AppState>().bumpActivity();
+                                setState(() => selectedContinent = null);
+                                _animateCamera(_Camera.fitWorld(mapSize));
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    if (panelVps != null)
-                      Positioned(
-                        right: 16,
-                        top: 14,
-                        child: _VpsMapCard(
-                          vps: panelVps!,
-                          snap: state.snapshots[panelVps!.id],
-                          onClose: () => setState(() => panelVps = null),
-                          onStats: () => AppShell.of(context).goToServer(panelVps!.id),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -506,6 +520,10 @@ class _MapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size canvasSize) {
+    // Hard clip — zoomed geometry must not spill into the continent sidebar.
+    canvas.save();
+    canvas.clipRect(Offset.zero & canvasSize);
+
     canvas.drawRect(Offset.zero & canvasSize, Paint()..color = BeacleColors.bg);
 
     canvas.save();
@@ -524,13 +542,24 @@ class _MapPainter extends CustomPainter {
       );
     }
 
+    // Land fill
     canvas.drawPath(geo.landPath, Paint()..color = const Color(0xFF111111));
+    // Coastline / land outline sketches
     canvas.drawPath(
       geo.landPath,
       Paint()
-        ..color = const Color(0xFF2A2A2A)
+        ..color = const Color(0xFF555555)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8 / camera.scale,
+        ..strokeWidth = 1.15 / camera.scale
+        ..isAntiAlias = true,
+    );
+    canvas.drawPath(
+      geo.landPath,
+      Paint()
+        ..color = const Color(0xFF2E2E2E)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.55 / camera.scale
+        ..isAntiAlias = true,
     );
     canvas.restore();
 
@@ -551,6 +580,7 @@ class _MapPainter extends CustomPainter {
         );
       }
     }
+    canvas.restore();
   }
 
   @override
