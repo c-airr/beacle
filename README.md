@@ -1,5 +1,3 @@
-# Beacle
-
 <p align="center">
 <h1 align="center">Beacle</h1>
 <p align="center">
