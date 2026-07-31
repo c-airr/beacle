@@ -1,8 +1,6 @@
 # Beacle
 
 <p align="center">
-  <img src="https://github.com/c-airr/beacle/blob/main/assets/logo.png?raw=true" alt="Beacle logo" width="256">
-</p>
 <h1 align="center">Beacle</h1>
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows-0078d6?logo=windows&logoColor=white" alt="Platform: Windows">
