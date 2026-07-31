@@ -59,14 +59,21 @@ func (r *Reporter) Proxy() shared.ProxyState {
 }
 
 func (r *Reporter) ApplyRegisterAck(ack shared.RegisterResponse) {
-	if ack.VPSID != "" {
+	changed := false
+	if ack.VPSID != "" && r.cfg.VPSID != ack.VPSID {
 		r.cfg.VPSID = ack.VPSID
+		changed = true
 	}
-	if ack.Token != "" {
+	if ack.Token != "" && r.cfg.Token != ack.Token {
 		r.cfg.Token = ack.Token
+		changed = true
+	}
+	if changed {
 		if err := r.cfg.Save(); err != nil {
 			log.Printf("warning: could not persist credentials: %v", err)
 		}
+	}
+	if ack.VPSID != "" {
 		log.Printf("registered as vps %s", ack.VPSID)
 	}
 }

@@ -141,6 +141,22 @@ type ComposeProject struct {
 	Total      int      `json:"total"`
 }
 
+type DockerVolume struct {
+	Name       string `json:"name"`
+	Driver     string `json:"driver"`
+	Mountpoint string `json:"mountpoint"`
+	Scope      string `json:"scope"`
+	CreatedAt  string `json:"created_at"`
+}
+
+type DockerNetwork struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Driver     string `json:"driver"`
+	Scope      string `json:"scope"`
+	Containers int    `json:"containers"`
+}
+
 type DockerState struct {
 	Available  bool             `json:"available"`
 	Error      string           `json:"error,omitempty"`
@@ -149,6 +165,8 @@ type DockerState struct {
 	Stats      []ContainerStats `json:"stats"`
 	Images     []ImageInfo      `json:"images"`
 	Compose    []ComposeProject `json:"compose"`
+	Volumes    []DockerVolume   `json:"volumes"`
+	Networks   []DockerNetwork  `json:"networks"`
 }
 
 // ---------------------------------------------------------------------------

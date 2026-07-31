@@ -166,6 +166,27 @@ class ComposeProject {
         total = _i(j['total']);
 }
 
+class DockerVolume {
+  final String name, driver, mountpoint, scope, createdAt;
+  DockerVolume.fromJson(Map<String, dynamic> j)
+      : name = _s(j['name']),
+        driver = _s(j['driver']),
+        mountpoint = _s(j['mountpoint']),
+        scope = _s(j['scope']),
+        createdAt = _s(j['created_at']);
+}
+
+class DockerNetwork {
+  final String id, name, driver, scope;
+  final int containers;
+  DockerNetwork.fromJson(Map<String, dynamic> j)
+      : id = _s(j['id']),
+        name = _s(j['name']),
+        driver = _s(j['driver']),
+        scope = _s(j['scope']),
+        containers = _i(j['containers']);
+}
+
 class DockerState {
   final bool available;
   final String error, version;
@@ -173,6 +194,8 @@ class DockerState {
   final List<ContainerStats> stats;
   final List<ImageInfo> images;
   final List<ComposeProject> compose;
+  final List<DockerVolume> volumes;
+  final List<DockerNetwork> networks;
   DockerState.fromJson(Map<String, dynamic> j)
       : available = _b(j['available']),
         error = _s(j['error']),
@@ -180,7 +203,9 @@ class DockerState {
         containers = _list(j['containers'], ContainerInfo.fromJson),
         stats = _list(j['stats'], ContainerStats.fromJson),
         images = _list(j['images'], ImageInfo.fromJson),
-        compose = _list(j['compose'], ComposeProject.fromJson);
+        compose = _list(j['compose'], ComposeProject.fromJson),
+        volumes = _list(j['volumes'], DockerVolume.fromJson),
+        networks = _list(j['networks'], DockerNetwork.fromJson);
   DockerState.empty() : this.fromJson(const {});
 }
 

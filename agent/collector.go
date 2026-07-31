@@ -12,7 +12,7 @@ type Collector interface {
 	PortDetail(port int) (shared.PortInfo, error)
 
 	Docker() shared.DockerState
-	DockerAction(id, action string) error // start | stop | restart
+	DockerAction(id, action string) error // start | stop | restart | remove
 	DockerLogs(id string, tail int) (string, error)
 	DockerStats(id string) (shared.ContainerStats, error)
 

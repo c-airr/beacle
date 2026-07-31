@@ -150,6 +150,9 @@ class ApiClient {
           as String? ??
       '';
 
+  Future<ContainerStats> dockerStats(String vpsId, String containerId) async =>
+      ContainerStats.fromJson(await get(_a(vpsId, 'docker/containers/$containerId/stats')));
+
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));
 

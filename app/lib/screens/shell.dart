@@ -89,6 +89,11 @@ class AppShellState extends State<AppShell> {
     _serversKey.currentState?.selectVps(vpsId);
   }
 
+  void goToAlerts() {
+    context.read<AppState>().bumpActivity();
+    setState(() => index = 7);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();

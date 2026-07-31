@@ -63,6 +63,23 @@ func (d *dockerClient) post(path string) error {
 	return nil
 }
 
+func (d *dockerClient) delete(path string) error {
+	req, err := http.NewRequest(http.MethodDelete, "http://docker"+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := d.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("docker api %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
 // --- raw API shapes ----------------------------------------------------------
 
 type apiContainer struct {
@@ -213,6 +230,40 @@ func (c *linuxCollector) Docker() shared.DockerState {
 		}
 	}
 
+	var vols struct {
+		Volumes []struct {
+			Name       string `json:"Name"`
+			Driver     string `json:"Driver"`
+			Mountpoint string `json:"Mountpoint"`
+			Scope      string `json:"Scope"`
+			CreatedAt  string `json:"CreatedAt"`
+		} `json:"Volumes"`
+	}
+	if err := c.docker.get("/volumes", &vols); err == nil {
+		for _, v := range vols.Volumes {
+			st.Volumes = append(st.Volumes, shared.DockerVolume{
+				Name: v.Name, Driver: v.Driver, Mountpoint: v.Mountpoint, Scope: v.Scope, CreatedAt: v.CreatedAt,
+			})
+		}
+		sort.Slice(st.Volumes, func(i, j int) bool { return st.Volumes[i].Name < st.Volumes[j].Name })
+	}
+
+	var nets []struct {
+		ID         string `json:"Id"`
+		Name       string `json:"Name"`
+		Driver     string `json:"Driver"`
+		Scope      string `json:"Scope"`
+		Containers map[string]any `json:"Containers"`
+	}
+	if err := c.docker.get("/networks", &nets); err == nil {
+		for _, n := range nets {
+			st.Networks = append(st.Networks, shared.DockerNetwork{
+				ID: n.ID, Name: n.Name, Driver: n.Driver, Scope: n.Scope, Containers: len(n.Containers),
+			})
+		}
+		sort.Slice(st.Networks, func(i, j int) bool { return st.Networks[i].Name < st.Networks[j].Name })
+	}
+
 	// live stats for running containers
 	for _, ci := range st.Containers {
 		if ci.State != "running" {
@@ -229,6 +280,8 @@ func (c *linuxCollector) DockerAction(id, action string) error {
 	switch action {
 	case "start", "stop", "restart":
 		return c.docker.post("/containers/" + id + "/" + action)
+	case "remove", "rm":
+		return c.docker.delete("/containers/" + id + "?force=true")
 	}
 	return fmt.Errorf("unknown docker action %q", action)
 }

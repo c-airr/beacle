@@ -145,6 +145,14 @@ func (c *devCollector) Docker() shared.DockerState {
 		Name: "demo-stack", WorkingDir: "/srv/demo", ConfigFile: "/srv/demo/docker-compose.yml",
 		Services: []string{"api", "db", "web", "worker"}, Running: 3, Total: 4,
 	}}
+	st.Volumes = []shared.DockerVolume{
+		{Name: "demo-stack_pgdata", Driver: "local", Mountpoint: "/var/lib/docker/volumes/demo-stack_pgdata/_data", Scope: "local"},
+		{Name: "caddy_data", Driver: "local", Mountpoint: "/var/lib/docker/volumes/caddy_data/_data", Scope: "local"},
+	}
+	st.Networks = []shared.DockerNetwork{
+		{ID: "bridge", Name: "bridge", Driver: "bridge", Scope: "local", Containers: 2},
+		{ID: "demo", Name: "demo-stack_default", Driver: "bridge", Scope: "local", Containers: 4},
+	}
 	return st
 }
 
@@ -163,6 +171,8 @@ func (c *devCollector) DockerAction(id, action string) error {
 			case "stop":
 				c.dockerC[i].State = "exited"
 				c.dockerC[i].Status = "Exited (0) 1 second ago"
+			case "remove", "rm":
+				c.dockerC = append(c.dockerC[:i], c.dockerC[i+1:]...)
 			default:
 				return fmt.Errorf("unknown action %q", action)
 			}
