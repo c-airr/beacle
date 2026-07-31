@@ -5,10 +5,13 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"beacle/shared"
 	"github.com/gorilla/websocket"
 )
+
+const uiWSWriteTimeout = 10 * time.Second
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true }, // desktop app, local use
@@ -54,7 +57,12 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// writer
 	go func() {
 		for msg := range ch {
+			// Without a deadline a suspended UI client (locked screen, minimised
+			// window) leaves this write blocked forever, holding the goroutine
+			// and its slot in the fan-out.
+			_ = conn.SetWriteDeadline(time.Now().Add(uiWSWriteTimeout))
 			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				_ = conn.Close()
 				return
 			}
 		}

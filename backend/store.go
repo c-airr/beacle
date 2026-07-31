@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"beacle/shared"
@@ -31,6 +33,7 @@ type Store struct {
 	path      string
 	state     persistedState
 	snapshots map[string]*shared.VPSSnapshot
+	dirty     atomic.Bool
 }
 
 func NewStore(dataDir string) (*Store, error) {
@@ -54,23 +57,64 @@ func NewStore(dataDir string) (*Store, error) {
 	if s.state.Links == nil {
 		s.state.Links = map[string]*shared.VPSLink{}
 	}
+	// No agent socket survives a backend restart, so the persisted status is
+	// meaningless here: trusting it would show a server as online with no
+	// snapshot behind it until the offline watcher caught up. Every non-pending
+	// VPS starts offline and is flipped online by its first WebSocket frame.
+	for _, e := range s.state.VPS {
+		if e.VPS.Status != shared.VPSPending {
+			e.VPS.Status = shared.VPSOffline
+		}
+	}
 	return s, nil
 }
 
+// Persist writes the registry out immediately (shutdown path).
 func (s *Store) Persist() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.persistLocked()
+	s.dirty.Store(false)
+	s.writeLocked()
 }
 
+// FlushLoop drains deferred writes at a bounded rate. Call once at startup.
+func (s *Store) FlushLoop() {
+	for range time.Tick(3 * time.Second) {
+		if !s.dirty.Swap(false) {
+			continue
+		}
+		s.mu.Lock()
+		s.writeLocked()
+		s.mu.Unlock()
+	}
+}
+
+// touchLocked defers a write instead of doing it inline. Every agent frame
+// bumps LastSeen — a few times per second per VPS — and re-serializing the
+// whole registry under the write lock that often stalled snapshot fan-out for
+// no benefit: none of those fields matter across a restart.
+func (s *Store) touchLocked() { s.dirty.Store(true) }
+
+// persistLocked writes structural changes (identity, tokens, links, history)
+// that must survive an unclean exit.
 func (s *Store) persistLocked() {
+	s.dirty.Store(false)
+	s.writeLocked()
+}
+
+func (s *Store) writeLocked() {
 	b, err := json.MarshalIndent(&s.state, "", "  ")
 	if err != nil {
+		log.Printf("store: encode state: %v", err)
 		return
 	}
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err == nil {
-		_ = os.Rename(tmp, s.path)
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		log.Printf("store: write %s: %v", tmp, err)
+		return
+	}
+	if err := os.Rename(tmp, s.path); err != nil {
+		log.Printf("store: replace %s: %v", s.path, err)
 	}
 }
 
@@ -94,7 +138,8 @@ func (s *Store) CreateVPS(name, tailscaleName, tailscaleIP string) *VPSEntry {
 	defer s.mu.Unlock()
 	for _, e := range s.state.VPS {
 		if e.VPS.TailscaleName == tailscaleName || (tailscaleIP != "" && e.VPS.Host == tailscaleIP) {
-			return e
+			c := *e
+			return &c
 		}
 	}
 	entry := &VPSEntry{
@@ -112,7 +157,8 @@ func (s *Store) CreateVPS(name, tailscaleName, tailscaleIP string) *VPSEntry {
 	}
 	s.state.VPS[entry.VPS.ID] = entry
 	s.persistLocked()
-	return entry
+	c := *entry
+	return &c
 }
 
 // FindPendingByTailscale matches a pre-added VPS waiting for its agent.
@@ -123,6 +169,24 @@ func (s *Store) FindPendingByTailscale(name, ip string) *VPSEntry {
 		if e.AgentToken != "" {
 			continue
 		}
+		if name != "" && e.VPS.TailscaleName == name {
+			c := *e
+			return &c
+		}
+		if ip != "" && e.VPS.Host == ip {
+			c := *e
+			return &c
+		}
+	}
+	return nil
+}
+
+// FindByTailscale matches any known VPS by Tailscale hostname or IP.
+// Used to reclaim an offline VPS after agent reinstall (lost local token).
+func (s *Store) FindByTailscale(name, ip string) *VPSEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, e := range s.state.VPS {
 		if name != "" && e.VPS.TailscaleName == name {
 			c := *e
 			return &c
@@ -164,7 +228,52 @@ func (s *Store) AutoRegisterVPS(hostname, host string, agentPort int, agentVersi
 	}
 	s.state.VPS[entry.VPS.ID] = entry
 	s.persistLocked()
-	return entry
+	c := *entry
+	return &c
+}
+
+// AdoptVPS re-creates an entry for an agent that still holds credentials the
+// registry lost (state.json reset, restored backup, reinstalled panel). The
+// agent's own ID and token are kept, so it keeps reconnecting with what it
+// already has on disk instead of needing a reinstall.
+func (s *Store) AdoptVPS(vpsID, token, name, host, tailscaleName, agentVer string) *VPSEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if vpsID == "" {
+		vpsID = newID()
+	}
+	if token == "" {
+		token = newToken()
+	}
+	if name == "" {
+		name = tailscaleName
+	}
+	if name == "" {
+		name = host
+	}
+	if e, ok := s.state.VPS[vpsID]; ok {
+		c := *e
+		return &c
+	}
+	entry := &VPSEntry{
+		VPS: shared.VPS{
+			ID:            vpsID,
+			Name:          name,
+			Host:          host,
+			TailscaleName: tailscaleName,
+			Weight:        1,
+			Status:        shared.VPSOnline,
+			AgentPort:     shared.DefaultAgentPort,
+			AgentVer:      agentVer,
+			CreatedAt:     time.Now().UTC(),
+			LastSeen:      time.Now().UTC(),
+		},
+		AgentToken: token,
+	}
+	s.state.VPS[vpsID] = entry
+	s.persistLocked()
+	c := *entry
+	return &c
 }
 
 func (s *Store) UpdateVPS(id string, fn func(*VPSEntry)) *VPSEntry {
@@ -175,8 +284,11 @@ func (s *Store) UpdateVPS(id string, fn func(*VPSEntry)) *VPSEntry {
 		return nil
 	}
 	fn(e)
-	s.persistLocked()
-	return e
+	s.touchLocked()
+	// Callers read the result after the lock is gone — hand out a copy so a
+	// concurrent frame from the same agent cannot tear it.
+	c := *e
+	return &c
 }
 
 func (s *Store) DeleteVPS(id string) bool {

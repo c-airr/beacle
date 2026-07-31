@@ -7,7 +7,11 @@ const (
 	DiskHighPercent    = 90.0
 	HighLoadCPUPercent = 75.0 // marker turns yellow above this
 
-	// OfflineAfterSec: agent may report metrics as slowly as 60 s in sleep mode.
-	OfflineAfterSec  = 90
+	// OfflineAfterSec: how long the agent WebSocket may stay down before an
+	// offline alert fires and the last snapshot is dropped. The VPS status
+	// itself flips as soon as the socket goes away — this is only the grace
+	// window for alerting, so a short reconnect does not spam alerts.
+	// Live sockets are never marked offline regardless of this value.
+	OfflineAfterSec  = 45
 	DefaultAgentPort = 8931
 )

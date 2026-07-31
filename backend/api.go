@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -15,12 +16,13 @@ import (
 )
 
 type Server struct {
-	store    *Store
-	hub      *Hub
-	agentHub *AgentHub
-	alerts   *AlertEngine
-	baseURL  string // public URL of this backend, used in install commands
-	dataDir  string
+	store     *Store
+	hub       *Hub
+	agentHub  *AgentHub
+	alerts    *AlertEngine
+	baseURL   string // public URL of this backend, used in install commands
+	dataDir   string
+	startedAt time.Time
 
 	uiPowerMu   sync.RWMutex
 	uiPowerMode shared.PowerMode
@@ -379,8 +381,24 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /download/agent", s.handleDownloadAgent)
 	mux.HandleFunc("GET /download/agent/version", s.handleAgentVersion)
 
-	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "beacle-backend"})
-	})
+	mux.HandleFunc("GET /api/health", s.handleHealth)
 	return mux
+}
+
+// handleHealth identifies this process so the desktop app can adopt a backend
+// that is already running (and already owns the agent sockets) instead of
+// killing it and forcing every agent through a reconnect.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	dataDir, err := filepath.Abs(s.dataDir)
+	if err != nil {
+		dataDir = s.dataDir
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"service":    "beacle-backend",
+		"pid":        os.Getpid(),
+		"data_dir":   dataDir,
+		"agents":     s.agentHub.ConnectedCount(),
+		"uptime_sec": int(time.Since(s.startedAt).Seconds()),
+	})
 }

@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -15,13 +18,28 @@ import (
 )
 
 const (
-	wsHandshakeTimeout = 30 * time.Second
-	wsReadTimeout      = 90 * time.Second
+	// The backend is the desktop panel: it is down whenever the app is closed,
+	// and a dial at that moment either gets refused instantly or (Tailscale peer
+	// asleep) hangs until it times out. Both paths have to stay cheap, because
+	// the delay between "user opens the panel" and "server shows data" is
+	// exactly one of these retries.
+	wsHandshakeTimeout = 10 * time.Second
+	wsReadTimeout      = 35 * time.Second
 	wsWriteTimeout     = 15 * time.Second
-	pingInterval       = 20 * time.Second
-	reconnectMin       = 1 * time.Second
-	reconnectMax       = 30 * time.Second
+	pingInterval       = 10 * time.Second
+
+	reconnectMin = 1 * time.Second
+	reconnectMax = 5 * time.Second
+	// Registration refused is a configuration problem, not a transport one —
+	// retrying it every few seconds only spams both sides.
+	reconnectRejected = 30 * time.Second
 )
+
+// registerRejected marks a backend that answered but refused this agent, so the
+// reconnect loop can back off differently than for an unreachable backend.
+type registerRejected struct{ msg string }
+
+func (e *registerRejected) Error() string { return e.msg }
 
 // WSClient is the only transport to the backend: register, snapshots, commands, keepalive.
 type WSClient struct {
@@ -54,21 +72,56 @@ func agentWSURL(backend string) (string, error) {
 
 func (c *WSClient) Run() {
 	backoff := reconnectMin
+	var lastErr string
+	var repeats int
+
 	for {
 		registered, err := c.session()
-		if err != nil {
-			log.Printf("agent ws session ended: %v", err)
-		}
-		if registered {
+
+		var rejected *registerRejected
+		switch {
+		case registered:
+			// The session got as far as register_ack, so the backend is real and
+			// healthy; whatever ended it (panel restart, laptop sleeping, network
+			// blip) deserves an immediate retry.
 			backoff = reconnectMin
+		case errors.As(err, &rejected):
+			backoff = reconnectRejected
+		default:
+			backoff *= 2
+			if backoff > reconnectMax {
+				backoff = reconnectMax
+			}
 		}
-		log.Printf("agent ws reconnect in %s", backoff)
-		time.Sleep(backoff)
-		backoff *= 2
-		if backoff > reconnectMax {
-			backoff = reconnectMax
+
+		// While the panel is closed this loop runs every few seconds for hours.
+		// Log the first failure of a kind, then stay quiet until it changes.
+		msg := "connection closed"
+		if err != nil {
+			msg = err.Error()
 		}
+		if msg != lastErr {
+			log.Printf("agent ws session ended: %s (retry in %s)", msg, backoff)
+			lastErr, repeats = msg, 0
+		} else if repeats++; repeats%60 == 0 {
+			log.Printf("agent ws still failing: %s (%d attempts)", msg, repeats)
+		}
+
+		time.Sleep(withJitter(backoff))
 	}
+}
+
+// withJitter spreads reconnects so a fleet of agents does not hit the backend
+// in lockstep after it comes back up.
+func withJitter(d time.Duration) time.Duration {
+	if d <= 0 {
+		return reconnectMin
+	}
+	spread := int64(d / 4)
+	if spread <= 0 {
+		return d
+	}
+	return d - time.Duration(spread) + time.Duration(rand.Int63n(2*spread))
 }
 
 // session returns registered=true once register_ack was received (backoff should reset).
@@ -82,7 +135,16 @@ func (c *WSClient) session() (registered bool, err error) {
 		hdr.Set("Authorization", "Bearer "+c.cfg.Token)
 	}
 
-	dialer := websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout}
+	dialer := websocket.Dialer{
+		HandshakeTimeout: wsHandshakeTimeout,
+		NetDialContext: (&net.Dialer{
+			Timeout: wsHandshakeTimeout,
+			// The panel machine can drop off the tailnet without closing
+			// anything; keepalives make a half-open socket surface as an error
+			// instead of hanging on a read.
+			KeepAlive: 15 * time.Second,
+		}).DialContext,
+	}
 	conn, _, err := dialer.Dial(wsURL, hdr)
 	if err != nil {
 		return false, err
@@ -179,9 +241,9 @@ func (c *WSClient) handshake(conn *websocket.Conn, writeText func([]byte) error)
 			return mode, nil
 		case shared.AgentWSError:
 			if msg.Error != "" {
-				return "", fmt.Errorf("register: %s", msg.Error)
+				return "", &registerRejected{msg: "register: " + msg.Error}
 			}
-			return "", fmt.Errorf("register rejected")
+			return "", &registerRejected{msg: "register rejected"}
 		default:
 		}
 	}

@@ -11,9 +11,10 @@ import (
 // AlertEngine evaluates incoming reports against thresholds and tracks state
 // transitions (a condition fires one alert when it starts, not every report).
 type AlertEngine struct {
-	mu    sync.Mutex
-	store *Store
-	hub   *Hub
+	mu       sync.Mutex
+	store    *Store
+	hub      *Hub
+	agentHub *AgentHub
 	// active["vpsid|type|key"] = true while the condition holds
 	active map[string]bool
 	// previous per-VPS state used for transition detection
@@ -30,6 +31,8 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		prevServices:   map[string]map[string]string{},
 	}
 }
+
+func (e *AlertEngine) SetAgentHub(h *AgentHub) { e.agentHub = h }
 
 func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertSeverity, key, msg string) {
 	id := vps.ID + "|" + string(t) + "|" + key
@@ -129,23 +132,44 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 	}
 }
 
-// WatchOffline marks VPSes offline when reports stop arriving.
+// WatchOffline keeps the VPS status tied to the agent WebSocket: a live socket
+// means online even if a metrics tick was delayed (eco/sleep mode, slow docker
+// collect), and a missing socket means offline. Only the *alert* waits out the
+// grace window, so a reconnect after a network blip never raises one.
 func (e *AlertEngine) WatchOffline() {
-	for range time.Tick(5 * time.Second) {
+	for range time.Tick(3 * time.Second) {
 		for _, v := range e.store.ListVPS() {
-			if v.Status == shared.VPSPending || v.Status == shared.VPSOffline {
+			if v.Status == shared.VPSPending {
 				continue
 			}
-			if time.Since(v.LastSeen) > shared.OfflineAfterSec*time.Second {
-				updated := e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+			live := e.agentHub != nil && e.agentHub.Connected(v.ID)
+			if live {
+				if v.Status == shared.VPSOffline {
+					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+						en.VPS.Status = shared.VPSOnline
+						en.VPS.LastSeen = time.Now().UTC()
+					})
+					e.mu.Lock()
+					e.clear(v.ID, shared.AlertAgentOffline, "")
+					e.mu.Unlock()
+					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+				}
+				continue
+			}
+			if v.Status != shared.VPSOffline {
+				e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
 					en.VPS.Status = shared.VPSOffline
 				})
+				e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+			}
+			// Socket gone for longer than the grace window: this is a real
+			// outage, not a reconnect. Alert once and drop the stale snapshot.
+			if time.Since(v.LastSeen) > shared.OfflineAfterSec*time.Second {
 				e.store.ClearSnapshot(v.ID)
 				e.mu.Lock()
-				e.fire(updated.VPS, shared.AlertAgentOffline, shared.SeverityCritical, "",
+				e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
 					"Agent stopped reporting - VPS offline")
 				e.mu.Unlock()
-				e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 			}
 		}
 	}

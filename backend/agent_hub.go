@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"beacle/shared"
@@ -15,9 +16,14 @@ import (
 )
 
 const (
-	agentWSReadTimeout  = 90 * time.Second
+	// A dead link (laptop asleep, Tailscale re-keying, VPS network drop) is
+	// invisible at the TCP level, so it is only detected when pings stop being
+	// answered. Three missed pings ≈ 35s, instead of the 90s it used to take —
+	// that window is exactly how long the panel would keep showing a server as
+	// online while no data arrives.
+	agentWSReadTimeout  = 35 * time.Second
 	agentWSWriteTimeout = 15 * time.Second
-	agentWSPingInterval = 20 * time.Second
+	agentWSPingInterval = 10 * time.Second
 )
 
 // AgentHub tracks outbound agent WebSocket connections and routes commands
@@ -40,8 +46,9 @@ type agentSession struct {
 	done       chan struct{}
 	closeOnce  sync.Once
 	writeMu    sync.Mutex
-	registered bool
+	registered atomic.Bool
 	remoteIP   string
+	token      string
 	tokenEntry *VPSEntry
 }
 
@@ -64,7 +71,8 @@ func (h *AgentHub) ServeAgentWS(w http.ResponseWriter, r *http.Request, srv *Ser
 	}
 
 	var tokenEntry *VPSEntry
-	if tok := bearer(r); tok != "" {
+	tok := bearer(r)
+	if tok != "" {
 		tokenEntry = h.store.FindByToken(tok)
 	}
 
@@ -73,6 +81,7 @@ func (h *AgentHub) ServeAgentWS(w http.ResponseWriter, r *http.Request, srv *Ser
 		send:       make(chan []byte, 64),
 		done:       make(chan struct{}),
 		remoteIP:   agentRemoteIP(r),
+		token:      tok,
 		tokenEntry: tokenEntry,
 	}
 
@@ -112,6 +121,11 @@ func (s *agentSession) writeControl(messageType int, data []byte) error {
 }
 
 func (h *AgentHub) writeLoop(sess *agentSession) {
+	// A failed write means the socket is gone. Without tearing the session down
+	// here the read side would sit on its deadline while the hub still reported
+	// the agent as connected.
+	defer sess.shutdown()
+
 	ticker := time.NewTicker(agentWSPingInterval)
 	defer ticker.Stop()
 	for {
@@ -126,9 +140,6 @@ func (h *AgentHub) writeLoop(sess *agentSession) {
 				return
 			}
 		case <-ticker.C:
-			if !sess.registered {
-				continue
-			}
 			if err := sess.writeControl(websocket.PingMessage, []byte("ping")); err != nil {
 				return
 			}
@@ -167,18 +178,32 @@ func (h *AgentHub) readLoop(sess *agentSession, srv *Server) {
 }
 
 func (h *AgentHub) disconnect(sess *agentSession) {
+	wasLive := false
 	h.mu.Lock()
 	if sess.vpsID != "" {
 		if cur, ok := h.agents[sess.vpsID]; ok && cur == sess {
 			delete(h.agents, sess.vpsID)
+			wasLive = true
 		}
 	}
 	h.mu.Unlock()
 	sess.shutdown()
-	if sess.vpsID != "" {
-		log.Printf("agent ws disconnected: %s", sess.vpsID)
-		h.hub.Broadcast(shared.WSVPSList, h.store.ListVPS())
+	if !wasLive {
+		// Superseded by a newer socket from the same agent (reconnect) — the
+		// live session owns the status now.
+		return
 	}
+	// The socket is the only channel this agent has: once it is gone the panel
+	// must say so immediately instead of showing a server as online for the
+	// whole offline grace window with no data behind it. The offline *alert*
+	// still waits out shared.OfflineAfterSec, so short reconnects stay quiet.
+	h.store.UpdateVPS(sess.vpsID, func(e *VPSEntry) {
+		if e.VPS.Status != shared.VPSPending {
+			e.VPS.Status = shared.VPSOffline
+		}
+	})
+	log.Printf("agent ws disconnected: %s", sess.vpsID)
+	h.hub.Broadcast(shared.WSVPSList, h.store.ListVPS())
 }
 
 func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.AgentWSMessage) {
@@ -187,16 +212,16 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if msg.Register == nil {
 			return
 		}
-		entry, ack, err := srv.registerAgent(*msg.Register, sess.remoteIP, sess.tokenEntry)
+		entry, ack, err := srv.registerAgent(*msg.Register, sess.remoteIP, sess.token, sess.tokenEntry)
 		if err != nil {
 			log.Printf("agent register failed: %v", err)
 			h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSError, Error: err.Error()})
-			_ = sess.conn.Close()
+			sess.shutdown()
 			return
 		}
 		sess.entry = entry
 		sess.vpsID = entry.VPS.ID
-		sess.registered = true
+		sess.registered.Store(true)
 		h.attachSession(sess)
 		log.Printf("agent ws registered: %s (%s)", entry.VPS.Name, entry.VPS.ID)
 		h.hub.Broadcast(shared.WSVPSList, h.store.ListVPS())
@@ -205,7 +230,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSPowerMode, Mode: ack.PowerMode})
 
 	case shared.AgentWSMetrics:
-		if !sess.registered || sess.entry == nil || msg.Metrics == nil {
+		if !sess.registered.Load() || sess.entry == nil || msg.Metrics == nil {
 			return
 		}
 		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
@@ -213,7 +238,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		})
 
 	case shared.AgentWSDockerSnapshot:
-		if !sess.registered || sess.entry == nil || msg.Docker == nil {
+		if !sess.registered.Load() || sess.entry == nil || msg.Docker == nil {
 			return
 		}
 		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
@@ -221,7 +246,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		})
 
 	case shared.AgentWSSystemdSnapshot:
-		if !sess.registered || sess.entry == nil || msg.Services == nil {
+		if !sess.registered.Load() || sess.entry == nil || msg.Services == nil {
 			return
 		}
 		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
@@ -229,7 +254,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		})
 
 	case shared.AgentWSPortsSnapshot:
-		if !sess.registered || sess.entry == nil {
+		if !sess.registered.Load() || sess.entry == nil {
 			return
 		}
 		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
@@ -237,7 +262,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		})
 
 	case shared.AgentWSProxySnapshot:
-		if !sess.registered || sess.entry == nil || msg.Proxy == nil {
+		if !sess.registered.Load() || sess.entry == nil || msg.Proxy == nil {
 			return
 		}
 		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
@@ -259,7 +284,15 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		}
 
 	case shared.AgentWSHeartbeat:
-		// Older agents may still send JSON heartbeats — treat as liveness only.
+		// Older agents may still send JSON heartbeats — treat as liveness.
+		if sess.registered.Load() && sess.entry != nil {
+			h.store.UpdateVPS(sess.entry.VPS.ID, func(e *VPSEntry) {
+				e.VPS.LastSeen = time.Now().UTC()
+				if e.VPS.Status == shared.VPSOffline {
+					e.VPS.Status = shared.VPSOnline
+				}
+			})
+		}
 	}
 }
 
@@ -267,7 +300,7 @@ func (h *AgentHub) SetPowerMode(mode shared.PowerMode) {
 	h.mu.Lock()
 	sessions := make([]*agentSession, 0, len(h.agents))
 	for _, sess := range h.agents {
-		if sess.registered {
+		if sess.registered.Load() {
 			sessions = append(sessions, sess)
 		}
 	}
@@ -283,7 +316,7 @@ func (h *AgentHub) RequestRefresh(vpsID string) {
 	h.mu.Lock()
 	sess, ok := h.agents[vpsID]
 	h.mu.Unlock()
-	if ok && sess.registered {
+	if ok && sess.registered.Load() {
 		h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSRefresh})
 	}
 }
@@ -292,7 +325,7 @@ func (h *AgentHub) RequestRefreshAll() {
 	h.mu.Lock()
 	sessions := make([]*agentSession, 0, len(h.agents))
 	for _, sess := range h.agents {
-		if sess.registered {
+		if sess.registered.Load() {
 			sessions = append(sessions, sess)
 		}
 	}
@@ -320,16 +353,42 @@ func (h *AgentHub) send(sess *agentSession, msg shared.AgentWSMessage) {
 	case <-sess.done:
 	case sess.send <- b:
 	default:
-		log.Printf("agent ws send buffer full for %s", sess.vpsID)
+		// The agent is not draining its socket: keeping the session around
+		// would keep the panel showing it as online. Drop it and let the agent
+		// reconnect on its own backoff.
+		log.Printf("agent ws send buffer full for %s — dropping session", sess.vpsID)
+		sess.shutdown()
 	}
 }
 
-// Connected reports whether an agent has an active outbound WebSocket.
+// Connected reports whether an agent has a live, registered outbound WebSocket.
 func (h *AgentHub) Connected(vpsID string) bool {
 	h.mu.Lock()
+	sess, ok := h.agents[vpsID]
+	h.mu.Unlock()
+	if !ok || !sess.registered.Load() {
+		return false
+	}
+	select {
+	case <-sess.done:
+		return false
+	default:
+		return true
+	}
+}
+
+// ConnectedCount is surfaced on /api/health so the desktop app can tell a
+// backend that still owns agent sockets from one that is merely listening.
+func (h *AgentHub) ConnectedCount() int {
+	h.mu.Lock()
 	defer h.mu.Unlock()
-	_, ok := h.agents[vpsID]
-	return ok
+	n := 0
+	for _, sess := range h.agents {
+		if sess.registered.Load() {
+			n++
+		}
+	}
+	return n
 }
 
 // Request sends a command to the agent over its existing WebSocket and waits

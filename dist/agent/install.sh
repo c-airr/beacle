@@ -49,7 +49,24 @@ if [ ! -f "$CONFIG" ]; then
 EOF
   chmod 600 "$CONFIG"
 else
-  echo "[beacle] keeping existing config"
+  echo "[beacle] updating backend_url in existing config"
+  # Keep vps_id/token; only refresh backend URL from install args.
+  if command -v python3 >/dev/null 2>&1; then
+    BACKEND_URL="$BACKEND_URL" CONFIG="$CONFIG" python3 - <<'PY'
+import json, os
+path = os.environ["CONFIG"]
+url = os.environ["BACKEND_URL"]
+with open(path) as f:
+    cfg = json.load(f)
+cfg["backend_url"] = url
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+  else
+    # Fallback: rewrite if jq missing and python missing — preserve by copy note only
+    echo "[beacle] keeping credentials; ensure backend_url is $BACKEND_URL" >&2
+  fi
 fi
 
 cat > /etc/systemd/system/beacle-agent.service <<'EOF'
@@ -57,6 +74,9 @@ cat > /etc/systemd/system/beacle-agent.service <<'EOF'
 Description=Beacle VPS Agent
 After=network-online.target tailscaled.service
 Wants=network-online.target
+# Never let the restart rate limit park the unit in failed state — a stopped
+# agent cannot be reached remotely, the panel would just show the VPS offline.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple

@@ -7,23 +7,35 @@ import (
 )
 
 func mergeSnapshot(store *Store, hub *Hub, alerts *AlertEngine, entry *VPSEntry, agentVer string, merge func(*shared.VPSSnapshot)) {
+	snap := store.GetSnapshot(entry.VPS.ID)
+	copy := shared.VPSSnapshot{}
+	if snap != nil {
+		copy = *snap
+	}
+	merge(&copy)
+
+	// A frame is proof of life, so the registry follows the snapshot instead of
+	// carrying its own idea of the status: the two used to disagree, and the UI
+	// (which overwrites its list entry from every snapshot) flickered between
+	// them whenever a full list broadcast landed.
+	status := shared.VPSOnline
+	if copy.Metrics.Hostname != "" || copy.Metrics.CPUPercent > 0 {
+		status = statusFor(copy.Metrics)
+	}
 	updated := store.UpdateVPS(entry.VPS.ID, func(e *VPSEntry) {
 		e.VPS.LastSeen = time.Now().UTC()
 		if agentVer != "" {
 			e.VPS.AgentVer = agentVer
 		}
+		if e.VPS.Status != shared.VPSPending {
+			e.VPS.Status = status
+		}
 	})
+	if updated == nil {
+		return // deleted while the frame was in flight
+	}
 
-	snap := store.GetSnapshot(entry.VPS.ID)
-	if snap == nil {
-		snap = &shared.VPSSnapshot{VPS: updated.VPS}
-	}
-	copy := *snap
 	copy.VPS = updated.VPS
-	merge(&copy)
-	if copy.Metrics.Hostname != "" || copy.Metrics.CPUPercent > 0 {
-		copy.VPS.Status = statusFor(copy.Metrics)
-	}
 	copy.Updated = time.Now().UTC()
 	store.SetSnapshot(&copy)
 

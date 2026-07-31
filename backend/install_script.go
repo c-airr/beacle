@@ -50,6 +50,9 @@ cat > /etc/systemd/system/beacle-agent.service <<'SVCEOF'
 Description=Beacle VPS Agent
 After=network-online.target tailscaled.service
 Wants=network-online.target
+# Never let the restart rate limit park the unit in failed state — a stopped
+# agent cannot be reached remotely, the panel would just show the VPS offline.
+StartLimitIntervalSec=0
 [Service]
 Type=simple
 ExecStart=/opt/beacle-agent/beacle-agent -config /opt/beacle-agent/config.json

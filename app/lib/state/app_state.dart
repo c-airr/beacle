@@ -18,6 +18,11 @@ class AppState extends ChangeNotifier {
   List<ActionLog> actions = [];
   List<VpsLink> links = [];
 
+  /// Rolling fleet averages for Overview sparklines (~24h at 1 sample / min).
+  final List<FleetSample> fleetHistory = [];
+  static const _historyMax = 24 * 60; // 1/min for 24h
+  DateTime? _lastSampleAt;
+
   bool connected = false;
   String? lastError;
 
@@ -28,6 +33,7 @@ class AppState extends ChangeNotifier {
   Timer? _reconnect;
   Timer? _staleCheck;
   Timer? _idleTimer;
+  Timer? _sampleTimer;
 
   static const _idleTimeout = Duration(seconds: 45);
 
@@ -60,12 +66,24 @@ class AppState extends ChangeNotifier {
       _pruneSnapshots();
       notifyListeners();
     });
+    _sampleTimer?.cancel();
+    _sampleTimer = Timer.periodic(const Duration(seconds: 60), (_) => _sampleFleet());
+    _sampleFleet();
     _scheduleIdleTimer();
   }
 
+  /// Set when the power mode changes: agents keep the old tick rate until the
+  /// backend has told them about the new one, so for a moment their reports
+  /// look late against the new threshold. Without this grace, switching back to
+  /// active mode blanked every server for one tick.
+  DateTime _powerModeChangedAt = DateTime.now();
+
   bool isReportStale(Vps v) {
     if (!v.online) return true;
-    return DateTime.now().difference(v.lastSeen.toLocal()).inSeconds > staleThresholdSeconds;
+    final age = DateTime.now().difference(v.lastSeen.toLocal()).inSeconds;
+    final sinceModeChange = DateTime.now().difference(_powerModeChangedAt).inSeconds;
+    if (sinceModeChange < 15 && age <= 60) return false;
+    return age > staleThresholdSeconds;
   }
 
   void bumpActivity() {
@@ -94,12 +112,25 @@ class AppState extends ChangeNotifier {
 
   void onUserAction() => bumpActivity();
 
+  /// Window regained focus / machine woke up. Anything may have happened to the
+  /// socket while we were away, so stop waiting out a backoff and re-check now.
+  Future<void> onAppResumed() async {
+    bumpActivity();
+    _wsBackoff = _wsBackoffMin;
+    await refreshAll();
+    if (!connected) {
+      _reconnect?.cancel();
+      _connectWs();
+    }
+  }
+
   void _scheduleIdleTimer() {
     _idleTimer?.cancel();
     _idleTimer = Timer(_idleTimeout, enterEcoMode);
   }
 
   Future<void> _applyPowerMode() async {
+    _powerModeChangedAt = DateTime.now();
     try {
       await api.setPowerMode(uiPowerMode);
     } catch (_) {}
@@ -116,9 +147,11 @@ class AppState extends ChangeNotifier {
       alerts = ((o['alerts'] as List?) ?? []).map((e) => Alert.fromJson(e)).toList().reversed.toList();
       actions = ((o['actions'] as List?) ?? []).map((e) => ActionLog.fromJson(e)).toList().reversed.toList();
       links = ((o['links'] as List?) ?? []).map((e) => VpsLink.fromJson(e)).toList();
-      connected = true;
       lastError = null;
+      _sampleFleet(force: true);
     } catch (e) {
+      // Backend not reachable at all — the live socket is the source of truth
+      // for `connected`, but a failed REST call already proves it is down.
       connected = false;
       lastError = '$e';
     }
@@ -126,23 +159,55 @@ class AppState extends ChangeNotifier {
   }
 
   void _connectWs() {
+    _reconnect?.cancel();
     _ws?.sink.close();
     final wsUrl = '${backendUrl.replaceFirst('http', 'ws')}/ws';
     try {
-      _ws = IOWebSocketChannel.connect(wsUrl, pingInterval: const Duration(seconds: 15));
-      _ws!.stream.listen(_onWsMessage, onDone: _scheduleReconnect, onError: (_) => _scheduleReconnect());
-      connected = true;
-      notifyListeners();
-    } catch (_) {
+      final ws = IOWebSocketChannel.connect(wsUrl, pingInterval: const Duration(seconds: 10));
+      _ws = ws;
+      // Every handler checks it still owns the current socket: closing the old
+      // one fires onDone *after* the replacement is live, and acting on that
+      // would tear down the healthy connection we just made.
+      ws.stream.listen(
+        _onWsMessage,
+        onDone: () => _onWsClosed(ws),
+        onError: (_) => _onWsClosed(ws),
+      );
+      // Only claim to be connected once the socket is really open — reporting it
+      // optimistically hid a backend that was still starting up.
+      ws.ready.then((_) {
+        if (_ws != ws) return;
+        _wsBackoff = _wsBackoffMin;
+        connected = true;
+        lastError = null;
+        notifyListeners();
+      }).catchError((Object e) {
+        if (_ws != ws) return;
+        lastError = '$e';
+        _scheduleReconnect();
+      });
+    } catch (e) {
+      lastError = '$e';
       _scheduleReconnect();
     }
+  }
+
+  static const _wsBackoffMin = Duration(seconds: 1);
+  static const _wsBackoffMax = Duration(seconds: 5);
+  Duration _wsBackoff = _wsBackoffMin;
+
+  void _onWsClosed(IOWebSocketChannel ws) {
+    if (_ws != ws) return; // a superseded socket finishing its teardown
+    _scheduleReconnect();
   }
 
   void _scheduleReconnect() {
     connected = false;
     notifyListeners();
-    _reconnect?.cancel();
-    _reconnect = Timer(const Duration(seconds: 3), () {
+    if (_reconnect?.isActive ?? false) return;
+    final wait = _wsBackoff;
+    _wsBackoff = wait * 2 > _wsBackoffMax ? _wsBackoffMax : wait * 2;
+    _reconnect = Timer(wait, () {
       refreshAll();
       _connectWs();
     });
@@ -193,9 +258,46 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drops snapshots of servers that left the registry. A late or missing
+  /// report is *not* a reason to throw the data away: every screen already
+  /// gates on [isReportStale], and discarding it meant a two-second network
+  /// blip emptied the whole panel until the next full push arrived.
   void _pruneSnapshots() {
-    final live = vpsList.where((v) => v.online && !isReportStale(v)).map((v) => v.id).toSet();
-    snapshots.removeWhere((id, _) => !live.contains(id));
+    final known = vpsList.map((v) => v.id).toSet();
+    snapshots.removeWhere((id, _) => !known.contains(id));
+  }
+
+  void _sampleFleet({bool force = false}) {
+    final now = DateTime.now();
+    if (!force && _lastSampleAt != null && now.difference(_lastSampleAt!) < const Duration(seconds: 45)) {
+      return;
+    }
+    double cpu = 0, ram = 0, netIn = 0, netOut = 0;
+    var n = 0;
+    for (final v in vpsList) {
+      if (!v.online || isReportStale(v)) continue;
+      final m = snapshots[v.id]?.metrics;
+      if (m == null) continue;
+      cpu += m.cpuPercent;
+      ram += m.memPercent;
+      for (final net in m.network) {
+        netIn += net.rxPerSec.toDouble();
+        netOut += net.txPerSec.toDouble();
+      }
+      n++;
+    }
+    if (n == 0) return;
+    _lastSampleAt = now;
+    fleetHistory.add(FleetSample(
+      at: now,
+      cpu: cpu / n,
+      ram: ram / n,
+      netIn: netIn,
+      netOut: netOut,
+    ));
+    while (fleetHistory.length > _historyMax) {
+      fleetHistory.removeAt(0);
+    }
   }
 
   void markAlertsSeen() {
@@ -221,7 +323,21 @@ class AppState extends ChangeNotifier {
     _reconnect?.cancel();
     _staleCheck?.cancel();
     _idleTimer?.cancel();
+    _sampleTimer?.cancel();
     alertStream.close();
     super.dispose();
   }
+}
+
+/// One fleet-wide metric sample for Overview charts.
+class FleetSample {
+  final DateTime at;
+  final double cpu, ram, netIn, netOut;
+  const FleetSample({
+    required this.at,
+    required this.cpu,
+    required this.ram,
+    required this.netIn,
+    required this.netOut,
+  });
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
@@ -22,6 +23,7 @@ func main() {
 	hub := NewHub()
 	alerts := NewAlertEngine(store, hub)
 	agentHub := NewAgentHub(store, hub, alerts)
+	alerts.SetAgentHub(agentHub)
 
 	base := *baseURL
 	if base == "" {
@@ -34,14 +36,16 @@ func main() {
 	}
 
 	srv := &Server{
-		store:    store,
-		hub:      hub,
-		agentHub: agentHub,
-		alerts:   alerts,
-		baseURL:  base,
-		dataDir:  *dataDir,
+		store:     store,
+		hub:       hub,
+		agentHub:  agentHub,
+		alerts:    alerts,
+		baseURL:   base,
+		dataDir:   *dataDir,
+		startedAt: time.Now(),
 	}
 
+	go store.FlushLoop()
 	go alerts.WatchOffline()
 	go srv.LinkMonitor()
 

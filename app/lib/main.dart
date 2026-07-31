@@ -57,12 +57,16 @@ class _BeacleAppState extends State<BeacleApp> with WidgetsBindingObserver {
     if (!userConfig.onboardingComplete) return;
     switch (lifecycle) {
       case AppLifecycleState.resumed:
-        state.bumpActivity();
+        // Wake agents back to active, re-check the socket, pull fresh snapshots.
+        state.onAppResumed();
       case AppLifecycleState.inactive:
+        // Alt-tab / focus loss — throttle a bit, keep agent reporting.
         state.enterEcoMode();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
-        state.enterSleepMode();
+        // Screen lock / minimize. Do NOT put agents in sleep (60s ticks) —
+        // that raced Offline detection. Eco is enough for a desktop panel.
+        state.enterEcoMode();
       case AppLifecycleState.detached:
         break;
     }
