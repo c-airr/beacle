@@ -1,5 +1,18 @@
 # Beacle
 
+![platform](https://img.shields.io/badge/platform-Windows-brightgreen)
+![language](https://img.shields.io/badge/frontend-Flutter-blue)
+![language](https://img.shields.io/badge/backend-Go-00ADD8)
+![status](https://img.shields.io/badge/status-beta-orange)
+![license](https://img.shields.io/badge/license-MIT-green)
+![Stars](https://img.shields.io/github/stars/c-airr/beacle)
+![issues](https://img.shields.io/github/issues/c-airr/beacle)
+![last commit](https://img.shields.io/github/last-commit/c-airr/beacle)
+![repo size](https://img.shields.io/github/repo-size/c-airr/beacle)
+![top language](https://img.shields.io/github/languages/top/c-airr/beacle)
+![contributors](https://img.shields.io/github/contributors/c-airr/beacle)
+![last release](https://img.shields.io/github/v/release/c-airr/beacle)
+
 **Status: BETA** — finishing infrastructure. **v1.0 target: when i feel like it**
 
 ## Roadmap
