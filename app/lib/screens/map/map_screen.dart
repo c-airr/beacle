@@ -177,7 +177,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       return;
     }
     final def = _continents.firstWhere((c) => c.name == name);
-    setState(() => selectedContinent = name);
+    setState(() {
+      selectedContinent = name;
+      // The open card would otherwise keep describing a marker the filter just
+      // hid, with no dot left on the map to match it.
+      if (panelVps != null && _continentFor(panelVps!) != name) panelVps = null;
+    });
     _animateCamera(_Camera.fitRect(size, def.worldRect));
   }
 
@@ -210,8 +215,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       _ensureBaseCamera(mapSize);
 
       final all = _allMarkers(state.vpsList);
-      // Always show every VPS — continent list is zoom-only, not a filter.
-      final markers = all;
+      // Selecting a continent both frames it and filters to it: the rail reads
+      // as a filter, so leaving unrelated markers fully lit made the counts
+      // beside each continent look wrong.
+      final markers = selectedContinent == null
+          ? all
+          : all.where((m) => m.continent == selectedContinent).toList();
 
       final counts = {for (final c in _continents) c.name: 0};
       for (final m in all) {

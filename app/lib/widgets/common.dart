@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../state/app_state.dart';
 import '../theme.dart';
 
 class PanelCard extends StatelessWidget {
@@ -172,7 +174,7 @@ class _HoverRowState extends State<HoverRow> {
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+          duration: Duration(milliseconds: context.watch<AppState>().animationsEnabled ? 100 : 0),
           decoration: BoxDecoration(
             color: widget.selected
                 ? BeacleColors.surfaceHi

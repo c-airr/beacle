@@ -1,14 +1,58 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../backend/autostart.dart';
 import '../config.dart';
 import '../paths.dart';
-import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../update/app_updater.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
+
+/// A setting that is deliberately not wired up yet. Shown as disabled with the
+/// reason, because a switch that silently does nothing is worse than no switch.
+class _PendingSetting extends StatelessWidget {
+  final String label, detail;
+  const _PendingSetting({required this.label, required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.55,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: BeacleColors.surfaceHi,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('not yet', style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(detail, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Switch(value: false, onChanged: null),
+        ],
+      ),
+    );
+  }
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,7 +65,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   String? updateStatus;
   UpdateInfo? staged;
   bool checking = false;
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
+  bool? autostartOn;
+
+  @override
+  void initState() {
+    super.initState();
+    Autostart.isEnabled().then((v) {
+      if (mounted) setState(() => autostartOn = v);
+    });
+  }
 
   @override
   void dispose() {
@@ -46,6 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             labelColor: BeacleColors.text,
             unselectedLabelColor: BeacleColors.textDim,
             tabs: const [
+              Tab(text: 'General'),
               Tab(text: 'VPS'),
               Tab(text: 'Updates'),
               Tab(text: 'Status'),
@@ -56,12 +110,123 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           child: TabBarView(
             controller: _tabs,
             children: [
+              _generalTab(state),
               _vpsTab(state),
               _updatesTab(state),
               _statusTab(state),
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _generalTab(AppState state) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        PanelCard(
+          title: 'APPEARANCE',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _toggle(
+                label: 'Animations',
+                detail: 'Hover and selection transitions across the app.',
+                value: state.animationsEnabled,
+                onChanged: state.setAnimationsEnabled,
+              ),
+              const Divider(height: 24),
+              const _PendingSetting(
+                label: 'Theme',
+                detail:
+                    'Dark only for now. The palette is compiled in as constants, so a light theme '
+                    'means reworking every screen rather than flipping a switch.',
+              ),
+              const Divider(height: 24),
+              const _PendingSetting(
+                label: 'Language',
+                detail: 'English only for now. Translations need the interface strings extracted first.',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        PanelCard(
+          title: 'STARTUP',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!Autostart.supported)
+                const Text(
+                  'Launch at login is only wired up for Windows.',
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                )
+              else
+                _toggle(
+                  label: 'Start Beacle when I sign in',
+                  detail: 'Registers this executable under the current user — no admin rights needed.',
+                  value: autostartOn ?? false,
+                  enabled: autostartOn != null,
+                  onChanged: (v) async {
+                    final ok = await Autostart.setEnabled(v);
+                    final now = await Autostart.isEnabled();
+                    if (!mounted) return;
+                    setState(() => autostartOn = now);
+                    if (!ok && now != v) {
+                      showToast(context, 'Could not change the autostart entry', error: true);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        PanelCard(
+          title: 'DATA LOCATION',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                BeaclePaths.configDir,
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Portable mode (keeping the registry and settings next to the executable) is not '
+                'available yet — moving an existing install would have to migrate this folder, and '
+                'getting that wrong loses your VPS tokens.',
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _toggle({
+    required String label,
+    required String detail,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    bool enabled = true,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 3),
+              Text(detail, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Switch(value: value, onChanged: enabled ? onChanged : null),
       ],
     );
   }

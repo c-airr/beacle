@@ -67,6 +67,19 @@ class AppState extends ChangeNotifier {
     if (saved is List) {
       _muted.addAll(saved.whereType<String>());
     }
+    animationsEnabled = _settings.raw['animations'] != false;
+  }
+
+  /// Turning this off drops hover/selection transitions. Kept in AppState so
+  /// every widget reads one flag instead of each screen tracking its own.
+  bool animationsEnabled = true;
+
+  void setAnimationsEnabled(bool on) {
+    if (animationsEnabled == on) return;
+    animationsEnabled = on;
+    _settings.raw['animations'] = on;
+    _settings.save();
+    notifyListeners();
   }
 
   bool get powerSaveMode => uiPowerMode != 'active';
