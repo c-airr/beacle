@@ -13,7 +13,6 @@ import 'alerts_screen.dart';
 import 'docker_screen.dart';
 import 'map/map_screen.dart';
 import 'overview_screen.dart';
-import 'processes_screen.dart';
 import 'proxy_screen.dart';
 import 'servers_screen.dart';
 import 'services_screen.dart';
@@ -39,13 +38,13 @@ class AppShellState extends State<AppShell> {
 
   late final List<Widget> _screens;
 
-  static const _items = [
+  @visibleForTesting
+  static const items = [
     (Icons.space_dashboard_outlined, 'Overview'),
     (Icons.public_outlined, 'Map'),
     (Icons.dns_outlined, 'Servers'),
-    (Icons.memory_outlined, 'Processes'),
     (Icons.view_in_ar_outlined, 'Docker'),
-    (Icons.miscellaneous_services_outlined, 'Systemd'),
+    (Icons.miscellaneous_services_outlined, 'Services'),
     (Icons.alt_route_outlined, 'Proxy'),
     (Icons.notifications_outlined, 'Alerts'),
     (Icons.tune_outlined, 'Settings'),
@@ -58,7 +57,6 @@ class AppShellState extends State<AppShell> {
       const OverviewScreen(),
       const MapScreen(),
       ServersScreen(key: _serversKey),
-      const ProcessesScreen(),
       const DockerScreen(),
       const ServicesScreen(),
       const ProxyScreen(),
@@ -80,18 +78,23 @@ class AppShellState extends State<AppShell> {
     super.dispose();
   }
 
+  // Tab indices, kept next to _items so reordering the sidebar cannot silently
+  // send a shortcut to the wrong screen.
+  static const _tabServers = 2;
+  static const _tabAlerts = 6;
+
   void goToServer(String vpsId) {
     context.read<AppState>().bumpActivity();
     setState(() {
       focusedVpsId = vpsId;
-      index = 2; // Servers
+      index = _tabServers;
     });
     _serversKey.currentState?.selectVps(vpsId);
   }
 
   void goToAlerts() {
     context.read<AppState>().bumpActivity();
-    setState(() => index = 7);
+    setState(() => index = _tabAlerts);
   }
 
   @override
@@ -158,18 +161,18 @@ class AppShellState extends State<AppShell> {
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 4, color: BeacleColors.text),
             ),
           ),
-          for (var i = 0; i < _items.length; i++)
+          for (var i = 0; i < items.length; i++)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
               child: _NavItem(
-                icon: _items[i].$1,
-                label: _items[i].$2,
+                icon: items[i].$1,
+                label: items[i].$2,
                 selected: index == i,
-                badge: i == 7 ? state.activeAlerts : 0,
+                badge: i == _tabAlerts ? state.activeAlerts : 0,
                 onTap: () {
                   context.read<AppState>().bumpActivity();
                   setState(() {
-                    if (i != 2) focusedVpsId = null;
+                    if (i != _tabServers) focusedVpsId = null;
                     index = i;
                   });
                 },
@@ -215,7 +218,7 @@ class AppShellState extends State<AppShell> {
       ),
       child: Row(
         children: [
-          Text(_items[index].$2, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
+          Text(items[index].$2, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
           const Spacer(),
           Text(
             '${state.vpsList.where((v) => v.online).length}/${state.vpsList.length} online',
