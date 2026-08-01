@@ -1,0 +1,427 @@
+import 'package:flutter/material.dart';
+
+import '../models/models.dart';
+import '../state/app_state.dart';
+import '../theme.dart';
+import 'common.dart';
+
+/// The reverse proxy site editor: a form that replaces editing a Caddyfile by
+/// hand. Shows the config it will generate, so nothing about the result is a
+/// surprise.
+Future<bool> showProxySiteForm(
+  BuildContext context, {
+  required AppState state,
+  required Vps vps,
+  ProxySite? existing,
+}) async {
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (_) => _ProxySiteForm(state: state, vps: vps, existing: existing),
+  );
+  return saved ?? false;
+}
+
+class _ProxySiteForm extends StatefulWidget {
+  final AppState state;
+  final Vps vps;
+  final ProxySite? existing;
+  const _ProxySiteForm({required this.state, required this.vps, this.existing});
+
+  @override
+  State<_ProxySiteForm> createState() => _ProxySiteFormState();
+}
+
+class _ProxySiteFormState extends State<_ProxySiteForm> {
+  late final _domain = TextEditingController(text: widget.existing?.domain ?? '');
+  late final _upstream = TextEditingController(text: widget.existing?.upstream ?? '');
+  late final _authUser = TextEditingController(text: widget.existing?.basicAuthUser ?? '');
+  late final _authHash = TextEditingController(text: widget.existing?.basicAuthHash ?? '');
+
+  late bool _ssl = widget.existing == null ? true : widget.existing!.ssl != 'disabled';
+  late bool _redirectWww = widget.existing?.redirectWww ?? false;
+  late bool _webSocket = widget.existing?.webSocket ?? false;
+  late bool _gzip = widget.existing?.gzip ?? false;
+  late bool _accessLog = widget.existing?.accessLog ?? false;
+  late Map<String, String> _headers = {...?widget.existing?.headers};
+
+  bool _advanced = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _domain.dispose();
+    _upstream.dispose();
+    _authUser.dispose();
+    _authHash.dispose();
+    super.dispose();
+  }
+
+  String get _normalizedUpstream {
+    final up = _upstream.text.trim();
+    if (up.isEmpty) return '';
+    // Mirrors the agent: a bare port means localhost.
+    if (int.tryParse(up) != null) return '127.0.0.1:$up';
+    return up;
+  }
+
+  bool get _valid => _domain.text.trim().isNotEmpty && _upstream.text.trim().isNotEmpty;
+
+  /// Preview of what lands in the site file. Kept in step with the agent's
+  /// renderer — this is the whole point of a GUI over a config file.
+  String get _preview {
+    final domain = _domain.text.trim().isEmpty ? '<domain>' : _domain.text.trim();
+    final up = _normalizedUpstream.isEmpty ? '<upstream>' : _normalizedUpstream;
+    final b = StringBuffer();
+    if (_redirectWww && !domain.startsWith('www.')) {
+      b.writeln('${_ssl ? '' : 'http://'}www.$domain {');
+      b.writeln('\tredir https://$domain{uri} permanent');
+      b.writeln('}');
+      b.writeln();
+    }
+    b.writeln('${_ssl ? '' : 'http://'}$domain {');
+    if (_gzip) b.writeln('\tencode gzip zstd');
+    if (_authUser.text.trim().isNotEmpty && _authHash.text.trim().isNotEmpty) {
+      b.writeln('\tbasic_auth {');
+      b.writeln('\t\t${_authUser.text.trim()} ${_authHash.text.trim()}');
+      b.writeln('\t}');
+    }
+    if (_headers.isNotEmpty) {
+      b.writeln('\theader {');
+      for (final k in _headers.keys.toList()..sort()) {
+        b.writeln('\t\t$k "${_headers[k]}"');
+      }
+      b.writeln('\t}');
+    }
+    if (_accessLog) {
+      b.writeln('\tlog {');
+      b.writeln('\t\toutput file /var/log/caddy/$domain.log');
+      b.writeln('\t}');
+    }
+    if (_webSocket) {
+      b.writeln('\treverse_proxy $up {');
+      b.writeln('\t\theader_up Host {upstream_hostport}');
+      b.writeln('\t\theader_up X-Real-IP {remote_host}');
+      b.writeln('\t}');
+    } else {
+      b.writeln('\treverse_proxy $up');
+    }
+    b.write('}');
+    return b.toString();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final body = {
+      'domain': _domain.text.trim(),
+      'upstream': _upstream.text.trim(),
+      'enable_ssl': _ssl,
+      'redirect_www': _redirectWww,
+      'websocket': _webSocket,
+      'gzip': _gzip,
+      'access_log': _accessLog,
+      'basic_auth_user': _authUser.text.trim(),
+      'basic_auth_hash': _authHash.text.trim(),
+      'headers': _headers,
+    };
+    try {
+      widget.state.onUserAction();
+      if (widget.existing == null) {
+        await widget.state.api.proxyAddSite(widget.vps.id, body);
+      } else {
+        await widget.state.api.proxyUpdateSite(widget.vps.id, widget.existing!.id, body);
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: 720,
+        constraints: const BoxConstraints(maxHeight: 700),
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(widget.existing == null ? 'Add site' : 'Edit ${widget.existing!.domain}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              ),
+              IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context, false)),
+            ]),
+            const SizedBox(height: 16),
+
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _domain,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Domain',
+                        hintText: 'app.example.com',
+                        helperText: 'Point this domain\'s DNS at the VPS first.',
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _upstream,
+                      decoration: const InputDecoration(
+                        labelText: 'Forward to',
+                        hintText: '3000',
+                        helperText: 'A port (3000) means 127.0.0.1:3000. Full addresses also work.',
+                      ),
+                      style: const TextStyle(fontFamily: 'Consolas'),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 16),
+
+                    _switch(
+                      'HTTPS',
+                      'Caddy requests and renews a certificate automatically.',
+                      _ssl,
+                      (v) => setState(() => _ssl = v),
+                    ),
+                    _switch(
+                      'Redirect www',
+                      'Send www.${_domain.text.trim().isEmpty ? 'domain' : _domain.text.trim()} to the bare domain.',
+                      _redirectWww,
+                      (v) => setState(() => _redirectWww = v),
+                    ),
+                    _switch(
+                      'WebSockets',
+                      'Forward upgrade requests and the original host header.',
+                      _webSocket,
+                      (v) => setState(() => _webSocket = v),
+                    ),
+                    _switch(
+                      'Compression',
+                      'gzip and zstd for text responses.',
+                      _gzip,
+                      (v) => setState(() => _gzip = v),
+                    ),
+
+                    const SizedBox(height: 6),
+                    HoverRow(
+                      onTap: () => setState(() => _advanced = !_advanced),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                        child: Row(children: [
+                          Icon(_advanced ? Icons.expand_less : Icons.expand_more,
+                              size: 16, color: BeacleColors.textDim),
+                          const SizedBox(width: 6),
+                          const Text('Advanced',
+                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, letterSpacing: 0.3)),
+                        ]),
+                      ),
+                    ),
+                    if (_advanced) ...[
+                      _switch(
+                        'Access log',
+                        'Write this site\'s requests to /var/log/caddy/<domain>.log.',
+                        _accessLog,
+                        (v) => setState(() => _accessLog = v),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _authUser,
+                            decoration: const InputDecoration(labelText: 'Basic auth user'),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _authHash,
+                            decoration: const InputDecoration(
+                              labelText: 'Password hash',
+                              hintText: r'$2a$14$...',
+                              helperText: 'From: caddy hash-password',
+                            ),
+                            style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+                      _HeaderEditor(
+                        headers: _headers,
+                        onChanged: (h) => setState(() => _headers = h),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+                    const Text('GENERATED CONFIG',
+                        style: TextStyle(
+                            fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: BeacleColors.bg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: BeacleColors.border),
+                      ),
+                      child: SelectableText(
+                        _preview,
+                        style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, height: 1.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SmallButton('Cancel', onPressed: _busy ? null : () => Navigator.pop(context, false)),
+                const SizedBox(width: 10),
+                if (_busy)
+                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  SmallButton(
+                    widget.existing == null ? 'Create site' : 'Save',
+                    icon: Icons.check,
+                    color: _valid ? BeacleColors.ok : null,
+                    onPressed: _valid ? _save : null,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _switch(String label, String detail, bool value, ValueChanged<bool> onChanged) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(detail, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.35)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+/// Free-form response headers, e.g. HSTS.
+class _HeaderEditor extends StatefulWidget {
+  final Map<String, String> headers;
+  final ValueChanged<Map<String, String>> onChanged;
+  const _HeaderEditor({required this.headers, required this.onChanged});
+
+  @override
+  State<_HeaderEditor> createState() => _HeaderEditorState();
+}
+
+class _HeaderEditorState extends State<_HeaderEditor> {
+  final _key = TextEditingController();
+  final _value = TextEditingController();
+
+  @override
+  void dispose() {
+    _key.dispose();
+    _value.dispose();
+    super.dispose();
+  }
+
+  void _add() {
+    final k = _key.text.trim();
+    final v = _value.text.trim();
+    if (k.isEmpty || v.isEmpty) return;
+    widget.onChanged({...widget.headers, k: v});
+    _key.clear();
+    _value.clear();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Response headers',
+            style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+        const SizedBox(height: 8),
+        for (final e in widget.headers.entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(children: [
+              Expanded(
+                child: Text('${e.key}: ${e.value}',
+                    style: const TextStyle(fontSize: 12, fontFamily: 'Consolas'),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 14, color: BeacleColors.err),
+                onPressed: () {
+                  final next = {...widget.headers}..remove(e.key);
+                  widget.onChanged(next);
+                },
+              ),
+            ]),
+          ),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _key,
+              decoration: const InputDecoration(hintText: 'Strict-Transport-Security'),
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _value,
+              decoration: const InputDecoration(hintText: 'max-age=31536000'),
+              style: const TextStyle(fontSize: 12),
+              onSubmitted: (_) => _add(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SmallButton('Add', icon: Icons.add, onPressed: _add),
+        ]),
+      ],
+    );
+  }
+}

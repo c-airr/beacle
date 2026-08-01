@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/proxy_site_form.dart';
 
 /// Reverse proxy GUI - shared UI for Caddy and Nginx Proxy Manager.
 /// Site management is a form, never a file editor.
@@ -75,7 +76,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
               }),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: proxy.provider == 'none' ? null : () => _siteForm(context, state, vps),
+                onPressed: proxy.provider == 'none' ? null : () => _openSiteForm(state, vps),
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add site', style: TextStyle(fontSize: 12)),
               ),
@@ -157,15 +158,24 @@ class _ProxyScreenState extends State<ProxyScreen> {
                     flex: 2,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(s.domain, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      Text('→ ${s.upstream}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                      const SizedBox(height: 2),
+                      Text('→ ${s.upstream}',
+                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                      if (_optionSummary(s).isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(_optionSummary(s),
+                            style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                      ],
                     ]),
                   ),
+                  _upstreamBadge(s),
+                  const SizedBox(width: 8),
                   _sslBadge(s.ssl),
                   const SizedBox(width: 16),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 16),
                     tooltip: 'Edit',
-                    onPressed: () => _siteForm(context, state, vps, existing: s),
+                    onPressed: () => _openSiteForm(state, vps, existing: s),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 16, color: BeacleColors.err),
@@ -202,6 +212,62 @@ class _ProxyScreenState extends State<ProxyScreen> {
     );
   }
 
+  Future<void> _openSiteForm(AppState state, Vps vps, {ProxySite? existing}) async {
+    final saved = await showProxySiteForm(context, state: state, vps: vps, existing: existing);
+    if (!saved) return;
+    if (mounted) showToast(context, existing == null ? 'Site created' : 'Site updated');
+    // The snapshot carries proxy state, but the next tick can be seconds out —
+    // pull now so the new row (and its port check) appears immediately.
+    await state.refreshAll();
+  }
+
+  /// One-line recap of the switches that are on, so the list shows how a site
+  /// is configured without opening the form.
+  String _optionSummary(ProxySite s) {
+    final on = [
+      if (s.redirectWww) 'www redirect',
+      if (s.webSocket) 'websockets',
+      if (s.gzip) 'compression',
+      if (s.basicAuthUser.isNotEmpty) 'basic auth',
+      if (s.accessLog) 'access log',
+      if (s.headers.isNotEmpty) '${s.headers.length} header${s.headers.length == 1 ? '' : 's'}',
+    ];
+    return on.join(' · ');
+  }
+
+  /// Whether anything is actually listening behind the domain. A site pointing
+  /// at a dead port still serves — as a 502 — so this is the check that saves
+  /// the "why is my site down" hunt.
+  Widget _upstreamBadge(ProxySite s) {
+    if (s.upstreamPort <= 0) {
+      return const SizedBox.shrink();
+    }
+    final (color, label, icon) = s.upstreamHealthy
+        ? (BeacleColors.ok, 'port ${s.upstreamPort} up', Icons.check_circle_outline)
+        : s.portInUse
+            ? (BeacleColors.warn, 'port ${s.upstreamPort} open', Icons.help_outline)
+            : (BeacleColors.err, 'port ${s.upstreamPort} dead', Icons.error_outline);
+    return Tooltip(
+      message: s.upstreamHealthy
+          ? 'Something is listening on ${s.upstreamPort} and answering HTTP.'
+          : s.portInUse
+              ? 'Port ${s.upstreamPort} accepts connections but did not answer HTTP.'
+              : 'Nothing is listening on port ${s.upstreamPort} — this domain will return 502.',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 11, color: color)),
+        ]),
+      ),
+    );
+  }
+
   Widget _sslBadge(String ssl) {
     final (color, label) = switch (ssl) {
       'active' => (BeacleColors.ok, 'SSL active'),
@@ -223,99 +289,6 @@ class _ProxyScreenState extends State<ProxyScreen> {
     );
   }
 
-  Future<void> _siteForm(BuildContext context, AppState state, Vps vps, {ProxySite? existing}) async {
-    final domain = TextEditingController(text: existing?.domain ?? '');
-    final upstream = TextEditingController(text: existing?.upstream ?? '');
-    bool ssl = existing == null ? true : existing.ssl != 'disabled';
-    bool websockets = existing?.extra['websockets'] == 'true';
-    String? error;
-    bool busy = false;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => Dialog(
-          child: Container(
-            width: 480,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(existing == null ? 'Add site' : 'Edit site',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 18),
-                TextField(controller: domain, decoration: const InputDecoration(labelText: 'Domain', hintText: 'app.example.com')),
-                const SizedBox(height: 10),
-                TextField(
-                    controller: upstream,
-                    decoration: const InputDecoration(labelText: 'Upstream', hintText: 'localhost:3000')),
-                const SizedBox(height: 8),
-                CheckboxListTile(
-                  value: ssl,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Enable SSL (automatic certificate)', style: TextStyle(fontSize: 13)),
-                  onChanged: (v) => setState(() => ssl = v ?? true),
-                ),
-                CheckboxListTile(
-                  value: websockets,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('WebSocket support', style: TextStyle(fontSize: 13)),
-                  onChanged: (v) => setState(() => websockets = v ?? false),
-                ),
-                if (error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(error!, style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
-                ],
-                const SizedBox(height: 16),
-                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: busy
-                        ? null
-                        : () async {
-                            if (domain.text.trim().isEmpty || upstream.text.trim().isEmpty) {
-                              setState(() => error = 'Domain and upstream are required');
-                              return;
-                            }
-                            setState(() => busy = true);
-                            final req = {
-                              'domain': domain.text.trim(),
-                              'upstream': upstream.text.trim(),
-                              'enable_ssl': ssl,
-                              'extra': {'websockets': websockets.toString()},
-                            };
-                            try {
-                              state.onUserAction();
-                              if (existing == null) {
-                                await state.api.proxyAddSite(vps.id, req);
-                              } else {
-                                await state.api.proxyUpdateSite(vps.id, existing.id, req);
-                              }
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              state.refreshAll();
-                            } catch (e) {
-                              setState(() {
-                                busy = false;
-                                error = '$e';
-                              });
-                            }
-                          },
-                    child: Text(existing == null ? 'Add site' : 'Save'),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Port checker sidebar: who is using a port, PID, command, health.

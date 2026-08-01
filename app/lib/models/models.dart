@@ -269,6 +269,15 @@ class ProxySite {
   final String id, domain, upstream, ssl, provider;
   final bool enabled;
   final Map<String, String> extra;
+
+  /// Local port parsed from [upstream], plus whether anything answers there.
+  final int upstreamPort;
+  final bool portInUse, upstreamHealthy;
+
+  final bool redirectWww, forceHttps, webSocket, gzip, accessLog;
+  final String basicAuthUser, basicAuthHash;
+  final Map<String, String> headers;
+
   ProxySite.fromJson(Map<String, dynamic> j)
       : id = _s(j['id']),
         domain = _s(j['domain']),
@@ -276,6 +285,17 @@ class ProxySite {
         ssl = _s(j['ssl']),
         provider = _s(j['provider']),
         enabled = _b(j['enabled']),
+        upstreamPort = _i(j['upstream_port']),
+        portInUse = _b(j['port_in_use']),
+        upstreamHealthy = _b(j['upstream_healthy']),
+        redirectWww = _b(j['redirect_www']),
+        forceHttps = _b(j['force_https']),
+        webSocket = _b(j['websocket']),
+        gzip = _b(j['gzip']),
+        accessLog = _b(j['access_log']),
+        basicAuthUser = _s(j['basic_auth_user']),
+        basicAuthHash = _s(j['basic_auth_hash']),
+        headers = (j['headers'] as Map?)?.map((k, v) => MapEntry(k as String, '$v')) ?? {},
         extra = (j['extra'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)) ?? {};
 }
 

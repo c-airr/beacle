@@ -17,6 +17,9 @@ type AlertEngine struct {
 	agentHub *AgentHub
 	// active["vpsid|type|key"] = true while the condition holds
 	active map[string]bool
+	// since["vpsid|metric"] = when a threshold was first exceeded, for the
+	// sustained-for check.
+	since map[string]time.Time
 	// previous per-VPS state used for transition detection
 	prevContainers map[string]map[string]shared.ContainerInfo // vps -> containerID -> info
 	prevServices   map[string]map[string]string               // vps -> unit -> active_state
@@ -27,6 +30,7 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		store:          store,
 		hub:            hub,
 		active:         map[string]bool{},
+		since:          map[string]time.Time{},
 		prevContainers: map[string]map[string]shared.ContainerInfo{},
 		prevServices:   map[string]map[string]string{},
 	}
@@ -48,22 +52,43 @@ func (e *AlertEngine) clear(vpsID string, t shared.AlertType, key string) {
 	delete(e.active, vpsID+"|"+string(t)+"|"+key)
 }
 
+// sustained reports whether `over` has held continuously for SustainedSeconds.
+// The first sample over the threshold only starts the clock, so a momentary
+// spike — a build, a backup, a container starting — never raises an alert.
+// Dropping below the threshold resets it, so the window has to be cleared in
+// one unbroken run.
+func (e *AlertEngine) sustained(vpsID, metric string, over bool) bool {
+	key := vpsID + "|" + metric
+	if !over {
+		delete(e.since, key)
+		return false
+	}
+	start, seen := e.since[key]
+	if !seen {
+		e.since[key] = time.Now()
+		return false
+	}
+	return time.Since(start) >= shared.SustainedSeconds*time.Second
+}
+
 // EvaluateSnapshot is called when any agent snapshot frame updates backend state.
 func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	m := snap.Metrics
-	if m.CPUPercent >= shared.CPUHighPercent {
+	if e.sustained(vps.ID, "cpu", m.CPUPercent >= shared.CPUHighPercent) {
 		e.fire(vps, shared.AlertCPUHigh, shared.SeverityWarning, "",
-			fmt.Sprintf("CPU usage %.0f%% (threshold %.0f%%)", m.CPUPercent, shared.CPUHighPercent))
-	} else {
+			fmt.Sprintf("CPU above %.0f%% for %ds (now %.0f%%)",
+				shared.CPUHighPercent, shared.SustainedSeconds, m.CPUPercent))
+	} else if m.CPUPercent < shared.CPUHighPercent {
 		e.clear(vps.ID, shared.AlertCPUHigh, "")
 	}
-	if m.MemPercent >= shared.MemHighPercent {
+	if e.sustained(vps.ID, "mem", m.MemPercent >= shared.MemHighPercent) {
 		e.fire(vps, shared.AlertMemHigh, shared.SeverityWarning, "",
-			fmt.Sprintf("RAM usage %.0f%%", m.MemPercent))
-	} else {
+			fmt.Sprintf("RAM above %.0f%% for %ds (now %.0f%%)",
+				shared.MemHighPercent, shared.SustainedSeconds, m.MemPercent))
+	} else if m.MemPercent < shared.MemHighPercent {
 		e.clear(vps.ID, shared.AlertMemHigh, "")
 	}
 	for _, d := range m.Disks {

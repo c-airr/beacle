@@ -255,8 +255,37 @@ type ProxySite struct {
 	SSL      SSLStatus `json:"ssl"`
 	Enabled  bool      `json:"enabled"`
 	Provider ProxyProviderKind `json:"provider"`
-	// Extra carries provider specific settings (websocket support, block
-	// exploits for NPM, etc).
+
+	// --- optional per-site behaviour, all rendered into the Caddy site file ---
+
+	// UpstreamPort is the local port parsed out of Upstream, so the UI can say
+	// whether anything is actually listening behind this domain.
+	UpstreamPort int `json:"upstream_port,omitempty"`
+	// PortInUse reports whether something listens on UpstreamPort right now.
+	// A site pointing at a dead port is the most common reverse proxy mistake.
+	PortInUse bool `json:"port_in_use"`
+	// UpstreamHealthy is a live probe of the upstream, not just the listener.
+	UpstreamHealthy bool `json:"upstream_healthy"`
+
+	// RedirectWWW adds a redirect from www.<domain> to <domain>.
+	RedirectWWW bool `json:"redirect_www,omitempty"`
+	// ForceHTTPS redirects plain HTTP to HTTPS (Caddy's default, explicit here).
+	ForceHTTPS bool `json:"force_https,omitempty"`
+	// WebSocket keeps connection headers intact for upgrade requests.
+	WebSocket bool `json:"websocket,omitempty"`
+	// GzipEncoding enables response compression.
+	GzipEncoding bool `json:"gzip,omitempty"`
+	// BasicAuthUser/Hash protect the site with HTTP basic auth. The hash is a
+	// bcrypt string produced by `caddy hash-password`; the plaintext never
+	// reaches the agent.
+	BasicAuthUser string `json:"basic_auth_user,omitempty"`
+	BasicAuthHash string `json:"basic_auth_hash,omitempty"`
+	// AccessLog writes this site's requests to its own file.
+	AccessLog bool `json:"access_log,omitempty"`
+	// Headers are extra response headers, e.g. HSTS.
+	Headers map[string]string `json:"headers,omitempty"`
+
+	// Extra carries provider specific settings (NPM's block-exploits, etc).
 	Extra map[string]string `json:"extra,omitempty"`
 }
 
@@ -273,6 +302,15 @@ type ProxySiteRequest struct {
 	Upstream  string            `json:"upstream"`
 	EnableSSL bool              `json:"enable_ssl"`
 	Extra     map[string]string `json:"extra,omitempty"`
+
+	RedirectWWW   bool              `json:"redirect_www,omitempty"`
+	ForceHTTPS    bool              `json:"force_https,omitempty"`
+	WebSocket     bool              `json:"websocket,omitempty"`
+	GzipEncoding  bool              `json:"gzip,omitempty"`
+	BasicAuthUser string            `json:"basic_auth_user,omitempty"`
+	BasicAuthHash string            `json:"basic_auth_hash,omitempty"`
+	AccessLog     bool              `json:"access_log,omitempty"`
+	Headers       map[string]string `json:"headers,omitempty"`
 }
 
 type ProxyValidateResult struct {
