@@ -7,6 +7,7 @@ import 'package:web_socket_channel/io.dart';
 import '../api/api_client.dart';
 import '../config.dart';
 import '../models/models.dart';
+import '../user_config.dart';
 
 /// Central reactive state: VPS registry, live snapshots, alerts, links.
 class AppState extends ChangeNotifier {
@@ -38,9 +39,35 @@ class AppState extends ChangeNotifier {
   static const _idleTimeout = Duration(seconds: 45);
 
   DateTime alertsSeenAt = DateTime.now();
-  int get unseenAlerts =>
-      alerts.where((a) => !a.resolved && a.createdAt.isAfter(alertsSeenAt)).length;
-  int get activeAlerts => alerts.where((a) => !a.resolved).length;
+  int get unseenAlerts => alerts
+      .where((a) => !a.resolved && !isMuted(a) && a.createdAt.isAfter(alertsSeenAt))
+      .length;
+  int get activeAlerts => alerts.where((a) => !a.resolved && !isMuted(a)).length;
+
+  /// Muted "vpsId|type" pairs. Muting the condition rather than the alert row
+  /// means the same problem firing again on the same host stays quiet, which is
+  /// the point — an alert object is recreated every time it re-triggers.
+  final Set<String> _muted = {};
+  final UserSettings _settings = UserSettings.load();
+
+  static String _muteKey(Alert a) => '${a.vpsId}|${a.type}';
+
+  bool isMuted(Alert a) => _muted.contains(_muteKey(a));
+
+  void toggleMute(Alert a) {
+    final key = _muteKey(a);
+    if (!_muted.remove(key)) _muted.add(key);
+    _settings.raw['muted_alerts'] = _muted.toList();
+    _settings.save();
+    notifyListeners();
+  }
+
+  void _loadMutes() {
+    final saved = _settings.raw['muted_alerts'];
+    if (saved is List) {
+      _muted.addAll(saved.whereType<String>());
+    }
+  }
 
   bool get powerSaveMode => uiPowerMode != 'active';
 
@@ -59,6 +86,7 @@ class AppState extends ChangeNotifier {
   final StreamController<Alert> alertStream = StreamController.broadcast();
 
   Future<void> start() async {
+    _loadMutes();
     await refreshAll();
     _connectWs();
     _staleCheck?.cancel();
