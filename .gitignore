@@ -10,3 +10,4 @@ app/*.iml
 
 # stray build output from running `go build -o dist/...` inside agent/
 agent/dist/
+agent/agent

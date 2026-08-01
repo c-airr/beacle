@@ -161,6 +161,23 @@ class ApiClient {
           as String? ??
       '';
 
+  Future<List<ScreenSession>> screenSessions(String vpsId) async =>
+      ((await get(_a(vpsId, 'services/screen'))) as List? ?? [])
+          .map((e) => ScreenSession.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+  Future<void> screenStart(String vpsId, {required String name, required String dir, required String command}) =>
+      post(_a(vpsId, 'services/screen'), body: {'name': name, 'dir': dir, 'command': command});
+
+  Future<void> screenStop(String vpsId, String name) =>
+      post(_a(vpsId, 'services/screen/$name/stop'));
+
+  Future<String> screenLogs(String vpsId, String name) async =>
+      ((await get(_a(vpsId, 'services/screen/$name/logs'))) as Map)['logs'] as String? ?? '';
+
+  Future<FsListing> listDir(String vpsId, String path) async =>
+      FsListing.fromJson(await get(_a(vpsId, 'fs/list?path=${Uri.encodeQueryComponent(path)}')));
+
   Future<ProxyState> proxyState(String vpsId) async =>
       ProxyState.fromJson(await get(_a(vpsId, 'proxy')));
 

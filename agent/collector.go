@@ -19,7 +19,13 @@ type Collector interface {
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)
+
 	ScreenSessions() ([]shared.ScreenSession, error)
+	ScreenStart(req shared.ScreenStartRequest) error
+	ScreenStop(name string) error   // sends Ctrl+C to the running payload
+	ScreenLogs(name string) (string, error)
+
+	ListDir(path string) (shared.FSListing, error)
 
 	Ping(target string) shared.PingResult
 }

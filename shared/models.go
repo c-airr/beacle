@@ -187,6 +187,39 @@ type ScreenSession struct {
 	Name     string `json:"name"`
 	Attached bool   `json:"attached"`
 	Created  string `json:"created"`
+	// Running reports whether a payload is executing inside the session, as
+	// opposed to an idle shell. The UI keys Start/Stop off this: you cannot
+	// launch a second script into a busy session, or stop an empty one.
+	Running bool `json:"running"`
+	// Command is the process found inside the session, e.g. "python3 main.py".
+	Command string `json:"command,omitempty"`
+	// ChildPID is the process running inside the session (0 when idle).
+	ChildPID int `json:"child_pid,omitempty"`
+}
+
+// FSEntry is one item of a remote directory listing, used by the picker that
+// builds a screen command.
+type FSEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"is_dir"`
+	Size  uint64 `json:"size"`
+	Mode  string `json:"mode"`
+}
+
+// FSListing is the answer to "what is in this directory".
+type FSListing struct {
+	Path    string    `json:"path"`
+	Parent  string    `json:"parent"`
+	Entries []FSEntry `json:"entries"`
+}
+
+// ScreenStartRequest launches Command inside a screen session named Name,
+// after changing into Dir.
+type ScreenStartRequest struct {
+	Name    string `json:"name"`
+	Dir     string `json:"dir"`
+	Command string `json:"command"`
 }
 
 type ServicesState struct {

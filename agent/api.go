@@ -161,6 +161,43 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, sess)
 	}))
+	mux.HandleFunc("POST /api/services/screen", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.ScreenStartRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		if err := s.col.ScreenStart(req); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("POST /api/services/screen/{name}/stop", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.ScreenStop(r.PathValue("name")); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("GET /api/services/screen/{name}/logs", a(func(w http.ResponseWriter, r *http.Request) {
+		logs, err := s.col.ScreenLogs(r.PathValue("name"))
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]string{"logs": logs})
+	}))
+
+	// filesystem browsing — backs the screen command picker
+	mux.HandleFunc("GET /api/fs/list", a(func(w http.ResponseWriter, r *http.Request) {
+		listing, err := s.col.ListDir(r.URL.Query().Get("path"))
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, listing)
+	}))
 
 	// reverse proxy
 	mux.HandleFunc("GET /api/proxy", a(func(w http.ResponseWriter, r *http.Request) {

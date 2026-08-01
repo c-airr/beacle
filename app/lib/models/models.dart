@@ -221,14 +221,39 @@ class SystemdUnit {
 }
 
 class ScreenSession {
-  final int pid;
-  final String name, created;
-  final bool attached;
+  final int pid, childPid;
+  final String name, created, command;
+  final bool attached, running;
   ScreenSession.fromJson(Map<String, dynamic> j)
       : pid = _i(j['pid']),
+        childPid = _i(j['child_pid']),
         name = _s(j['name']),
         created = _s(j['created']),
-        attached = _b(j['attached']);
+        command = _s(j['command']),
+        attached = _b(j['attached']),
+        running = _b(j['running']);
+}
+
+/// One entry of a remote directory listing (screen command picker).
+class FsEntry {
+  final String name, path, mode;
+  final bool isDir;
+  final int size;
+  FsEntry.fromJson(Map<String, dynamic> j)
+      : name = _s(j['name']),
+        path = _s(j['path']),
+        mode = _s(j['mode']),
+        isDir = _b(j['is_dir']),
+        size = _i(j['size']);
+}
+
+class FsListing {
+  final String path, parent;
+  final List<FsEntry> entries;
+  FsListing.fromJson(Map<String, dynamic> j)
+      : path = _s(j['path']),
+        parent = _s(j['parent']),
+        entries = _list(j['entries'], FsEntry.fromJson);
 }
 
 class ServicesState {

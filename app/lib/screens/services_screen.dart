@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/screen_launcher.dart';
 
 /// Everything running on a host: systemd units, screen sessions and raw
 /// processes. Processes used to be their own tab, but "what is running here"
@@ -154,7 +155,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           child: switch (tab) {
             0 => _systemdList(state, vps, services),
             1 => _processList(state, vps),
-            _ => _screenList(services),
+            _ => _screenList(state, vps, services),
           },
         ),
       ],
@@ -361,48 +362,174 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  Widget _screenList(ServicesState services) {
+  Future<void> _refreshScreens(AppState state, Vps vps) async {
+    // The snapshot stream carries screen sessions, but after start/stop the
+    // next tick can be seconds away — ask the agent to re-push immediately.
+    try {
+      await state.api.screenSessions(vps.id);
+      await state.refreshAll();
+    } catch (_) {}
+  }
+
+  Future<void> _startScreen(AppState state, Vps vps, {String? existingName}) async {
+    final spec = await showScreenLauncher(context, state: state, vpsId: vps.id, fixedName: existingName);
+    if (spec == null) return;
+    try {
+      state.onUserAction();
+      await state.api.screenStart(vps.id, name: spec.name, dir: spec.dir, command: spec.command);
+      if (mounted) showToast(context, 'Started ${spec.command} in ${spec.name}');
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+    await _refreshScreens(state, vps);
+  }
+
+  Future<void> _stopScreen(AppState state, Vps vps, ScreenSession s) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stop this process?'),
+        content: Text(
+          'Sends Ctrl+C to "${s.command}" in session ${s.name}.\n\n'
+          'The session itself stays open, so you can start something else in it.',
+          style: const TextStyle(fontSize: 13, height: 1.45),
+        ),
+        actions: [
+          SmallButton('Cancel', onPressed: () => Navigator.pop(ctx, false)),
+          const SizedBox(width: 8),
+          SmallButton('Send Ctrl+C', icon: Icons.stop, color: BeacleColors.err,
+              onPressed: () => Navigator.pop(ctx, true)),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      state.onUserAction();
+      await state.api.screenStop(vps.id, s.name);
+      if (mounted) showToast(context, 'Ctrl+C sent to ${s.name}');
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+    await _refreshScreens(state, vps);
+  }
+
+  Widget _screenList(AppState state, Vps vps, ServicesState services) {
     var sessions = services.screen;
     if (filter.isNotEmpty) {
       sessions = sessions.where((s) => s.name.toLowerCase().contains(filter)).toList();
     }
-    if (sessions.isEmpty) {
-      return const Center(child: Text('No screen sessions', style: TextStyle(color: BeacleColors.textDim)));
-    }
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    final live = vps.online && !state.isReportStale(vps);
+
+    return Column(
       children: [
-        for (final s in sessions)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: PanelCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(children: [
-                Icon(Icons.terminal, size: 18, color: s.attached ? BeacleColors.ok : BeacleColors.textDim),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text('PID ${s.pid} · created ${s.created}',
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-                  ]),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Long-running scripts kept alive in GNU screen.',
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: (s.attached ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(s.attached ? 'attached' : 'detached',
-                      style: TextStyle(fontSize: 11, color: s.attached ? BeacleColors.ok : BeacleColors.textDim)),
-                ),
-              ]),
-            ),
+              ),
+              SmallButton(
+                'New session',
+                icon: Icons.add,
+                onPressed: live ? () => _startScreen(state, vps) : null,
+              ),
+            ],
           ),
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text('Detached sessions can be reattached with screen -r <name> on the server.',
-              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+        ),
+        Expanded(
+          child: sessions.isEmpty
+              ? const Center(child: Text('No screen sessions', style: TextStyle(color: BeacleColors.textDim)))
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  children: [
+                    for (final s in sessions)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: PanelCard(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          child: Row(children: [
+                            Icon(Icons.terminal, size: 18,
+                                color: s.running ? BeacleColors.ok : BeacleColors.textDim),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Row(children: [
+                                  Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  const SizedBox(width: 10),
+                                  if (s.attached)
+                                    const Text('attached',
+                                        style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                                ]),
+                                const SizedBox(height: 2),
+                                Text(
+                                  s.running ? s.command : 'idle — nothing running',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: s.running ? 'Consolas' : null,
+                                    color: s.running ? BeacleColors.text : BeacleColors.textDim,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'PID ${s.pid}${s.running ? ' · child ${s.childPid}' : ''} · created ${s.created}',
+                                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                                ),
+                              ]),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: (s.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(s.running ? 'running' : 'idle',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: s.running ? BeacleColors.ok : BeacleColors.textDim)),
+                            ),
+                            const SizedBox(width: 10),
+                            // Start only into an idle session, stop only a busy
+                            // one — the agent enforces the same rule.
+                            IconButton(
+                              icon: const Icon(Icons.add, size: 16),
+                              tooltip: s.running ? 'Already running — stop it first' : 'Run a script here',
+                              color: BeacleColors.ok,
+                              onPressed: (!live || s.running)
+                                  ? null
+                                  : () => _startScreen(state, vps, existingName: s.name),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.stop, size: 16),
+                              tooltip: s.running ? 'Send Ctrl+C' : 'Nothing to stop',
+                              color: BeacleColors.err,
+                              onPressed: (!live || !s.running) ? null : () => _stopScreen(state, vps, s),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.article_outlined, size: 16),
+                              tooltip: 'Session output',
+                              onPressed: !live
+                                  ? null
+                                  : () => showLogsDialog(
+                                        context,
+                                        'screen -S ${s.name} (hardcopy)',
+                                        () => state.api.screenLogs(vps.id, s.name),
+                                      ),
+                            ),
+                          ]),
+                        ),
+                      ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text('Reattach on the server with screen -r <name>.',
+                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                    ),
+                  ],
+                ),
         ),
       ],
     );

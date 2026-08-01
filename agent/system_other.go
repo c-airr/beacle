@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -229,10 +230,102 @@ func (c *devCollector) SystemdLogs(unit string, lines int) (string, error) {
 	return s, nil
 }
 
+// devScreens is mutable so start/stop can be exercised on a dev machine
+// without a real VPS — the panel is developed on Windows.
+var devScreens = []shared.ScreenSession{
+	{PID: 4211, Name: "minecraft", Attached: false, Created: "07/01/2026 10:22:01 AM",
+		Running: true, Command: "java -Xmx2G -jar server.jar", ChildPID: 4212},
+	{PID: 5100, Name: "botrunner", Attached: true, Created: "07/03/2026 08:12:44 PM"},
+}
+
 func (c *devCollector) ScreenSessions() ([]shared.ScreenSession, error) {
-	return []shared.ScreenSession{
-		{PID: 4211, Name: "minecraft", Attached: false, Created: "07/01/2026 10:22:01 AM"},
-		{PID: 5100, Name: "botrunner", Attached: true, Created: "07/03/2026 08:12:44 PM"},
+	out := make([]shared.ScreenSession, len(devScreens))
+	copy(out, devScreens)
+	return out, nil
+}
+
+func (c *devCollector) ScreenStart(req shared.ScreenStartRequest) error {
+	if strings.TrimSpace(req.Command) == "" {
+		return fmt.Errorf("command is required")
+	}
+	for i := range devScreens {
+		if devScreens[i].Name != req.Name {
+			continue
+		}
+		if devScreens[i].Running {
+			return fmt.Errorf("session %q is already running %s", req.Name, devScreens[i].Command)
+		}
+		devScreens[i].Running = true
+		devScreens[i].Command = req.Command
+		devScreens[i].ChildPID = devScreens[i].PID + 1
+		return nil
+	}
+	devScreens = append(devScreens, shared.ScreenSession{
+		PID:      9000 + len(devScreens),
+		Name:     req.Name,
+		Created:  time.Now().Format("01/02/2006 03:04:05 PM"),
+		Running:  true,
+		Command:  req.Command,
+		ChildPID: 9001 + len(devScreens),
+	})
+	return nil
+}
+
+func (c *devCollector) ScreenStop(name string) error {
+	for i := range devScreens {
+		if devScreens[i].Name != name {
+			continue
+		}
+		if !devScreens[i].Running {
+			return fmt.Errorf("nothing is running in session %q", name)
+		}
+		devScreens[i].Running = false
+		devScreens[i].Command = ""
+		devScreens[i].ChildPID = 0
+		return nil
+	}
+	return fmt.Errorf("session %q not found", name)
+}
+
+func (c *devCollector) ScreenLogs(name string) (string, error) {
+	for _, s := range devScreens {
+		if s.Name == name {
+			if !s.Running {
+				return "(session idle — no output)", nil
+			}
+			return fmt.Sprintf("simulated output of %s in session %s\nline 2\nline 3", s.Command, name), nil
+		}
+	}
+	return "", fmt.Errorf("session %q not found", name)
+}
+
+func (c *devCollector) ListDir(path string) (shared.FSListing, error) {
+	if path == "" {
+		path = "/home"
+	}
+	if !strings.HasPrefix(path, "/") {
+		return shared.FSListing{}, fmt.Errorf("path must be absolute")
+	}
+	path = strings.TrimSuffix(path, "/")
+	if path == "" {
+		path = "/"
+	}
+	parent := path[:strings.LastIndex(path, "/")+1]
+	if parent != "" && parent != "/" {
+		parent = strings.TrimSuffix(parent, "/")
+	}
+	if path == "/" {
+		parent = ""
+	}
+	return shared.FSListing{
+		Path:   path,
+		Parent: parent,
+		Entries: []shared.FSEntry{
+			{Name: "bot-python", Path: path + "/bot-python", IsDir: true, Mode: "drwxr-xr-x"},
+			{Name: "logs", Path: path + "/logs", IsDir: true, Mode: "drwxr-xr-x"},
+			{Name: "main.py", Path: path + "/main.py", IsDir: false, Size: 2048, Mode: "-rw-r--r--"},
+			{Name: "run.sh", Path: path + "/run.sh", IsDir: false, Size: 512, Mode: "-rwxr-xr-x"},
+		},
 	}, nil
 }
 

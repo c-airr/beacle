@@ -251,11 +251,30 @@ class CopyField extends StatelessWidget {
   }
 }
 
-/// Simple monospace log viewer dialog.
+/// Monospace log viewer with copy-to-clipboard and reload.
 Future<void> showLogsDialog(BuildContext context, String title, Future<String> Function() loader) async {
   await showDialog(
     context: context,
-    builder: (ctx) => Dialog(
+    builder: (ctx) => _LogsDialog(title: title, loader: loader),
+  );
+}
+
+class _LogsDialog extends StatefulWidget {
+  final String title;
+  final Future<String> Function() loader;
+  const _LogsDialog({required this.title, required this.loader});
+
+  @override
+  State<_LogsDialog> createState() => _LogsDialogState();
+}
+
+class _LogsDialogState extends State<_LogsDialog> {
+  late Future<String> _future = widget.loader();
+  String _loaded = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
       child: Container(
         width: 900,
         height: 600,
@@ -264,18 +283,42 @@ Future<void> showLogsDialog(BuildContext context, String title, Future<String> F
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
-              IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(ctx)),
+              Expanded(child: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w600))),
+              SmallButton(
+                'Copy',
+                icon: Icons.copy,
+                // Copying a 300-line journal by dragging the mouse is exactly
+                // what people give up on, so this grabs the whole buffer.
+                onPressed: _loaded.isEmpty
+                    ? null
+                    : () {
+                        Clipboard.setData(ClipboardData(text: _loaded));
+                        final lines = '\n'.allMatches(_loaded).length + 1;
+                        showToast(context, 'Copied $lines lines to clipboard');
+                      },
+              ),
+              const SizedBox(width: 8),
+              SmallButton(
+                'Reload',
+                icon: Icons.refresh,
+                onPressed: () => setState(() => _future = widget.loader()),
+              ),
+              const SizedBox(width: 4),
+              IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
             ]),
             const SizedBox(height: 8),
             Expanded(
               child: FutureBuilder<String>(
-                future: loader(),
+                future: _future,
                 builder: (ctx, snap) {
                   if (snap.hasError) {
                     return Center(child: Text('Error: ${snap.error}', style: const TextStyle(color: BeacleColors.err)));
                   }
                   if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                  // Cache outside build so Copy has something to hand over.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _loaded != snap.data!) setState(() => _loaded = snap.data!);
+                  });
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(color: BeacleColors.bg, borderRadius: BorderRadius.circular(6)),
@@ -292,8 +335,8 @@ Future<void> showLogsDialog(BuildContext context, String title, Future<String> F
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 void showToast(BuildContext context, String msg, {bool error = false}) {

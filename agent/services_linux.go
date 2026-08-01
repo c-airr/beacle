@@ -4,7 +4,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -73,7 +76,120 @@ func (c *linuxCollector) SystemdLogs(unit string, lines int) (string, error) {
 	return string(out), nil
 }
 
+// --- filesystem ----------------------------------------------------------------
+
+// ListDir backs the picker that chooses a working directory and script. It is
+// listing only — never file contents — and it hides dotfiles, which are noise
+// when you are looking for a bot folder.
+func (c *linuxCollector) ListDir(path string) (shared.FSListing, error) {
+	if path == "" {
+		path = "/root"
+		if _, err := os.Stat(path); err != nil {
+			path = "/home"
+		}
+	}
+	if !filepath.IsAbs(path) {
+		return shared.FSListing{}, fmt.Errorf("path must be absolute")
+	}
+	path = filepath.Clean(path)
+
+	items, err := os.ReadDir(path)
+	if err != nil {
+		return shared.FSListing{}, err
+	}
+
+	listing := shared.FSListing{Path: path, Parent: filepath.Dir(path)}
+	if listing.Parent == path {
+		listing.Parent = "" // already at /
+	}
+	for _, it := range items {
+		if strings.HasPrefix(it.Name(), ".") {
+			continue
+		}
+		e := shared.FSEntry{
+			Name:  it.Name(),
+			Path:  filepath.Join(path, it.Name()),
+			IsDir: it.IsDir(),
+		}
+		if info, err := it.Info(); err == nil {
+			e.Mode = info.Mode().String()
+			if !it.IsDir() {
+				e.Size = uint64(info.Size())
+			}
+		}
+		listing.Entries = append(listing.Entries, e)
+	}
+	// Directories first, then files, each alphabetical.
+	sort.Slice(listing.Entries, func(i, j int) bool {
+		a, b := listing.Entries[i], listing.Entries[j]
+		if a.IsDir != b.IsDir {
+			return a.IsDir
+		}
+		return a.Name < b.Name
+	})
+	return listing, nil
+}
+
 // --- screen --------------------------------------------------------------------
+
+// screenPayload reports what is executing inside a screen session. screen forks
+// a daemon (the pid in `screen -ls`) which owns the window's shell, so the
+// payload is a descendant rather than a direct child — an idle session bottoms
+// out at the shell itself.
+func screenPayload(sessionPID int) (int, string) {
+	type proc struct {
+		pid, ppid int
+		args      string
+	}
+	out, err := exec.Command("ps", "-eo", "pid=,ppid=,args=").Output()
+	if err != nil {
+		return 0, ""
+	}
+	var all []proc
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 3 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(f[0])
+		ppid, err2 := strconv.Atoi(f[1])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		all = append(all, proc{pid: pid, ppid: ppid, args: strings.Join(f[2:], " ")})
+	}
+
+	isShell := func(args string) bool {
+		first := args
+		if i := strings.IndexByte(args, ' '); i > 0 {
+			first = args[:i]
+		}
+		switch filepath.Base(strings.TrimPrefix(first, "-")) {
+		case "bash", "sh", "zsh", "dash", "fish", "ash":
+			return true
+		}
+		return false
+	}
+
+	// Walk down from the session pid, preferring the deepest non-shell process.
+	frontier := []int{sessionPID}
+	for depth := 0; depth < 6 && len(frontier) > 0; depth++ {
+		var next []int
+		for _, parent := range frontier {
+			for _, p := range all {
+				if p.ppid != parent {
+					continue
+				}
+				if !isShell(p.args) {
+					return p.pid, p.args
+				}
+				next = append(next, p.pid)
+			}
+		}
+		frontier = next
+	}
+	return 0, ""
+}
 
 func (c *linuxCollector) ScreenSessions() ([]shared.ScreenSession, error) {
 	out, _ := exec.Command("screen", "-ls").Output()
@@ -103,12 +219,117 @@ func (c *linuxCollector) ScreenSessions() ([]shared.ScreenSession, error) {
 				created = line[s+1 : s+e]
 			}
 		}
+		childPID, cmd := screenPayload(pid)
 		sessions = append(sessions, shared.ScreenSession{
 			PID:      pid,
 			Name:     fields[0][idx+1:],
 			Attached: strings.Contains(line, "(Attached)"),
 			Created:  created,
+			Running:  childPID > 0,
+			Command:  cmd,
+			ChildPID: childPID,
 		})
 	}
 	return sessions, nil
+}
+
+func (c *linuxCollector) ScreenStart(req shared.ScreenStartRequest) error {
+	name, err := screenName(req.Name)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(req.Command) == "" {
+		return fmt.Errorf("command is required")
+	}
+	if req.Dir != "" {
+		st, err := os.Stat(req.Dir)
+		if err != nil || !st.IsDir() {
+			return fmt.Errorf("working directory %q does not exist", req.Dir)
+		}
+	}
+
+	// Refuse to stack a second payload onto a busy session — the UI hides the
+	// button, but the agent is what actually has to be sure.
+	sessions, _ := c.ScreenSessions()
+	for _, s := range sessions {
+		if s.Name != name {
+			continue
+		}
+		if s.Running {
+			return fmt.Errorf("session %q is already running %s", name, s.Command)
+		}
+		// Idle session exists: send the command into it rather than failing.
+		script := ""
+		if req.Dir != "" {
+			script += "cd " + shellQuote(req.Dir) + " && "
+		}
+		script += req.Command + "\n"
+		out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", script).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("screen stuff: %s", strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+
+	script := ""
+	if req.Dir != "" {
+		script += "cd " + shellQuote(req.Dir) + " && "
+	}
+	// exec replaces the shell so the payload is the session's own process,
+	// which is what makes Ctrl+C and the running/idle check land on it.
+	script += "exec " + req.Command
+	out, err := exec.Command("screen", "-dmS", name, "bash", "-lc", script).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("screen -dmS: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func (c *linuxCollector) ScreenStop(name string) error {
+	if _, err := screenName(name); err != nil {
+		return err
+	}
+	sessions, _ := c.ScreenSessions()
+	for _, s := range sessions {
+		if s.Name != name {
+			continue
+		}
+		if !s.Running {
+			return fmt.Errorf("nothing is running in session %q", name)
+		}
+		// \003 is Ctrl+C: ask the payload to stop the way a person at the
+		// terminal would, instead of killing the session outright.
+		out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", "\003").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("screen stuff ctrl-c: %s", strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+	return fmt.Errorf("session %q not found", name)
+}
+
+func (c *linuxCollector) ScreenLogs(name string) (string, error) {
+	if _, err := screenName(name); err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp("", "beacle-screen-*.log")
+	if err != nil {
+		return "", err
+	}
+	path := f.Name()
+	f.Close()
+	defer os.Remove(path)
+
+	// -h includes the scrollback buffer, otherwise this is just the visible window.
+	out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "hardcopy", "-h", path).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("screen hardcopy: %s", strings.TrimSpace(string(out)))
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	// hardcopy pads the buffer with blank lines; trim them so the viewer opens
+	// on the last real output.
+	return strings.TrimRight(string(b), "\n \t"), nil
 }
