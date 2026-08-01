@@ -21,37 +21,39 @@ class PanelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final fill = expand && constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
-      return Container(
-        height: fill ? constraints.maxHeight : null,
-        decoration: BoxDecoration(
-          color: BeacleColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: BeacleColors.border),
-        ),
-        padding: padding,
-        alignment: Alignment.topLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
-          children: [
-            if (title != null) ...[
-              Row(children: [
-                Expanded(
-                  child: Text(title!,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.4)),
-                ),
-                if (trailing != null) trailing!,
-              ]),
-              const SizedBox(height: 12),
-            ],
-            if (fill) Expanded(child: child) else child,
+    // No LayoutBuilder here. These cards sit inside IntrinsicHeight rows, and
+    // LayoutBuilder cannot answer an intrinsic-height query: in debug it throws,
+    // in a release build it silently reports 0, which collapsed every panel on
+    // the Servers screen to nothing. Equal heights come from the parent
+    // (IntrinsicHeight + CrossAxisAlignment.stretch); `expand` only tells the
+    // inner column to fill the height it is given.
+    return Container(
+      decoration: BoxDecoration(
+        color: BeacleColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: BeacleColors.border),
+      ),
+      padding: padding,
+      alignment: Alignment.topLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          if (title != null) ...[
+            Row(children: [
+              Expanded(
+                child: Text(title!,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.4)),
+              ),
+              if (trailing != null) trailing!,
+            ]),
+            const SizedBox(height: 12),
           ],
-        ),
-      );
-    });
+          child,
+        ],
+      ),
+    );
   }
 }
 
