@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -269,70 +272,161 @@ class _LogsDialog extends StatefulWidget {
 }
 
 class _LogsDialogState extends State<_LogsDialog> {
-  late Future<String> _future = widget.loader();
-  String _loaded = '';
+  final _scroll = ScrollController();
+
+  String _text = '';
+  String? _error;
+  bool _loading = true;
+  bool _follow = true;
+  Timer? _auto;
+
+  /// Auto-refresh cadence. Fast enough that a script's output feels live,
+  /// slow enough not to hammer the agent over a relayed link.
+  static const _interval = Duration(seconds: 2);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _auto = Timer.periodic(_interval, (_) => _load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    _auto?.cancel();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent && mounted) setState(() => _loading = true);
+    try {
+      final text = await widget.loader();
+      if (!mounted) return;
+      final changed = text != _text;
+      setState(() {
+        _text = text;
+        _error = null;
+        _loading = false;
+      });
+      if (changed && _follow) _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
+  }
+
+  /// Jumps after the frame that lays the new text out — before it, the extent
+  /// is still the old one and the view lands short of the end.
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final lines = _text.isEmpty ? 0 : '\n'.allMatches(_text).length + 1;
+
+    // Sized against the window rather than the content: the viewer used to
+    // take whatever space the last refresh needed, so it moved under the
+    // cursor every time the output changed. Dialog also subtracts its own
+    // inset padding, so ask for a share of what is actually available.
+    final screen = MediaQuery.sizeOf(context);
+    final width = (screen.width - 120).clamp(480.0, 1100.0);
+    final height = (screen.height - 120).clamp(360.0, 720.0);
+
     return Dialog(
-      child: Container(
-        width: 900,
-        height: 600,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Expanded(child: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w600))),
-              SmallButton(
-                'Copy',
-                icon: Icons.copy,
-                // Copying a 300-line journal by dragging the mouse is exactly
-                // what people give up on, so this grabs the whole buffer.
-                onPressed: _loaded.isEmpty
-                    ? null
-                    : () {
-                        Clipboard.setData(ClipboardData(text: _loaded));
-                        final lines = '\n'.allMatches(_loaded).length + 1;
-                        showToast(context, 'Copied $lines lines to clipboard');
-                      },
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints.tight(Size(width, height)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Expanded(
+                  child: Text(widget.title,
+                      style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                ),
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 10),
+                    child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                Text('$lines lines', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                const SizedBox(width: 10),
+                // Following is the default; turning it off lets you read
+                // scrollback while output keeps arriving.
+                Tooltip(
+                  message: _follow ? 'Following new output' : 'Scroll position held',
+                  child: SmallButton(
+                    _follow ? 'Follow' : 'Paused',
+                    icon: _follow ? Icons.vertical_align_bottom : Icons.pause,
+                    color: _follow ? BeacleColors.ok : BeacleColors.textDim,
+                    onPressed: () {
+                      setState(() => _follow = !_follow);
+                      if (_follow) _scrollToBottom();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SmallButton(
+                  'Copy',
+                  icon: Icons.copy,
+                  // Copying a 300-line journal by dragging the mouse is exactly
+                  // what people give up on, so this grabs the whole buffer.
+                  onPressed: _text.isEmpty
+                      ? null
+                      : () {
+                          Clipboard.setData(ClipboardData(text: _text));
+                          showToast(context, 'Copied $lines lines to clipboard');
+                        },
+                ),
+                const SizedBox(width: 8),
+                SmallButton('Reload', icon: Icons.refresh, onPressed: () => _load()),
+                const SizedBox(width: 4),
+                IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
+              ]),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: BeacleColors.bg, borderRadius: BorderRadius.circular(6)),
+                  child: _error != null
+                      ? Center(child: Text('Error: $_error', style: const TextStyle(color: BeacleColors.err)))
+                      : NotificationListener<UserScrollNotification>(
+                          // Scrolling up is how you say "stop jumping"; getting
+                          // back to the bottom resumes following.
+                          onNotification: (n) {
+                            if (n.direction == ScrollDirection.forward && _follow) {
+                              setState(() => _follow = false);
+                            } else if (n.direction == ScrollDirection.reverse &&
+                                !_follow &&
+                                _scroll.hasClients &&
+                                _scroll.position.pixels >= _scroll.position.maxScrollExtent - 24) {
+                              setState(() => _follow = true);
+                            }
+                            return false;
+                          },
+                          child: SingleChildScrollView(
+                            controller: _scroll,
+                            child: SelectableText(
+                              _text.isEmpty ? (_loading ? 'Loading…' : '(no output)') : _text,
+                              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, height: 1.4),
+                            ),
+                          ),
+                        ),
+                ),
               ),
-              const SizedBox(width: 8),
-              SmallButton(
-                'Reload',
-                icon: Icons.refresh,
-                onPressed: () => setState(() => _future = widget.loader()),
-              ),
-              const SizedBox(width: 4),
-              IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
-            ]),
-            const SizedBox(height: 8),
-            Expanded(
-              child: FutureBuilder<String>(
-                future: _future,
-                builder: (ctx, snap) {
-                  if (snap.hasError) {
-                    return Center(child: Text('Error: ${snap.error}', style: const TextStyle(color: BeacleColors.err)));
-                  }
-                  if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                  // Cache outside build so Copy has something to hand over.
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted && _loaded != snap.data!) setState(() => _loaded = snap.data!);
-                  });
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: BeacleColors.bg, borderRadius: BorderRadius.circular(6)),
-                    child: SingleChildScrollView(
-                      child: SelectableText(
-                        snap.data!.isEmpty ? '(no output)' : snap.data!,
-                        style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, height: 1.4),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
