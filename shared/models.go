@@ -285,6 +285,30 @@ type ProxySite struct {
 	// Headers are extra response headers, e.g. HSTS.
 	Headers map[string]string `json:"headers,omitempty"`
 
+	// --- provenance, for sites read out of a hand-written config ------------
+
+	// Managed is true for sites Beacle owns (its own file in CaddyDir). False
+	// means the site was parsed out of the main Caddyfile and is shown so the
+	// list is complete.
+	Managed bool `json:"managed"`
+	// Editable is false when regenerating the block from the form would lose
+	// something it cannot express — matchers, handle blocks, try_files,
+	// multiple domains. Those sites are displayed, never rewritten.
+	Editable bool `json:"editable"`
+	// ReadOnlyReason explains that to the user instead of a disabled button.
+	ReadOnlyReason string `json:"read_only_reason,omitempty"`
+	// Domains lists every address on the block ("a.com, www.a.com").
+	Domains []string `json:"domains,omitempty"`
+	// Kind is proxy | static | mixed | other.
+	Kind string `json:"kind,omitempty"`
+	// TLSMode is auto | internal | custom | none.
+	TLSMode string `json:"tls_mode,omitempty"`
+	// SourceFile is where the block lives, e.g. /etc/caddy/Caddyfile.
+	SourceFile string `json:"source_file,omitempty"`
+	// RawConfig is the block verbatim, so the panel can show exactly what is
+	// deployed without pretending to understand it.
+	RawConfig string `json:"raw_config,omitempty"`
+
 	// Extra carries provider specific settings (NPM's block-exploits, etc).
 	Extra map[string]string `json:"extra,omitempty"`
 }

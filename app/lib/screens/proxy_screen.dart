@@ -157,9 +157,19 @@ class _ProxyScreenState extends State<ProxyScreen> {
                   Expanded(
                     flex: 2,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(s.domain, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      Row(children: [
+                        Flexible(
+                          child: Text(
+                            s.domains.length > 1 ? s.domains.join(', ') : s.domain,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _sourceChip(s),
+                      ]),
                       const SizedBox(height: 2),
-                      Text('→ ${s.upstream}',
+                      Text(_targetLine(s),
                           style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                       if (_optionSummary(s).isNotEmpty) ...[
                         const SizedBox(height: 3),
@@ -172,15 +182,28 @@ class _ProxyScreenState extends State<ProxyScreen> {
                   const SizedBox(width: 8),
                   _sslBadge(s.ssl),
                   const SizedBox(width: 16),
+                  if (s.rawConfig.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.code, size: 16),
+                      tooltip: 'View config',
+                      onPressed: () => _showRawConfig(s),
+                    ),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 16),
-                    tooltip: 'Edit',
-                    onPressed: () => _openSiteForm(state, vps, existing: s),
+                    tooltip: s.editable || s.managed
+                        ? 'Edit'
+                        : 'Read-only: ${s.readOnlyReason}',
+                    color: (s.editable || s.managed) ? null : BeacleColors.textDim,
+                    onPressed: (s.editable || s.managed)
+                        ? () => _openSiteForm(state, vps, existing: s)
+                        : null,
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 16, color: BeacleColors.err),
-                    tooltip: 'Delete',
-                    onPressed: () async {
+                    tooltip: s.managed ? 'Delete' : 'Only Beacle-managed sites can be deleted here',
+                    onPressed: !s.managed
+                        ? null
+                        : () async {
                       final ok = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
@@ -212,6 +235,17 @@ class _ProxyScreenState extends State<ProxyScreen> {
     );
   }
 
+  /// Shows the block exactly as it sits in the config. For sites the form
+  /// cannot model this is the only honest view — and it is also how you check
+  /// what Beacle generated for the ones it owns.
+  void _showRawConfig(ProxySite s) {
+    showLogsDialog(
+      context,
+      '${s.domain} — ${s.sourceFile.isEmpty ? 'Caddy config' : s.sourceFile}',
+      () async => s.rawConfig,
+    );
+  }
+
   Future<void> _openSiteForm(AppState state, Vps vps, {ProxySite? existing}) async {
     final saved = await showProxySiteForm(context, state: state, vps: vps, existing: existing);
     if (!saved) return;
@@ -219,6 +253,41 @@ class _ProxyScreenState extends State<ProxyScreen> {
     // The snapshot carries proxy state, but the next tick can be seconds out —
     // pull now so the new row (and its port check) appears immediately.
     await state.refreshAll();
+  }
+
+  /// What the site actually does. A static site has no upstream, so printing
+  /// "→ " with nothing after it would look like a broken config.
+  String _targetLine(ProxySite s) {
+    if (s.upstream.isNotEmpty && s.kind == 'mixed') {
+      return 'static files + → ${s.upstream}';
+    }
+    if (s.upstream.isNotEmpty) return '→ ${s.upstream}';
+    if (s.kind == 'static') return 'serves files from disk';
+    return 'no reverse_proxy in this block';
+  }
+
+  /// Distinguishes sites Beacle owns from ones parsed out of the hand-written
+  /// Caddyfile, because only the former can be rewritten from the form.
+  Widget _sourceChip(ProxySite s) {
+    if (s.managed) return const SizedBox.shrink();
+    final tls = s.tlsMode == 'internal' ? ' · tls internal' : '';
+    return Tooltip(
+      message: s.editable
+          ? 'Read from ${s.sourceFile}. Simple enough to edit here.'
+          : 'Read from ${s.sourceFile}. ${s.readOnlyReason}',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: BeacleColors.surfaceHi,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: BeacleColors.border),
+        ),
+        child: Text(
+          s.editable ? 'Caddyfile$tls' : 'Caddyfile · read-only$tls',
+          style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
+        ),
+      ),
+    );
   }
 
   /// One-line recap of the switches that are on, so the list shows how a site

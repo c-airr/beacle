@@ -292,8 +292,91 @@ func (a *caddyAdapter) loadSites() []shared.ProxySite {
 		}
 		sites = append(sites, a.siteFromMetaSSL(m, ssl))
 	}
+
+	// Sites written by hand in the main Caddyfile are shown too, otherwise the
+	// panel claims a server has no sites while it is happily serving four.
+	sites = append(sites, a.loadCaddyfileSites(sites)...)
+
 	sort.Slice(sites, func(i, j int) bool { return sites[i].Domain < sites[j].Domain })
 	return sites
+}
+
+// loadCaddyfileSites parses the main Caddyfile and returns everything Beacle
+// does not already manage. These are read-only unless the block is a plain
+// reverse proxy the form can regenerate without losing anything.
+func (a *caddyAdapter) loadCaddyfileSites(managed []shared.ProxySite) []shared.ProxySite {
+	b, err := os.ReadFile(a.caddyfile)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, s := range managed {
+		seen[s.Domain] = true
+	}
+
+	var out []shared.ProxySite
+	for _, blk := range parseCaddyfile(string(b)) {
+		if len(blk.Addresses) == 0 {
+			continue
+		}
+		// The import line pulling in beacle.d is not a site.
+		if strings.HasPrefix(blk.Addresses[0], "import ") {
+			continue
+		}
+		domain := strings.TrimPrefix(strings.TrimPrefix(blk.Addresses[0], "https://"), "http://")
+		if seen[domain] {
+			continue // Beacle manages this one; its own file wins
+		}
+
+		kind := classifyBlock(blk.Body)
+		upstream := directiveArg(blk.Body, "reverse_proxy")
+		editable := editableByForm(blk)
+
+		reason := ""
+		if !editable {
+			switch {
+			case len(blk.Addresses) > 1:
+				reason = "Block serves several domains at once — editing here would split them."
+			case kind == siteKindStatic:
+				reason = "Serves files from disk (root/file_server), which this form does not model."
+			case kind == siteKindMixed:
+				reason = "Mixes static files with a proxied path via matchers — too much to regenerate safely."
+			default:
+				reason = "Uses directives this form cannot express, so it is shown as-is."
+			}
+		}
+
+		ssl := shared.SSLActive
+		mode := tlsMode(blk)
+		if mode == "none" {
+			ssl = shared.SSLDisabled
+		}
+		if !a.running() && mode != "none" {
+			ssl = shared.SSLPending
+		}
+
+		port, inUse, healthy := probeUpstream(upstream)
+		out = append(out, shared.ProxySite{
+			ID:              "caddyfile:" + domain,
+			Domain:          domain,
+			Domains:         blk.Addresses,
+			Upstream:        upstream,
+			SSL:             ssl,
+			Enabled:         true,
+			Provider:        shared.ProxyProviderCaddy,
+			UpstreamPort:    port,
+			PortInUse:       inUse,
+			UpstreamHealthy: healthy,
+			Managed:         false,
+			Editable:        editable,
+			ReadOnlyReason:  reason,
+			Kind:            kind,
+			TLSMode:         mode,
+			SourceFile:      a.caddyfile,
+			RawConfig:       blk.Raw,
+		})
+	}
+	return out
 }
 
 // probeUpstream answers the question the site list is really asking: is there
@@ -339,6 +422,18 @@ func (a *caddyAdapter) AddSite(req shared.ProxySiteRequest) (shared.ProxySite, e
 	if err := validateSiteRequest(req); err != nil {
 		return shared.ProxySite{}, err
 	}
+	// Caddy refuses to start when two blocks claim the same site address, and
+	// that failure takes down every other site on the box — so a clash with a
+	// hand-written block has to be caught before anything is written.
+	for _, existing := range a.loadCaddyfileSites(nil) {
+		for _, d := range existing.Domains {
+			bare := strings.TrimPrefix(strings.TrimPrefix(d, "https://"), "http://")
+			if strings.EqualFold(bare, strings.TrimSpace(req.Domain)) {
+				return shared.ProxySite{}, fmt.Errorf(
+					"%s is already defined in %s — remove it there first", bare, a.caddyfile)
+			}
+		}
+	}
 	if err := a.ensureImport(); err != nil {
 		return shared.ProxySite{}, err
 	}
@@ -357,6 +452,15 @@ func (a *caddyAdapter) AddSite(req shared.ProxySiteRequest) (shared.ProxySite, e
 func (a *caddyAdapter) UpdateSite(id string, req shared.ProxySiteRequest) (shared.ProxySite, error) {
 	if err := validateSiteRequest(req); err != nil {
 		return shared.ProxySite{}, err
+	}
+	// Sites parsed out of the main Caddyfile carry a synthetic id. Writing a
+	// Beacle file for that domain would leave two blocks serving it, and Caddy
+	// refuses to start on a duplicate site address — taking every other site
+	// on the box down with it.
+	if strings.HasPrefix(id, "caddyfile:") {
+		return shared.ProxySite{}, fmt.Errorf(
+			"%s is defined in %s; edit it there, or delete it from that file first",
+			strings.TrimPrefix(id, "caddyfile:"), a.caddyfile)
 	}
 	path := a.sitePath(id)
 	if _, err := os.Stat(path); err != nil {
@@ -395,6 +499,11 @@ func (a *caddyAdapter) siteFromMetaSSL(m caddySiteMeta, ssl shared.SSLStatus) sh
 		UpstreamPort:    port,
 		PortInUse:       listening,
 		UpstreamHealthy: healthy,
+		Managed:         true,
+		Editable:        true,
+		Kind:            siteKindProxy,
+		SourceFile:      a.sitePath(m.ID),
+		RawConfig:       renderCaddySite(m),
 		RedirectWWW:     m.RedirectWWW,
 		ForceHTTPS:      m.ForceHTTPS,
 		WebSocket:       m.WebSocket,

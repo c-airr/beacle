@@ -1,0 +1,39 @@
+# Caddy — produkcja (kopiuj do /etc/caddy/Caddyfile i: systemctl reload caddy)
+# tls internal = cert dla Cloudflare Full SSL (origin :443)
+
+discordbothosting.pl, www.discordbothosting.pl {
+        tls internal
+        root * /home/ubuntu/DISCORD-BOT-HOSTING/landing
+        encode gzip
+        try_files {path} {path}/ /index.html
+        file_server
+}
+
+dash.discordbothosting.pl {
+        tls internal
+        root * /home/ubuntu/DISCORD-BOT-HOSTING/frontend-flutter/build/web
+        encode gzip
+
+        header {
+                Cache-Control "no-cache, no-store, must-revalidate"
+                Pragma "no-cache"
+        }
+
+        @api path /auth/* /public/* /health /me /bot/* /admin/*
+        handle @api {
+                reverse_proxy localhost:18080
+        }
+
+        handle {
+                try_files {path} {path}/ /index.html
+                file_server
+        }
+}
+
+http://ai.niedojeby.lol {
+        reverse_proxy localhost:8080
+}
+
+http://fivem.niedojeby.lol {
+        reverse_proxy localhost:30120
+}

@@ -170,6 +170,36 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Editing a hand-written block replaces it with generated
+                    // config. Fine for a one-line proxy, destructive for
+                    // anything else — so say so before the first keystroke.
+                    if (widget.existing != null && !widget.existing!.managed) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: BeacleColors.warn.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: BeacleColors.warn.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, size: 16, color: BeacleColors.warn),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'This site lives in ${widget.existing!.sourceFile}. Saving moves it into '
+                                'Beacle\'s own config and rewrites the block from the fields above — '
+                                'anything not shown here is lost.',
+                                style: const TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.45),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     TextField(
                       controller: _domain,
                       autofocus: true,

@@ -278,6 +278,11 @@ class ProxySite {
   final String basicAuthUser, basicAuthHash;
   final Map<String, String> headers;
 
+  /// Where the site came from and whether the form may rewrite it.
+  final bool managed, editable;
+  final String readOnlyReason, kind, tlsMode, sourceFile, rawConfig;
+  final List<String> domains;
+
   ProxySite.fromJson(Map<String, dynamic> j)
       : id = _s(j['id']),
         domain = _s(j['domain']),
@@ -296,6 +301,14 @@ class ProxySite {
         basicAuthUser = _s(j['basic_auth_user']),
         basicAuthHash = _s(j['basic_auth_hash']),
         headers = (j['headers'] as Map?)?.map((k, v) => MapEntry(k as String, '$v')) ?? {},
+        managed = _b(j['managed']),
+        editable = _b(j['editable']),
+        readOnlyReason = _s(j['read_only_reason']),
+        kind = _s(j['kind']),
+        tlsMode = _s(j['tls_mode']),
+        sourceFile = _s(j['source_file']),
+        rawConfig = _s(j['raw_config']),
+        domains = ((j['domains'] as List?) ?? const []).map((e) => '$e').toList(),
         extra = (j['extra'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)) ?? {};
 }
 
