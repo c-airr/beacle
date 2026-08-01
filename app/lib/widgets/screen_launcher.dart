@@ -61,6 +61,10 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
   final _nameCtrl = TextEditingController();
   final _cmdCtrl = TextEditingController();
 
+  /// The working directory, as a real field. Browsing fills it in, but it is
+  /// the text here that runs — "~/" means wherever the session already opens.
+  final _dirCtrl = TextEditingController(text: '~/');
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +76,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
   void dispose() {
     _nameCtrl.dispose();
     _cmdCtrl.dispose();
+    _dirCtrl.dispose();
     super.dispose();
   }
 
@@ -87,6 +92,8 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
         listing = l;
         pickedFile = null;
         loading = false;
+        // Browsing is a way to fill the field, not a replacement for it.
+        _dirCtrl.text = l.path;
       });
     } catch (e) {
       if (!mounted) return;
@@ -110,10 +117,18 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
     });
   }
 
-  bool get _valid =>
-      _nameCtrl.text.trim().isNotEmpty &&
-      _cmdCtrl.text.trim().isNotEmpty &&
-      (listing?.path.isNotEmpty ?? false);
+  /// Directory as typed, with the "session default" spellings normalised away.
+  String get _dir {
+    final d = _dirCtrl.text.trim();
+    return (d == '~' || d == '~/') ? '' : d;
+  }
+
+  /// The cd line, or empty when the session's own starting directory is used.
+  String get _cdLine => _dir.isEmpty ? '' : 'cd $_dir';
+
+  // A file no longer has to be picked: the command is a text field, and
+  // browsing is only a shortcut for filling it in.
+  bool get _valid => _nameCtrl.text.trim().isNotEmpty && _cmdCtrl.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -217,13 +232,26 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
-                    controller: _cmdCtrl,
-                    decoration: const InputDecoration(labelText: 'Command'),
+                    controller: _dirCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Directory',
+                      hintText: '~/',
+                    ),
                     style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _cmdCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Command',
+                hintText: 'python3 bot.py',
+              ),
+              style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
             Container(
@@ -236,10 +264,10 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
               ),
               child: Text(
                 _valid
-                    ? 'screen -dmS ${_nameCtrl.text.trim()}\n'
-                        'cd ${l?.path ?? ''}\n'
+                    ? 'screen -S ${_nameCtrl.text.trim()}\n'
+                        '${_cdLine.isEmpty ? '' : '$_cdLine\n'}'
                         '${_cmdCtrl.text.trim()}'
-                    : 'Pick a script, then name the session.',
+                    : 'Name the session and enter a command.',
                 style: TextStyle(
                   fontFamily: 'Consolas',
                   fontSize: 11,
@@ -264,7 +292,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                             context,
                             ScreenLaunchSpec(
                               name: _nameCtrl.text.trim(),
-                              dir: l?.path ?? '',
+                              dir: _dir,
                               command: _cmdCtrl.text.trim(),
                             ),
                           ),

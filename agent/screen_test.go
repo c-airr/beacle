@@ -2,7 +2,10 @@
 
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestScreenNameRejectsShellMetacharacters(t *testing.T) {
 	// The name is passed to `screen -S`; anything that could become a separate
@@ -32,6 +35,43 @@ func TestScreenNameLengthCap(t *testing.T) {
 	}
 	if _, err := screenName(string(long)); err == nil {
 		t.Error("a 65 character session name should be rejected")
+	}
+}
+
+func TestScreenLinesAreSeparateCommands(t *testing.T) {
+	// Chaining with && meant a failed cd swallowed the command, and the whole
+	// thing arrived as one line — so `python 3 agent.py` ran in the wrong
+	// directory instead of failing on its own line.
+	got := screenLines("/home/ubuntu/bot", "python3 main.py")
+	want := []string{"cd '/home/ubuntu/bot'", "python3 main.py"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d lines %q, want %d", len(got), got, len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+	for _, line := range got {
+		if strings.Contains(line, "&&") {
+			t.Errorf("lines must stay independent, got %q", line)
+		}
+	}
+}
+
+func TestScreenLinesSkipCdWhenDirectoryIsDefault(t *testing.T) {
+	// Empty means "wherever the session opens" — emitting `cd ''` would send
+	// the shell somewhere unexpected.
+	got := screenLines("", "python3 bot.py")
+	if len(got) != 1 || got[0] != "python3 bot.py" {
+		t.Errorf("got %q, want just the command", got)
+	}
+}
+
+func TestScreenLinesQuoteAwkwardDirectories(t *testing.T) {
+	got := screenLines("/home/o'brien/my bot", "ls")
+	if got[0] != `cd '/home/o'\''brien/my bot'` {
+		t.Errorf("cd line = %q", got[0])
 	}
 }
 

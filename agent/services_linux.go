@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"beacle/shared"
 )
@@ -241,10 +242,16 @@ func (c *linuxCollector) ScreenStart(req shared.ScreenStartRequest) error {
 	if strings.TrimSpace(req.Command) == "" {
 		return fmt.Errorf("command is required")
 	}
-	if req.Dir != "" {
-		st, err := os.Stat(req.Dir)
+	// Empty means "wherever the session opens", which for screen is the home
+	// directory — the same thing a person sees after `screen -R`.
+	dir := strings.TrimSpace(req.Dir)
+	if dir == "" || dir == "~" || dir == "~/" {
+		dir = ""
+	}
+	if dir != "" {
+		st, err := os.Stat(dir)
 		if err != nil || !st.IsDir() {
-			return fmt.Errorf("working directory %q does not exist", req.Dir)
+			return fmt.Errorf("working directory %q does not exist", dir)
 		}
 	}
 
@@ -258,32 +265,36 @@ func (c *linuxCollector) ScreenStart(req shared.ScreenStartRequest) error {
 		if s.Running {
 			return fmt.Errorf("session %q is already running %s", name, s.Command)
 		}
-		// Idle session exists: send the command into it rather than failing.
-		script := ""
-		if req.Dir != "" {
-			script += "cd " + shellQuote(req.Dir) + " && "
-		}
-		script += req.Command + "\n"
-		out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", script).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("screen stuff: %s", strings.TrimSpace(string(out)))
+		// Idle session exists: type into it rather than failing. Two separate
+		// lines, exactly what a person would type — chaining them with && made
+		// a failed cd swallow the command, and any typo in one became a typo
+		// in the whole line.
+		for _, line := range screenLines(dir, req.Command) {
+			out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", line+"\n").CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("screen stuff: %s", strings.TrimSpace(string(out)))
+			}
 		}
 		return nil
 	}
 
-	script := ""
-	if req.Dir != "" {
-		script += "cd " + shellQuote(req.Dir) + " && "
-	}
-	// exec replaces the shell so the payload is the session's own process,
-	// which is what makes Ctrl+C and the running/idle check land on it.
-	script += "exec " + req.Command
-	out, err := exec.Command("screen", "-dmS", name, "bash", "-lc", script).CombinedOutput()
+	// A fresh session starts a login shell so the environment matches an
+	// interactive one, then the same two lines are typed into it.
+	out, err := exec.Command("screen", "-dmS", name, "bash", "-l").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("screen -dmS: %s", strings.TrimSpace(string(out)))
 	}
+	// screen needs a moment before its window accepts input.
+	time.Sleep(400 * time.Millisecond)
+	for _, line := range screenLines(dir, req.Command) {
+		out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", line+"\n").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("screen stuff: %s", strings.TrimSpace(string(out)))
+		}
+	}
 	return nil
 }
+
 
 func (c *linuxCollector) ScreenStop(name string) error {
 	if _, err := screenName(name); err != nil {

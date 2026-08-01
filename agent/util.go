@@ -37,6 +37,19 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// screenLines builds what gets typed into a screen session: a cd, then the
+// command, as two independent lines — exactly what a person would type.
+// Joining them with && meant a failed cd swallowed the command and the whole
+// thing arrived as a single line. An empty dir means the session's own
+// starting directory, so no cd is sent at all.
+func screenLines(dir, command string) []string {
+	var lines []string
+	if dir != "" {
+		lines = append(lines, "cd "+shellQuote(dir))
+	}
+	return append(lines, strings.TrimSpace(command))
+}
+
 func randomID() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
