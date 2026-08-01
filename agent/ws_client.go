@@ -23,10 +23,18 @@ const (
 	// asleep) hangs until it times out. Both paths have to stay cheap, because
 	// the delay between "user opens the panel" and "server shows data" is
 	// exactly one of these retries.
-	wsHandshakeTimeout = 10 * time.Second
-	wsReadTimeout      = 35 * time.Second
-	wsWriteTimeout     = 15 * time.Second
-	pingInterval       = 10 * time.Second
+	// Measured against a real outage: a relayed Tailscale link dies silently,
+	// and recovery cost 87s made up almost entirely of these two constants —
+	// 35s to notice, then four dials that each hung for the full 10s because
+	// the SYN went nowhere. Halving both roughly halves the outage.
+	//
+	// The floor is set by the ping interval: the read timeout has to survive a
+	// couple of missed pongs on a laggy relay, or a healthy link gets torn
+	// down for a hiccup and reconnects for no reason.
+	wsHandshakeTimeout = 6 * time.Second
+	wsReadTimeout      = 22 * time.Second // two missed pings plus slack
+	wsWriteTimeout     = 10 * time.Second
+	pingInterval       = 8 * time.Second
 
 	reconnectMin = 1 * time.Second
 	reconnectMax = 5 * time.Second

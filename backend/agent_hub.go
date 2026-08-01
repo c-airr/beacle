@@ -18,12 +18,12 @@ import (
 const (
 	// A dead link (laptop asleep, Tailscale re-keying, VPS network drop) is
 	// invisible at the TCP level, so it is only detected when pings stop being
-	// answered. Three missed pings ≈ 35s, instead of the 90s it used to take —
-	// that window is exactly how long the panel would keep showing a server as
-	// online while no data arrives.
-	agentWSReadTimeout  = 35 * time.Second
-	agentWSWriteTimeout = 15 * time.Second
-	agentWSPingInterval = 10 * time.Second
+	// answered. Kept slightly more patient than the agent's own timeout so the
+	// side that reconnects is the one that can — the agent dials, the backend
+	// only waits.
+	agentWSReadTimeout  = 26 * time.Second
+	agentWSWriteTimeout = 10 * time.Second
+	agentWSPingInterval = 8 * time.Second
 )
 
 // AgentHub tracks outbound agent WebSocket connections and routes commands
