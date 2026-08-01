@@ -570,6 +570,18 @@ class _MapPainter extends CustomPainter {
         ..strokeWidth = 0.55 / camera.scale
         ..isAntiAlias = true,
     );
+    // Country borders: half the coastline's weight and a dimmer grey, so they
+    // read as detail inside a landmass instead of competing with its outline.
+    canvas.drawPath(
+      geo.borderPath,
+      Paint()
+        ..color = const Color(0xFF3A3A3A)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.55 / camera.scale
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..isAntiAlias = true,
+    );
     canvas.restore();
 
     for (final m in markers) {

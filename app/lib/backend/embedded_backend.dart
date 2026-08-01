@@ -85,6 +85,7 @@ class EmbeddedBackend {
       args,
       workingDirectory: bin.parent.path,
     );
+    _drainOutput(_process!);
 
     final startedAt = DateTime.now();
     _process!.exitCode.then((code) async {
@@ -115,6 +116,43 @@ class EmbeddedBackend {
       }
     }
     debugPrint('beacle: backend did not become healthy in time');
+  }
+
+  /// Process.start opens pipes for stdout/stderr whether or not anyone reads
+  /// them. Nobody did, so once ~64KB of backend logs had accumulated the pipe
+  /// buffer filled and the next log.Printf blocked *inside the backend* — it
+  /// stopped answering agents mid-connection, which surfaced on the VPS as
+  /// read/write errors every few minutes. Agent churn logs two lines per
+  /// reconnect, so the stall fed itself.
+  void _drainOutput(Process p) {
+    IOSink? sink;
+    try {
+      BeaclePaths.ensureDirs();
+      final f = File('${BeaclePaths.logsDir}${Platform.pathSeparator}backend.log');
+      // Keep the log bounded; this runs for as long as the panel is open.
+      if (f.existsSync() && f.lengthSync() > 2 * 1024 * 1024) {
+        f.writeAsStringSync('');
+      }
+      sink = f.openWrite(mode: FileMode.append);
+    } catch (e) {
+      debugPrint('beacle: cannot open backend log: $e');
+    }
+
+    void pump(Stream<List<int>> stream, String tag) {
+      stream.transform(utf8.decoder).transform(const LineSplitter()).listen(
+        (line) {
+          if (line.isEmpty) return;
+          sink?.writeln('${DateTime.now().toIso8601String()} [$tag] $line');
+          debugPrint('beacle-backend: $line');
+        },
+        onDone: () => sink?.flush().then((_) => sink?.close()).catchError((_) {}),
+        onError: (_) {},
+        cancelOnError: false,
+      );
+    }
+
+    pump(p.stdout, 'out');
+    pump(p.stderr, 'err');
   }
 
   /// Covers the backend we adopted as well as the one we spawned: an adopted
