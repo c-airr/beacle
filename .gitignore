@@ -11,3 +11,12 @@ app/*.iml
 # stray build output from running `go build -o dist/...` inside agent/
 agent/dist/
 agent/agent
+
+# Compiled binaries. scripts/build.ps1 regenerates every one of these, and they
+# were ~116 MB of tracked blobs. The release *layout* stays in git
+# (dist/agent/install.sh, README.md, VERSION) — its payload does not.
+dist/agent/beacle-agent*
+dist/agent/linux-amd64/
+dist/agent/linux-arm64/
+agent/beacle-agent*
+backend/beacle-backend*
