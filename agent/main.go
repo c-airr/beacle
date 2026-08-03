@@ -28,7 +28,9 @@ func main() {
 	updater := NewUpdater(cfg)
 	reporter := NewReporter(cfg, col, proxy)
 	api := &APIServer{cfg: cfg, col: col, proxy: proxy, upd: updater}
-	go updater.AutoUpdateLoop()
+	// Automatic updates are parked — see AutoUpdateLoop in updater.go. The agent
+	// only replaces its own binary when someone presses Update.
+	// go updater.AutoUpdateLoop()
 	ws := NewWSClient(cfg, api, reporter)
 	ws.Run()
 }

@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"beacle/shared"
@@ -98,36 +97,35 @@ func fetchGitHubAsset(goarch string) (stamp, downloadURL string, err error) {
 	return "", shared.AgentGitHubBinaryURL(goarch), nil
 }
 
-// remoteStamp returns a stamp for the current arch asset on GitHub.
-func (u *Updater) remoteStamp() (string, error) {
-	stamp, _, err := fetchGitHubAsset(runtime.GOARCH)
-	if err != nil {
-		return "", err
-	}
-	if stamp == "" {
-		return "", fmt.Errorf("no stamp for %s", shared.AgentGitHubAssetName(runtime.GOARCH))
-	}
-	return stamp, nil
-}
+// remoteStamp returned a stamp for the current arch asset. Only the parked
+// AutoUpdateLoop ever needed it; nothing decides anything from asset metadata
+// now. Kept next to the loop it belongs to.
+//
+// func (u *Updater) remoteStamp() (string, error) {
+// 	stamp, _, err := fetchGitHubAsset(runtime.GOARCH)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	if stamp == "" {
+// 		return "", fmt.Errorf("no stamp for %s", shared.AgentGitHubAssetName(runtime.GOARCH))
+// 	}
+// 	return stamp, nil
+// }
 
-// Update downloads the binary from GitHub agentbeta and restarts.
+// Update downloads the binary from the GitHub release and restarts. That is
+// the whole contract: fetch what is on agentbeta right now, swap it in, come
+// back up.
 //
-// It always downloads. The release is a rolling tag that gets overwritten in
-// place, so "has the asset changed" is not a question its metadata can answer
-// honestly — a rebuilt binary under the same tag can keep the digest and the
-// timestamp it had before. Pressing Update used to compare a stored stamp and
-// return "already up to date" without fetching anything, which made the button
-// look broken precisely when it was needed.
-//
-// The stamp is still written, because AutoUpdateLoop uses it to avoid pulling
-// the same asset every six hours unprompted. That is a different question from
-// a person deliberately asking for the current build.
+// Nothing is compared first. The release is a rolling tag overwritten in
+// place, so its metadata cannot answer "did this change" honestly — a rebuild
+// under the same tag keeps the digest and timestamp it had before. Every
+// version of this that tried to be clever ended up refusing to download.
 func (u *Updater) Update() (string, error) {
-	stamp, url, err := fetchGitHubAsset(runtime.GOARCH)
-	if err != nil {
-		// Fall back to direct URL if API is rate-limited.
+	// The asset URL is fixed and derivable, so the API call is only worth
+	// making for the tidier download link; failing it changes nothing.
+	_, url, err := fetchGitHubAsset(runtime.GOARCH)
+	if err != nil || url == "" {
 		url = shared.AgentGitHubBinaryURL(runtime.GOARCH)
-		stamp = time.Now().UTC().Format(time.RFC3339)
 	}
 	bin, err := u.binPath()
 	if err != nil {
@@ -164,9 +162,6 @@ func (u *Updater) Update() (string, error) {
 	}
 	if err := os.Rename(tmp, bin); err != nil {
 		return "", fmt.Errorf("swap binary: %w", err)
-	}
-	if stamp != "" {
-		_ = os.WriteFile(u.stampPath(bin), []byte(stamp+"\n"), 0o644)
 	}
 	u.restartSoon()
 	// The size is worth reporting: against a rolling tag it is the only thing
@@ -211,25 +206,37 @@ func (u *Updater) restartSoon() {
 	}()
 }
 
-// AutoUpdateLoop checks GitHub for a newer agent every 6 hours.
-func (u *Updater) AutoUpdateLoop() {
-	for range time.Tick(6 * time.Hour) {
-		bin, err := u.binPath()
-		if err != nil {
-			continue
-		}
-		stamp, err := u.remoteStamp()
-		if err != nil || stamp == "" {
-			continue
-		}
-		if prev, err := os.ReadFile(u.stampPath(bin)); err == nil && strings.TrimSpace(string(prev)) == stamp {
-			continue
-		}
-		if _, err := u.Update(); err == nil {
-			return
-		}
-	}
-}
+// AUTOMATIC UPDATES — parked until the update flow is designed properly.
+//
+// This ran unconditionally every six hours and was the reason the whole stamp
+// mechanism existed: something had to stop the timer re-downloading the same
+// asset forever. With the manual button now doing exactly what it says, none
+// of that has a reason to exist yet, and an agent that replaces its own binary
+// on a timer nobody asked for is a liability, not a feature.
+//
+// When this comes back it belongs behind the opt-in setting sketched in
+// app/lib/update/app_updater.dart, off by default, and it will need its own
+// way of deciding what "newer" means — the rolling agentbeta tag cannot answer
+// that, which is what broke the button in the first place.
+//
+// func (u *Updater) AutoUpdateLoop() {
+// 	for range time.Tick(6 * time.Hour) {
+// 		bin, err := u.binPath()
+// 		if err != nil {
+// 			continue
+// 		}
+// 		stamp, err := u.remoteStamp()
+// 		if err != nil || stamp == "" {
+// 			continue
+// 		}
+// 		if prev, err := os.ReadFile(u.stampPath(bin)); err == nil && strings.TrimSpace(string(prev)) == stamp {
+// 			continue
+// 		}
+// 		if _, err := u.Update(); err == nil {
+// 			return
+// 		}
+// 	}
+// }
 
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
