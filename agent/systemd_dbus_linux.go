@@ -32,11 +32,28 @@ type systemdBus struct {
 	// not something a status poll can cause. Cached well past the poll interval.
 	fileStates   map[string]string
 	fileStatesAt time.Time
+
+	// Main PIDs, keyed by unit, with the unit state they were read at. A
+	// running service keeps its PID until it restarts, and a restart changes
+	// the state, so an unchanged state means the cached PID is still right.
+	mainPIDs  map[string]cachedPID
+	mainPIDMu sync.Mutex
+}
+
+type cachedPID struct {
+	pid   int
+	state string // ActiveState|SubState when the PID was read
+	at    time.Time
 }
 
 var systemd = &systemdBus{}
 
-const unitFileCacheFor = 5 * time.Minute
+const (
+	unitFileCacheFor = 5 * time.Minute
+	// A PID is re-read this often even when the state looks unchanged, in case
+	// a restart landed entirely between two polls.
+	mainPIDCacheFor = 5 * time.Minute
+)
 
 // connect returns a live connection, dialing on first use and after a drop.
 // A failure is not fatal: callers fall back to systemctl, which keeps the agent
@@ -105,6 +122,39 @@ func (s *systemdBus) InvalidateUnitFiles() {
 	s.mu.Unlock()
 }
 
+// mainPID reads one property instead of a unit's whole property dictionary.
+//
+// GetUnitTypeProperties makes systemd build every Service property there is —
+// over a hundred of them, including cgroup accounting it has to go and read.
+// Asking that for every active unit on every poll put PID 1 itself at 80% CPU
+// while the agent sat at 2%: the cost lands in systemd, not in the caller.
+//
+// The answer is also cached against the unit's state, because a service keeps
+// its PID for as long as it stays up.
+func (s *systemdBus) mainPID(ctx context.Context, conn *sd.Conn, name, state string) int {
+	s.mainPIDMu.Lock()
+	if s.mainPIDs == nil {
+		s.mainPIDs = map[string]cachedPID{}
+	}
+	if c, ok := s.mainPIDs[name]; ok && c.state == state && time.Since(c.at) < mainPIDCacheFor {
+		s.mainPIDMu.Unlock()
+		return c.pid
+	}
+	s.mainPIDMu.Unlock()
+
+	pid := 0
+	if p, err := conn.GetUnitTypePropertyContext(ctx, name, "Service", "MainPID"); err == nil {
+		if v, ok := p.Value.Value().(uint32); ok {
+			pid = int(v)
+		}
+	}
+
+	s.mainPIDMu.Lock()
+	s.mainPIDs[name] = cachedPID{pid: pid, state: state, at: time.Now()}
+	s.mainPIDMu.Unlock()
+	return pid
+}
+
 // Units lists service units with their state and main PID. Returns ok=false
 // when the bus is unavailable, so the caller can fall back.
 func (s *systemdBus) Units() ([]shared.SystemdUnit, bool) {
@@ -136,17 +186,20 @@ func (s *systemdBus) Units() ([]shared.SystemdUnit, bool) {
 			SubState:    u.SubState,
 			Enabled:     fileStates[u.Name],
 		}
-		// Only running units have a process worth asking about, and each of
-		// these is one small property read rather than a spawn.
 		if u.ActiveState == "active" || u.ActiveState == "activating" {
-			if props, err := conn.GetUnitTypePropertiesContext(ctx, u.Name, "Service"); err == nil {
-				if pid, ok := props["MainPID"].(uint32); ok {
-					unit.MainPID = int(pid)
-				}
-			}
+			unit.MainPID = s.mainPID(ctx, conn, u.Name, u.ActiveState+"|"+u.SubState)
 		}
 		units = append(units, unit)
 	}
+
+	// Units that went away should not keep an entry forever.
+	s.mainPIDMu.Lock()
+	for name := range s.mainPIDs {
+		if !seen[name] {
+			delete(s.mainPIDs, name)
+		}
+	}
+	s.mainPIDMu.Unlock()
 
 	// Installed but not loaded: shown so the panel can still offer to start
 	// them, the way `list-units --all` used to.
