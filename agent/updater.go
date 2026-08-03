@@ -110,7 +110,18 @@ func (u *Updater) remoteStamp() (string, error) {
 	return stamp, nil
 }
 
-// Update downloads the latest binary from GitHub agentbeta and restarts.
+// Update downloads the binary from GitHub agentbeta and restarts.
+//
+// It always downloads. The release is a rolling tag that gets overwritten in
+// place, so "has the asset changed" is not a question its metadata can answer
+// honestly — a rebuilt binary under the same tag can keep the digest and the
+// timestamp it had before. Pressing Update used to compare a stored stamp and
+// return "already up to date" without fetching anything, which made the button
+// look broken precisely when it was needed.
+//
+// The stamp is still written, because AutoUpdateLoop uses it to avoid pulling
+// the same asset every six hours unprompted. That is a different question from
+// a person deliberately asking for the current build.
 func (u *Updater) Update() (string, error) {
 	stamp, url, err := fetchGitHubAsset(runtime.GOARCH)
 	if err != nil {
@@ -121,11 +132,6 @@ func (u *Updater) Update() (string, error) {
 	bin, err := u.binPath()
 	if err != nil {
 		return "", err
-	}
-	if stamp != "" {
-		if prev, err := os.ReadFile(u.stampPath(bin)); err == nil && strings.TrimSpace(string(prev)) == stamp {
-			return "already up to date (" + AgentVersion + ")", nil
-		}
 	}
 
 	client := &http.Client{Timeout: 3 * time.Minute}
@@ -163,7 +169,12 @@ func (u *Updater) Update() (string, error) {
 		_ = os.WriteFile(u.stampPath(bin), []byte(stamp+"\n"), 0o644)
 	}
 	u.restartSoon()
-	return fmt.Sprintf("updated from GitHub %s (%s), restarting", shared.AgentReleaseTag, shared.AgentGitHubAssetName(runtime.GOARCH)), nil
+	// The size is worth reporting: against a rolling tag it is the only thing
+	// distinguishing "a new build arrived" from "the same bytes came down
+	// again", and the answer decides whether to go looking further.
+	return fmt.Sprintf("downloaded %s from GitHub %s (%.1f MB), restarting",
+		shared.AgentGitHubAssetName(runtime.GOARCH), shared.AgentReleaseTag,
+		float64(n)/(1024*1024)), nil
 }
 
 // Rollback restores the previous binary and restarts.
