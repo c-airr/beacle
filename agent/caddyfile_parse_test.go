@@ -38,6 +38,22 @@ func TestMultipleDomainsInOneBlock(t *testing.T) {
 	}
 }
 
+// Caddy accepts both separators on the address line. A space-separated block
+// read as one hostname looks like a single-domain site, which would make the
+// form offer to "edit" it and rewrite two domains into one.
+func TestSpaceSeparatedAddresses(t *testing.T) {
+	blocks := parseCaddyfile("a.com www.a.com {\n\treverse_proxy localhost:3000\n}\n")
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1", len(blocks))
+	}
+	if got := blocks[0].Addresses; len(got) != 2 || got[0] != "a.com" || got[1] != "www.a.com" {
+		t.Fatalf("addresses = %v, want [a.com www.a.com]", got)
+	}
+	if editableByForm(blocks[0]) {
+		t.Error("a two-domain block must not be editable by the single-domain form")
+	}
+}
+
 func TestNestedBlocksDoNotEndTheSite(t *testing.T) {
 	// dash.* contains header{}, a matcher and two handle{} blocks. Naive brace
 	// counting would close the site at the first '}' and lose the rest.

@@ -17,6 +17,8 @@ type ProxyAdapter interface {
 	State() shared.ProxyState
 	AddSite(req shared.ProxySiteRequest) (shared.ProxySite, error)
 	UpdateSite(id string, req shared.ProxySiteRequest) (shared.ProxySite, error)
+	// UpdateSiteRaw writes a block verbatim, for config the form cannot model.
+	UpdateSiteRaw(id string, raw string) (shared.ProxySite, error)
 	DeleteSite(id string) error
 	Reload() error
 	Validate() shared.ProxyValidateResult
@@ -81,6 +83,14 @@ func (m *ProxyManager) UpdateSite(id string, req shared.ProxySiteRequest) (share
 		return shared.ProxySite{}, errNoProvider
 	}
 	return a.UpdateSite(id, req)
+}
+
+func (m *ProxyManager) UpdateSiteRaw(id, raw string) (shared.ProxySite, error) {
+	a := m.Active()
+	if a == nil {
+		return shared.ProxySite{}, errNoProvider
+	}
+	return a.UpdateSiteRaw(id, raw)
 }
 
 func (m *ProxyManager) DeleteSite(id string) error {

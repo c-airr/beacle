@@ -48,7 +48,45 @@ func (c *linuxCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 			Enabled:     enabled[f[0]],
 		})
 	}
+	attachMainPIDs(units)
 	return units, nil
+}
+
+// attachMainPIDs fills in the process behind each running unit, so the panel
+// can show a service's CPU and memory instead of a blank column. Only active
+// units are asked about — the rest have no process to point at, and the query
+// runs on every collection tick.
+func attachMainPIDs(units []shared.SystemdUnit) {
+	var names []string
+	for _, u := range units {
+		if u.ActiveState == "active" || u.ActiveState == "activating" {
+			names = append(names, u.Name)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	args := append([]string{"show", "--property=Id", "--property=MainPID", "--no-pager"}, names...)
+	out, err := exec.Command("systemctl", args...).Output()
+	if err != nil {
+		return // no PIDs is a missing column, not a failed collection
+	}
+	pids := map[string]int{}
+	var id string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "Id="):
+			id = strings.TrimPrefix(line, "Id=")
+		case strings.HasPrefix(line, "MainPID="):
+			if pid, err := strconv.Atoi(strings.TrimPrefix(line, "MainPID=")); err == nil && pid > 0 && id != "" {
+				pids[id] = pid
+			}
+		}
+	}
+	for i := range units {
+		units[i].MainPID = pids[units[i].Name]
+	}
 }
 
 func (c *linuxCollector) SystemdAction(unit, action string) (string, error) {
@@ -317,6 +355,35 @@ func (c *linuxCollector) ScreenStop(name string) error {
 		return nil
 	}
 	return fmt.Errorf("session %q not found", name)
+}
+
+// ScreenKill removes the session itself, along with whatever is running in it.
+// ScreenStop is the polite version that leaves the session open; this is the
+// one for a session you are finished with.
+func (c *linuxCollector) ScreenKill(name string) error {
+	if _, err := screenName(name); err != nil {
+		return err
+	}
+	sessions, _ := c.ScreenSessions()
+	found := false
+	for _, s := range sessions {
+		if s.Name == name {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("session %q not found", name)
+	}
+	out, err := exec.Command("screen", "-S", name, "-X", "quit").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("screen quit: %s", strings.TrimSpace(string(out)))
+	}
+	// screen leaves the socket behind when the session dies mid-detach, and a
+	// dead socket keeps showing up in the list as if the session were still
+	// there.
+	_ = exec.Command("screen", "-wipe").Run()
+	return nil
 }
 
 func (c *linuxCollector) ScreenLogs(name string) (string, error) {

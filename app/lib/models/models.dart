@@ -211,13 +211,18 @@ class DockerState {
 
 class SystemdUnit {
   final String name, description, loadState, activeState, subState, enabled;
+
+  /// The unit's process, so a service can be shown with the CPU and memory of
+  /// what it actually runs. 0 when the unit is not running.
+  final int mainPid;
   SystemdUnit.fromJson(Map<String, dynamic> j)
       : name = _s(j['name']),
         description = _s(j['description']),
         loadState = _s(j['load_state']),
         activeState = _s(j['active_state']),
         subState = _s(j['sub_state']),
-        enabled = _s(j['enabled']);
+        enabled = _s(j['enabled']),
+        mainPid = _i(j['main_pid']);
 }
 
 class ScreenSession {
@@ -231,6 +236,22 @@ class ScreenSession {
         created = _s(j['created']),
         command = _s(j['command']),
         attached = _b(j['attached']),
+        running = _b(j['running']);
+}
+
+/// A command started detached with nohup. No terminal to reattach to, so the
+/// agent remembers it — otherwise there would be no way to stop it later.
+class NohupJob {
+  final int pid;
+  final String name, command, dir, logFile, started;
+  final bool running;
+  NohupJob.fromJson(Map<String, dynamic> j)
+      : pid = _i(j['pid']),
+        name = _s(j['name']),
+        command = _s(j['command']),
+        dir = _s(j['dir']),
+        logFile = _s(j['log_file']),
+        started = _s(j['started']),
         running = _b(j['running']);
 }
 
@@ -280,6 +301,10 @@ class ProxySite {
 
   /// Where the site came from and whether the form may rewrite it.
   final bool managed, editable;
+
+  /// Set when the block was written by hand in the raw editor. The fields above
+  /// are then only a summary — the config is whatever is in [rawConfig].
+  final bool rawEdited;
   final String readOnlyReason, kind, tlsMode, sourceFile, rawConfig;
   final List<String> domains;
 
@@ -303,6 +328,7 @@ class ProxySite {
         headers = (j['headers'] as Map?)?.map((k, v) => MapEntry(k as String, '$v')) ?? {},
         managed = _b(j['managed']),
         editable = _b(j['editable']),
+        rawEdited = _b(j['raw_edited']),
         readOnlyReason = _s(j['read_only_reason']),
         kind = _s(j['kind']),
         tlsMode = _s(j['tls_mode']),

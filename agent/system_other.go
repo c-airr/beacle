@@ -287,6 +287,55 @@ func (c *devCollector) ScreenStop(name string) error {
 	return fmt.Errorf("session %q not found", name)
 }
 
+// The dev collector fakes nohup jobs in memory, the same way it fakes screen.
+var devNohup []shared.NohupJob
+
+func (c *devCollector) NohupJobs() ([]shared.NohupJob, error) { return devNohup, nil }
+
+func (c *devCollector) NohupStart(req shared.NohupStartRequest) (shared.NohupJob, error) {
+	for _, j := range devNohup {
+		if j.Name == req.Name && j.Running {
+			return shared.NohupJob{}, fmt.Errorf("job %q is already running", req.Name)
+		}
+	}
+	job := shared.NohupJob{
+		Name: req.Name, PID: 4200 + len(devNohup), Command: req.Command, Dir: req.Dir,
+		LogFile: "/var/log/beacle/" + req.Name + ".log",
+		Started: time.Now().UTC().Format(time.RFC3339), Running: true,
+	}
+	devNohup = append(devNohup, job)
+	return job, nil
+}
+
+func (c *devCollector) NohupStop(name string) error {
+	for i := range devNohup {
+		if devNohup[i].Name == name {
+			devNohup = append(devNohup[:i], devNohup[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("job %q not found", name)
+}
+
+func (c *devCollector) NohupLogs(name string) (string, error) {
+	for _, j := range devNohup {
+		if j.Name == name {
+			return "dev collector: fake output for " + j.Command, nil
+		}
+	}
+	return "", fmt.Errorf("job %q not found", name)
+}
+
+func (c *devCollector) ScreenKill(name string) error {
+	for i := range devScreens {
+		if devScreens[i].Name == name {
+			devScreens = append(devScreens[:i], devScreens[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("session %q not found", name)
+}
+
 func (c *devCollector) ScreenLogs(name string) (string, error) {
 	for _, s := range devScreens {
 		if s.Name == name {

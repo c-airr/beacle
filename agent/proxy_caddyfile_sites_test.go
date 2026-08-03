@@ -114,3 +114,23 @@ func TestMissingCaddyfileIsNotAnError(t *testing.T) {
 		t.Errorf("expected no sites, got %+v", got)
 	}
 }
+
+// The normal state of a server Beacle has never written to: beacle.d does not
+// exist yet, but the Caddyfile is full of sites. Those must still be listed,
+// otherwise the panel reports "no sites" for a box serving four domains.
+func TestLoadSitesWithoutBeacleDir(t *testing.T) {
+	src, err := os.ReadFile("testdata/Caddyfile")
+	if err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "Caddyfile")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a := &caddyAdapter{dir: filepath.Join(dir, "does-not-exist"), caddyfile: path}
+	if got := a.loadSites(); len(got) != 4 {
+		t.Fatalf("got %d sites, want 4 — a missing beacle.d hid the whole Caddyfile", len(got))
+	}
+}

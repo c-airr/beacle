@@ -44,9 +44,22 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
   late bool _accessLog = widget.existing?.accessLog ?? false;
   late Map<String, String> _headers = {...?widget.existing?.headers};
 
+  /// Raw mode edits the block as text instead of through the fields. It is the
+  /// only way to touch config the form cannot model, so sites flagged
+  /// non-editable open straight into it — as do sites already written by hand,
+  /// where regenerating from the fields would throw the user's work away.
+  late final _rawCtl = TextEditingController(
+      text: widget.existing != null && widget.existing!.rawConfig.isNotEmpty
+          ? widget.existing!.rawConfig
+          : _preview);
+  late bool _raw = widget.existing != null && (!widget.existing!.editable || widget.existing!.rawEdited);
+
   bool _advanced = false;
   bool _busy = false;
   String? _error;
+
+  /// Raw editing rewrites a block in place; it needs a site that already exists.
+  bool get _canEditRaw => widget.existing != null;
 
   @override
   void dispose() {
@@ -54,6 +67,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
     _upstream.dispose();
     _authUser.dispose();
     _authHash.dispose();
+    _rawCtl.dispose();
     super.dispose();
   }
 
@@ -65,7 +79,9 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
     return up;
   }
 
-  bool get _valid => _domain.text.trim().isNotEmpty && _upstream.text.trim().isNotEmpty;
+  bool get _valid => _raw
+      ? _rawCtl.text.trim().isNotEmpty
+      : _domain.text.trim().isNotEmpty && _upstream.text.trim().isNotEmpty;
 
   /// Preview of what lands in the site file. Kept in step with the agent's
   /// renderer — this is the whole point of a GUI over a config file.
@@ -115,6 +131,21 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
       _busy = true;
       _error = null;
     });
+    if (_raw) {
+      try {
+        widget.state.onUserAction();
+        await widget.state.api.proxyUpdateSiteRaw(widget.vps.id, widget.existing!.id, _rawCtl.text);
+        if (mounted) Navigator.pop(context, true);
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _error = '$e';
+            _busy = false;
+          });
+        }
+      }
+      return;
+    }
     final body = {
       'domain': _domain.text.trim(),
       'upstream': _upstream.text.trim(),
@@ -147,6 +178,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
 
   @override
   Widget build(BuildContext context) {
+    final notice = _modeNotice();
     return Dialog(
       child: Container(
         width: 720,
@@ -170,36 +202,17 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Editing a hand-written block replaces it with generated
-                    // config. Fine for a one-line proxy, destructive for
-                    // anything else — so say so before the first keystroke.
-                    if (widget.existing != null && !widget.existing!.managed) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: BeacleColors.warn.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: BeacleColors.warn.withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
+                    if (notice != null) notice,
+                    // The fields describe a site the form can generate. In raw
+                    // mode they no longer drive the save, so they stop
+                    // accepting input rather than quietly lying.
+                    IgnorePointer(
+                      ignoring: _raw,
+                      child: Opacity(
+                        opacity: _raw ? 0.4 : 1,
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.warning_amber_rounded, size: 16, color: BeacleColors.warn),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'This site lives in ${widget.existing!.sourceFile}. Saving moves it into '
-                                'Beacle\'s own config and rewrites the block from the fields above — '
-                                'anything not shown here is lost.',
-                                style: const TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.45),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     TextField(
                       controller: _domain,
                       autofocus: true,
@@ -299,11 +312,33 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                         onChanged: (h) => setState(() => _headers = h),
                       ),
                     ],
+                          ],
+                        ),
+                      ),
+                    ),
 
                     const SizedBox(height: 16),
-                    const Text('GENERATED CONFIG',
-                        style: TextStyle(
-                            fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
+                    Row(children: [
+                      Text(_raw ? 'SITE CONFIG' : 'GENERATED CONFIG',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: BeacleColors.textDim,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.4)),
+                      const Spacer(),
+                      // Sites the form cannot model have nothing to go back to,
+                      // so they stay in raw mode instead of offering a switch
+                      // that would rewrite them into something plainer.
+                      if (_canEditRaw && (widget.existing!.editable || widget.existing!.managed))
+                        SmallButton(
+                          _raw ? 'Back to form' : 'Edit as config',
+                          icon: _raw ? Icons.tune : Icons.code,
+                          onPressed: () => setState(() {
+                            _raw = !_raw;
+                            if (_raw) _rawCtl.text = _preview;
+                          }),
+                        ),
+                    ]),
                     const SizedBox(height: 6),
                     Container(
                       width: double.infinity,
@@ -311,12 +346,25 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                       decoration: BoxDecoration(
                         color: BeacleColors.bg,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: BeacleColors.border),
+                        border: Border.all(color: _raw ? BeacleColors.accent : BeacleColors.border),
                       ),
-                      child: SelectableText(
-                        _preview,
-                        style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, height: 1.5),
-                      ),
+                      child: _raw
+                          ? TextField(
+                              controller: _rawCtl,
+                              maxLines: null,
+                              minLines: 8,
+                              style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, height: 1.5),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            )
+                          : SelectableText(
+                              _preview,
+                              style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, height: 1.5),
+                            ),
                     ),
                   ],
                 ),
@@ -346,6 +394,65 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Says what Save is about to do, which is a different answer per mode: the
+  /// form rewrites the block from the fields, raw mode swaps the text in place.
+  Widget? _modeNotice() {
+    final s = widget.existing;
+    if (_raw) {
+      if (s == null) return null;
+      return _notice(
+        Icons.code,
+        BeacleColors.accent,
+        'Saved exactly as written, into ${s.sourceFile.isEmpty ? 'this site\'s config file' : s.sourceFile}. '
+        'Only this block changes — the rest of the file is left alone. Caddy checks the result '
+        'first, and if it will not load, the previous config is put back.',
+      );
+    }
+    if (s != null && !s.managed) {
+      return _notice(
+        Icons.warning_amber_rounded,
+        BeacleColors.warn,
+        'This site lives in ${s.sourceFile}. Saving moves it into Beacle\'s own config and '
+        'rewrites the block from the fields above — anything not shown here is lost. '
+        'Use "Edit as config" below to change it where it is instead.',
+      );
+    }
+    // Going back to the form on a block someone wrote by hand throws that work
+    // away just as surely, so it gets the same warning.
+    if (s != null && s.rawEdited) {
+      return _notice(
+        Icons.warning_amber_rounded,
+        BeacleColors.warn,
+        'This block was written by hand. Saving from the form rebuilds it from these fields '
+        'and discards everything you typed — switch back to "Edit as config" to keep it.',
+      );
+    }
+    return null;
+  }
+
+  Widget _notice(IconData icon, Color color, String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 11, color: color, height: 1.45)),
+          ),
+        ],
       ),
     );
   }

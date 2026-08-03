@@ -21,10 +21,12 @@ Future<ScreenLaunchSpec?> showScreenLauncher(
   required AppState state,
   required String vpsId,
   String? fixedName,
+  bool forNohup = false,
 }) {
   return showDialog<ScreenLaunchSpec>(
     context: context,
-    builder: (_) => _ScreenLauncherDialog(state: state, vpsId: vpsId, fixedName: fixedName),
+    builder: (_) => _ScreenLauncherDialog(
+        state: state, vpsId: vpsId, fixedName: fixedName, forNohup: forNohup),
   );
 }
 
@@ -46,7 +48,12 @@ class _ScreenLauncherDialog extends StatefulWidget {
   final AppState state;
   final String vpsId;
   final String? fixedName;
-  const _ScreenLauncherDialog({required this.state, required this.vpsId, this.fixedName});
+
+  /// Same picker, different destination: nohup has no session to name, so the
+  /// name becomes the job's label and its log file.
+  final bool forNohup;
+  const _ScreenLauncherDialog(
+      {required this.state, required this.vpsId, this.fixedName, this.forNohup = false});
 
   @override
   State<_ScreenLauncherDialog> createState() => _ScreenLauncherDialogState();
@@ -143,8 +150,9 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
           children: [
             Row(
               children: [
-                const Expanded(
-                  child: Text('Run in a screen session', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: Text(widget.forNohup ? 'Run detached with nohup' : 'Run in a screen session',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
                 IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
               ],
@@ -225,7 +233,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                   child: TextField(
                     controller: _nameCtrl,
                     enabled: widget.fixedName == null,
-                    decoration: const InputDecoration(labelText: 'Session name'),
+                    decoration: InputDecoration(labelText: widget.forNohup ? 'Job name' : 'Session name'),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
@@ -263,11 +271,17 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                 border: Border.all(color: BeacleColors.border),
               ),
               child: Text(
-                _valid
-                    ? 'screen -S ${_nameCtrl.text.trim()}\n'
-                        '${_cdLine.isEmpty ? '' : '$_cdLine\n'}'
-                        '${_cmdCtrl.text.trim()}'
-                    : 'Name the session and enter a command.',
+                !_valid
+                    ? (widget.forNohup
+                        ? 'Name the job and enter a command.'
+                        : 'Name the session and enter a command.')
+                    : widget.forNohup
+                        ? '${_cdLine.isEmpty ? '' : '$_cdLine\n'}'
+                            'nohup ${_cmdCtrl.text.trim()} '
+                            '> /var/log/beacle/${_nameCtrl.text.trim()}.log 2>&1 &'
+                        : 'screen -S ${_nameCtrl.text.trim()}\n'
+                            '${_cdLine.isEmpty ? '' : '$_cdLine\n'}'
+                            '${_cmdCtrl.text.trim()}',
                 style: TextStyle(
                   fontFamily: 'Consolas',
                   fontSize: 11,

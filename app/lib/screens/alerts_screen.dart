@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../alert_sound.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -48,6 +49,29 @@ class _AlertsScreenState extends State<AlertsScreen> {
               style: TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
             ),
             const Spacer(),
+            IconButton(
+              tooltip: !AlertSound.supported
+                  ? 'Alert sounds are not available on this platform'
+                  : AlertSound.enabled
+                      ? 'Alert sound on — click to silence'
+                      : 'Alert sound off — click to enable',
+              icon: Icon(
+                AlertSound.enabled && AlertSound.supported ? Icons.volume_up : Icons.volume_off,
+                size: 18,
+                color: AlertSound.enabled && AlertSound.supported
+                    ? BeacleColors.textDim
+                    : BeacleColors.border,
+              ),
+              onPressed: !AlertSound.supported
+                  ? null
+                  : () => setState(() {
+                        AlertSound.setEnabled(!AlertSound.enabled);
+                        // Play the sound being switched on, so the volume is a
+                        // known quantity before an actual outage uses it.
+                        if (AlertSound.enabled) AlertSound.play('warning');
+                      }),
+            ),
+            const SizedBox(width: 4),
             if (active.isNotEmpty)
               SmallButton(
                 'Mark all seen',
@@ -258,6 +282,8 @@ class _AlertRow extends StatelessWidget {
         'docker_crash' => Icons.view_in_ar,
         'proxy_error' => Icons.alt_route,
         'agent_offline' => Icons.cloud_off,
+        // The host answers, the agent does not — a restart, not a dead server.
+        'agent_down' => Icons.sensors_off,
         _ => Icons.warning_amber_rounded,
       };
 

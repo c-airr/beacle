@@ -180,8 +180,53 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, map[string]any{"ok": true})
 	}))
+	mux.HandleFunc("DELETE /api/services/screen/{name}", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.ScreenKill(r.PathValue("name")); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
 	mux.HandleFunc("GET /api/services/screen/{name}/logs", a(func(w http.ResponseWriter, r *http.Request) {
 		logs, err := s.col.ScreenLogs(r.PathValue("name"))
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]string{"logs": logs})
+	}))
+
+	// nohup jobs
+	mux.HandleFunc("GET /api/services/nohup", a(func(w http.ResponseWriter, r *http.Request) {
+		jobs, err := s.col.NohupJobs()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, jobs)
+	}))
+	mux.HandleFunc("POST /api/services/nohup", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.NohupStartRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		job, err := s.col.NohupStart(req)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, job)
+	}))
+	mux.HandleFunc("DELETE /api/services/nohup/{name}", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.NohupStop(r.PathValue("name")); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("GET /api/services/nohup/{name}/logs", a(func(w http.ResponseWriter, r *http.Request) {
+		logs, err := s.col.NohupLogs(r.PathValue("name"))
 		if err != nil {
 			jsonErr(w, 400, err.Error())
 			return
@@ -225,6 +270,22 @@ func (s *APIServer) Routes() http.Handler {
 		site, err := s.proxy.UpdateSite(r.PathValue("id"), req)
 		if err != nil {
 			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, site)
+	}))
+	// Raw block editing. The id travels in the body because sites read out of
+	// the Caddyfile carry a "caddyfile:<domain>" id, which has no business
+	// being escaped through two hops of URL path.
+	mux.HandleFunc("PUT /api/proxy/raw", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.ProxyRawRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" {
+			jsonErr(w, 400, "site id and raw config are required")
+			return
+		}
+		site, err := s.proxy.UpdateSiteRaw(req.ID, req.Raw)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
 			return
 		}
 		jsonOut(w, 200, site)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +27,83 @@ type linuxCollector struct {
 	prevNet       map[string][2]uint64 // iface -> rx, tx
 	prevNetAt     time.Time
 	docker        *dockerClient
+
+	// Per-process CPU time from the last collection, so usage can be measured
+	// as a delta instead of read off ps as a lifetime average.
+	prevProcTicks map[int]uint64
+	prevProcAt    time.Time
+}
+
+// USER_HZ. The kernel reports process CPU time in these units and it has been
+// 100 on every mainstream Linux build for decades; sysconf(_SC_CLK_TCK) would
+// need cgo to read properly.
+const clockTicksPerSec = 100.0
+
+// procCPUDeltas measures what each process is doing *now*, from the change in
+// its CPU time since the previous collection.
+//
+// This exists because ps reports pcpu as an average over the whole lifetime of
+// the process. For anything long-running that number stops moving: a service
+// hammering the box for the last minute still shows the 0.3% it averaged over
+// three weeks of uptime, and sorting by CPU sorts by history instead of by
+// what is happening. htop reads the same counters this does.
+//
+// Returns nil on the first call, when there is no baseline to compare against.
+func (c *linuxCollector) procCPUDeltas() map[int]float64 {
+	cur := map[int]uint64{}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue // not a process directory
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/stat")
+		if err != nil {
+			continue // process exited between readdir and read
+		}
+		// The comm field is wrapped in parentheses and may contain spaces or
+		// parentheses of its own, so everything before the last ')' is skipped.
+		close := strings.LastIndexByte(string(b), ')')
+		if close < 0 {
+			continue
+		}
+		fields := strings.Fields(string(b)[close+1:])
+		// After comm the fields are: state, ppid, pgrp, session, tty_nr,
+		// tpgid, flags, minflt, cminflt, majflt, cmajflt, utime, stime.
+		if len(fields) < 13 {
+			continue
+		}
+		utime, err1 := strconv.ParseUint(fields[11], 10, 64)
+		stime, err2 := strconv.ParseUint(fields[12], 10, 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		cur[pid] = utime + stime
+	}
+
+	c.mu.Lock()
+	prev, prevAt := c.prevProcTicks, c.prevProcAt
+	c.prevProcTicks, c.prevProcAt = cur, time.Now()
+	c.mu.Unlock()
+
+	elapsed := time.Since(prevAt).Seconds()
+	if prev == nil || elapsed <= 0 {
+		return nil
+	}
+
+	out := make(map[int]float64, len(cur))
+	for pid, ticks := range cur {
+		was, ok := prev[pid]
+		if !ok || ticks < was {
+			continue // new process, or a recycled PID: no honest delta yet
+		}
+		pct := (float64(ticks-was) / clockTicksPerSec) / elapsed * 100
+		out[pid] = pct
+	}
+	return out
 }
 
 func newCollector(cfg *Config) Collector {
@@ -391,10 +469,14 @@ func (c *linuxCollector) Metrics() (shared.SystemMetrics, error) {
 // --- Processes ----------------------------------------------------------------
 
 func (c *linuxCollector) Processes() ([]shared.ProcessInfo, error) {
-	out, err := exec.Command("ps", "-eo", "pid,user,pcpu,pmem,rss,stat,comm,args", "--sort=-pcpu").Output()
+	// ps still supplies the inventory — user names, RSS and the full command
+	// line are all fiddlier to assemble from /proc than they are worth.
+	out, err := exec.Command("ps", "-eo", "pid,user,pcpu,pmem,rss,stat,comm,args").Output()
 	if err != nil {
 		return nil, err
 	}
+	live := c.procCPUDeltas()
+
 	lines := strings.Split(string(out), "\n")
 	var procs []shared.ProcessInfo
 	for i, line := range lines {
@@ -409,6 +491,11 @@ func (c *linuxCollector) Processes() ([]shared.ProcessInfo, error) {
 		cpu, _ := strconv.ParseFloat(fields[2], 64)
 		mem, _ := strconv.ParseFloat(fields[3], 64)
 		rss, _ := strconv.ParseUint(fields[4], 10, 64)
+		// The lifetime average is only a seed for the very first collection,
+		// when there is no previous sample to diff against.
+		if pct, ok := live[pid]; ok {
+			cpu = pct
+		}
 		procs = append(procs, shared.ProcessInfo{
 			PID:        pid,
 			User:       fields[1],
@@ -419,9 +506,14 @@ func (c *linuxCollector) Processes() ([]shared.ProcessInfo, error) {
 			Name:       fields[6],
 			Command:    strings.Join(fields[7:], " "),
 		})
-		if len(procs) >= 100 {
-			break
-		}
+	}
+
+	// Sorting has to happen after the real numbers are in: ps --sort=-pcpu
+	// would have ranked by lifetime average and the busiest process right now
+	// could fall outside the cap entirely.
+	sort.Slice(procs, func(i, j int) bool { return procs[i].CPUPercent > procs[j].CPUPercent })
+	if len(procs) > 100 {
+		procs = procs[:100]
 	}
 	return procs, nil
 }

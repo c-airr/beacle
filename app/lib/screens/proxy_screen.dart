@@ -76,7 +76,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
               }),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: proxy.provider == 'none' ? null : () => _openSiteForm(state, vps),
+                onPressed: _hasProvider(proxy) ? () => _openSiteForm(state, vps) : null,
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add site', style: TextStyle(fontSize: 12)),
               ),
@@ -98,13 +98,19 @@ class _ProxyScreenState extends State<ProxyScreen> {
     );
   }
 
+  /// An empty provider is not "none" — it is a snapshot that has not carried
+  /// proxy state yet. Treating the two the same makes a server that is still
+  /// connecting look like a server with no reverse proxy installed.
+  bool _hasProvider(ProxyState p) => p.provider == 'caddy' || p.provider == 'npm';
+
   Widget _providerBadge(ProxyState proxy) {
     final label = switch (proxy.provider) {
       'caddy' => 'Caddy ${proxy.version}',
       'npm' => 'Nginx Proxy Manager',
-      _ => 'No provider detected',
+      'none' => 'No provider detected',
+      _ => 'Waiting for agent data',
     };
-    final color = proxy.provider == 'none'
+    final color = !_hasProvider(proxy)
         ? BeacleColors.textDim
         : proxy.running
             ? BeacleColors.ok
@@ -120,7 +126,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
         Icon(Icons.circle, size: 8, color: color),
         const SizedBox(width: 6),
         Text(label, style: TextStyle(fontSize: 12, color: color)),
-        if (proxy.provider != 'none' && !proxy.running)
+        if (_hasProvider(proxy) && !proxy.running)
           const Text('  (not running)', style: TextStyle(fontSize: 12, color: BeacleColors.err)),
       ]),
     );
@@ -130,6 +136,12 @@ class _ProxyScreenState extends State<ProxyScreen> {
     if (proxy.provider == 'none') {
       return const Center(
         child: Text('Install Caddy or Nginx Proxy Manager on this VPS\nto manage reverse proxy sites.',
+            textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
+      );
+    }
+    if (!_hasProvider(proxy)) {
+      return const Center(
+        child: Text('Waiting for proxy data from the agent…',
             textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
       );
     }
@@ -188,15 +200,15 @@ class _ProxyScreenState extends State<ProxyScreen> {
                       tooltip: 'View config',
                       onPressed: () => _showRawConfig(s),
                     ),
+                  // Everything is editable now: what the form cannot model, the
+                  // raw editor can, so the button opens straight into it
+                  // instead of being dead.
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    icon: Icon(s.editable || s.managed ? Icons.edit_outlined : Icons.code, size: 16),
                     tooltip: s.editable || s.managed
                         ? 'Edit'
-                        : 'Read-only: ${s.readOnlyReason}',
-                    color: (s.editable || s.managed) ? null : BeacleColors.textDim,
-                    onPressed: (s.editable || s.managed)
-                        ? () => _openSiteForm(state, vps, existing: s)
-                        : null,
+                        : 'Edit as config — ${s.readOnlyReason}',
+                    onPressed: () => _openSiteForm(state, vps, existing: s),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 16, color: BeacleColors.err),
@@ -269,12 +281,26 @@ class _ProxyScreenState extends State<ProxyScreen> {
   /// Distinguishes sites Beacle owns from ones parsed out of the hand-written
   /// Caddyfile, because only the former can be rewritten from the form.
   Widget _sourceChip(ProxySite s) {
-    if (s.managed) return const SizedBox.shrink();
+    if (s.managed) {
+      if (!s.rawEdited) return const SizedBox.shrink();
+      // A managed site written by hand is no longer generated from the form —
+      // worth saying, because the form is what everything else here implies.
+      return _chip('hand-edited', 'This block was written in the raw editor. '
+          'Beacle saves it verbatim and does not regenerate it from the fields.');
+    }
     final tls = s.tlsMode == 'internal' ? ' · tls internal' : '';
-    return Tooltip(
-      message: s.editable
+    return _chip(
+      s.editable ? 'Caddyfile$tls' : 'Caddyfile · config only$tls',
+      s.editable
           ? 'Read from ${s.sourceFile}. Simple enough to edit here.'
-          : 'Read from ${s.sourceFile}. ${s.readOnlyReason}',
+          : 'Read from ${s.sourceFile}. ${s.readOnlyReason} '
+              'The form cannot rebuild it, so editing opens the raw config instead.',
+    );
+  }
+
+  Widget _chip(String label, String tooltip) {
+    return Tooltip(
+      message: tooltip,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -282,10 +308,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: BeacleColors.border),
         ),
-        child: Text(
-          s.editable ? 'Caddyfile$tls' : 'Caddyfile · read-only$tls',
-          style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
-        ),
+        child: Text(label, style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
       ),
     );
   }

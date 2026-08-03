@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 
+import '../alert_sound.dart';
 import '../api/api_client.dart';
 import '../config.dart';
 import '../models/models.dart';
@@ -68,16 +69,42 @@ class AppState extends ChangeNotifier {
       _muted.addAll(saved.whereType<String>());
     }
     animationsEnabled = _settings.raw['animations'] != false;
+    startMinimised = _settings.raw['start_minimised'] == true;
+    closeBehaviour = _settings.raw['close_behaviour'] as String? ?? 'tray';
   }
 
-  /// Turning this off drops hover/selection transitions. Kept in AppState so
-  /// every widget reads one flag instead of each screen tracking its own.
+  /// Hover/selection transitions. No longer exposed as a setting — it stayed
+  /// on for everyone anyway, and the flag is what widgets read.
   bool animationsEnabled = true;
 
   void setAnimationsEnabled(bool on) {
     if (animationsEnabled == on) return;
     animationsEnabled = on;
     _settings.raw['animations'] = on;
+    _settings.save();
+    notifyListeners();
+  }
+
+  /// Come up in the tray rather than on screen. Stored now, acted on once the
+  /// tray exists — see the note in the Tray settings card.
+  bool startMinimised = false;
+
+  void setStartMinimised(bool on) {
+    if (startMinimised == on) return;
+    startMinimised = on;
+    _settings.raw['start_minimised'] = on;
+    _settings.save();
+    notifyListeners();
+  }
+
+  /// What closing the window does: 'tray' keeps the backend and its alerts
+  /// alive, 'quit' shuts the whole thing down.
+  String closeBehaviour = 'tray';
+
+  void setCloseBehaviour(String v) {
+    if (closeBehaviour == v) return;
+    closeBehaviour = v;
+    _settings.raw['close_behaviour'] = v;
     _settings.save();
     notifyListeners();
   }
@@ -281,6 +308,9 @@ class AppState extends ChangeNotifier {
         final a = Alert.fromJson(payload as Map<String, dynamic>);
         alerts.insert(0, a);
         alertStream.add(a);
+        // Muted conditions stay silent: muting is a promise to stop bringing
+        // this one up, and a chime is bringing it up.
+        if (!a.resolved && !isMuted(a)) AlertSound.play(a.severity);
         break;
       case 'link_update':
         final l = VpsLink.fromJson(payload as Map<String, dynamic>);

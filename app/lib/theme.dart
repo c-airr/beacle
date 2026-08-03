@@ -24,6 +24,10 @@ class BeacleColors {
         return ok;
       case 'high_load':
         return warn;
+      // The machine is up, its agent is not. Amber, because it is degraded
+      // rather than gone — red here would read as "the server died".
+      case 'agent_down':
+        return warn;
       case 'offline':
         return err;
       default:

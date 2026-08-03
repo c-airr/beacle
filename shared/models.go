@@ -180,6 +180,10 @@ type SystemdUnit struct {
 	ActiveState string `json:"active_state"` // active | inactive | failed | activating
 	SubState    string `json:"sub_state"`    // running | dead | exited | ...
 	Enabled     string `json:"enabled"`
+	// MainPID lets the panel join a unit to its process, which is the only way
+	// a service can show CPU and memory next to a raw process. 0 when the unit
+	// is not running or systemd does not report one.
+	MainPID int `json:"main_pid,omitempty"`
 }
 
 type ScreenSession struct {
@@ -217,6 +221,25 @@ type FSListing struct {
 // ScreenStartRequest launches Command inside a screen session named Name,
 // after changing into Dir.
 type ScreenStartRequest struct {
+	Name    string `json:"name"`
+	Dir     string `json:"dir"`
+	Command string `json:"command"`
+}
+
+// NohupJob is a command started detached from the panel. screen keeps a
+// terminal you can reattach to; nohup does not, so the agent has to remember
+// the job itself or there would be no way to find it again, let alone stop it.
+type NohupJob struct {
+	Name    string `json:"name"`
+	PID     int    `json:"pid"`
+	Command string `json:"command"`
+	Dir     string `json:"dir"`
+	LogFile string `json:"log_file"`
+	Started string `json:"started"`
+	Running bool   `json:"running"`
+}
+
+type NohupStartRequest struct {
 	Name    string `json:"name"`
 	Dir     string `json:"dir"`
 	Command string `json:"command"`
@@ -308,6 +331,10 @@ type ProxySite struct {
 	// RawConfig is the block verbatim, so the panel can show exactly what is
 	// deployed without pretending to understand it.
 	RawConfig string `json:"raw_config,omitempty"`
+	// RawEdited marks a site whose block was written by hand in the raw editor.
+	// Its file is the source of truth, not the fields above — the form must not
+	// quietly regenerate it from them.
+	RawEdited bool `json:"raw_edited,omitempty"`
 
 	// Extra carries provider specific settings (NPM's block-exploits, etc).
 	Extra map[string]string `json:"extra,omitempty"`
@@ -335,6 +362,14 @@ type ProxySiteRequest struct {
 	BasicAuthHash string            `json:"basic_auth_hash,omitempty"`
 	AccessLog     bool              `json:"access_log,omitempty"`
 	Headers       map[string]string `json:"headers,omitempty"`
+}
+
+// ProxyRawRequest carries one site block exactly as the user typed it. This is
+// the escape hatch for config the form cannot model; the agent validates it
+// with Caddy before it is allowed anywhere near the live file.
+type ProxyRawRequest struct {
+	ID  string `json:"id"`
+	Raw string `json:"raw"`
 }
 
 type ProxyValidateResult struct {
@@ -459,6 +494,10 @@ const (
 	VPSOffline  VPSStatus = "offline"
 	VPSHighLoad VPSStatus = "high_load"
 	VPSPending  VPSStatus = "pending" // created, agent never connected
+	// VPSAgentDown means the machine answers over Tailscale but the agent is
+	// not reporting. That is a service to restart, not a server that died, and
+	// the two call for completely different reactions at 3am.
+	VPSAgentDown VPSStatus = "agent_down"
 )
 
 type VPS struct {
@@ -530,6 +569,9 @@ const (
 	AlertDockerCrash  AlertType = "docker_crash"
 	AlertProxyError   AlertType = "proxy_error"
 	AlertAgentOffline AlertType = "agent_offline"
+	// AlertAgentDown is raised when the host still answers on its Tailscale
+	// address but the agent stopped reporting.
+	AlertAgentDown AlertType = "agent_down"
 )
 
 type Alert struct {

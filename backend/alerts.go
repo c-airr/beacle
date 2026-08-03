@@ -23,6 +23,13 @@ type AlertEngine struct {
 	// previous per-VPS state used for transition detection
 	prevContainers map[string]map[string]shared.ContainerInfo // vps -> containerID -> info
 	prevServices   map[string]map[string]string               // vps -> unit -> active_state
+	// reach caches the Tailscale probe per VPS; see hostReachable.
+	reach map[string]reachProbe
+}
+
+type reachProbe struct {
+	up bool
+	at time.Time
 }
 
 func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
@@ -33,7 +40,25 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		since:          map[string]time.Time{},
 		prevContainers: map[string]map[string]shared.ContainerInfo{},
 		prevServices:   map[string]map[string]string{},
+		reach:          map[string]reachProbe{},
 	}
+}
+
+// hostReachable probes a VPS at most every 30 s. WatchOffline ticks every three
+// seconds, and shelling out to tailscale that often for a box that is simply
+// gone costs far more than it tells us.
+func (e *AlertEngine) hostReachable(id, host string) bool {
+	e.mu.Lock()
+	c, ok := e.reach[id]
+	e.mu.Unlock()
+	if ok && time.Since(c.at) < 30*time.Second {
+		return c.up
+	}
+	up := tailscaleReachable(host)
+	e.mu.Lock()
+	e.reach[id] = reachProbe{up: up, at: time.Now()}
+	e.mu.Unlock()
+	return up
 }
 
 func (e *AlertEngine) SetAgentHub(h *AgentHub) { e.agentHub = h }
@@ -143,12 +168,11 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 
 	// Proxy errors
 	if snap.Proxy.Provider != shared.ProxyProviderNone {
-		if !snap.Proxy.Running {
-			e.fire(vps, shared.AlertProxyError, shared.SeverityCritical, "down",
-				fmt.Sprintf("Reverse proxy (%s) is not running", snap.Proxy.Provider))
-		} else {
-			e.clear(vps.ID, shared.AlertProxyError, "down")
-		}
+		// A stopped proxy is deliberately not an alert. Detection keys off the
+		// binary being installed, so a box with Caddy sitting unused — or one
+		// where the proxy is simply not meant to run — would page the user
+		// forever about a service they never asked to have running.
+		e.clear(vps.ID, shared.AlertProxyError, "down")
 		if snap.Proxy.LastError != "" {
 			e.fire(vps, shared.AlertProxyError, shared.SeverityWarning, "err", snap.Proxy.LastError)
 		} else {
@@ -169,31 +193,53 @@ func (e *AlertEngine) WatchOffline() {
 			}
 			live := e.agentHub != nil && e.agentHub.Connected(v.ID)
 			if live {
-				if v.Status == shared.VPSOffline {
+				if v.Status == shared.VPSOffline || v.Status == shared.VPSAgentDown {
 					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
 						en.VPS.Status = shared.VPSOnline
 						en.VPS.LastSeen = time.Now().UTC()
 					})
 					e.mu.Lock()
 					e.clear(v.ID, shared.AlertAgentOffline, "")
+					e.clear(v.ID, shared.AlertAgentDown, "")
+					delete(e.reach, v.ID)
 					e.mu.Unlock()
 					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 				}
 				continue
 			}
-			if v.Status != shared.VPSOffline {
+			if v.Status != shared.VPSOffline && v.Status != shared.VPSAgentDown {
 				e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
 					en.VPS.Status = shared.VPSOffline
 				})
 				e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 			}
 			// Socket gone for longer than the grace window: this is a real
-			// outage, not a reconnect. Alert once and drop the stale snapshot.
+			// outage, not a reconnect. Which outage it is decides what the user
+			// should go and do, so ask the tailnet before saying the box died —
+			// a crashed agent on a healthy server is a restart, not a rescue.
 			if time.Since(v.LastSeen) > shared.OfflineAfterSec*time.Second {
 				e.store.ClearSnapshot(v.ID)
+				hostUp := e.hostReachable(v.ID, v.Host)
+
+				want := shared.VPSOffline
+				if hostUp {
+					want = shared.VPSAgentDown
+				}
+				if v.Status != want {
+					e.store.UpdateVPS(v.ID, func(en *VPSEntry) { en.VPS.Status = want })
+					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+				}
+
 				e.mu.Lock()
-				e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
-					"Agent stopped reporting - VPS offline")
+				if hostUp {
+					e.clear(v.ID, shared.AlertAgentOffline, "")
+					e.fire(v, shared.AlertAgentDown, shared.SeverityCritical, "",
+						"Agent is not responding — the VPS itself answers on Tailscale")
+				} else {
+					e.clear(v.ID, shared.AlertAgentDown, "")
+					e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
+						"VPS offline — no answer on its Tailscale address")
+				}
 				e.mu.Unlock()
 			}
 		}

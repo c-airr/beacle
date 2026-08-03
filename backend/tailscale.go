@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // TailscaleDevice is one node visible in the local tailnet.
@@ -65,6 +67,41 @@ func tailscaleStatus() ([]TailscaleDevice, error) {
 		})
 	}
 	return devices, nil
+}
+
+// tailscaleReachable answers the only question that matters when an agent goes
+// quiet: is the machine still there? `tailscale ping` goes end to end through
+// the tailnet, so a reply means the host is up and it is the agent that died.
+//
+// The control plane's Online flag is the fallback, not the first choice: it
+// says the node has a session with the coordination server, which can lag a
+// machine that has already gone away.
+func tailscaleReachable(ip string) bool {
+	if strings.TrimSpace(ip) == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "tailscale", "ping", "--c", "1", "--timeout", "3s", ip).Run(); err == nil {
+		return true
+	}
+	if ctx.Err() != nil {
+		return false // timed out: treat as unreachable rather than guessing
+	}
+	devs, err := tailscaleStatus()
+	if err != nil {
+		// No Tailscale CLI at all. Claiming the host is down would turn every
+		// agent restart into a fake outage, so say nothing conclusive.
+		return false
+	}
+	for _, d := range devs {
+		for _, addr := range d.IPs {
+			if addr == ip {
+				return d.Online
+			}
+		}
+	}
+	return false
 }
 
 func tailscaleSelfIPv4() string {

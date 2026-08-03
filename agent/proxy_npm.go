@@ -229,6 +229,12 @@ func (a *npmAdapter) UpdateSite(id string, req shared.ProxySiteRequest) (shared.
 	return a.toSite(updated), nil
 }
 
+// UpdateSiteRaw has nothing to write to: NPM keeps its hosts in a database and
+// generates the nginx config itself, so there is no block to hand-edit here.
+func (a *npmAdapter) UpdateSiteRaw(id, raw string) (shared.ProxySite, error) {
+	return shared.ProxySite{}, fmt.Errorf("raw config editing is only available for Caddy")
+}
+
 func (a *npmAdapter) DeleteSite(id string) error {
 	return a.do(http.MethodDelete, "/api/nginx/proxy-hosts/"+id, nil, nil)
 }

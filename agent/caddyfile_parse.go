@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -11,6 +12,11 @@ type caddyBlock struct {
 	Addresses []string // e.g. ["discordbothosting.pl", "www.discordbothosting.pl"]
 	Body      string   // inside the braces, original formatting
 	Raw       string   // the whole block including the address line
+
+	// StartLine/EndLine locate the block in the file it came from, so one block
+	// can be rewritten without reformatting a single byte of the rest.
+	StartLine int
+	EndLine   int
 }
 
 // stripComments removes `#` comments that are not inside a quoted string.
@@ -44,8 +50,9 @@ func parseCaddyfile(src string) []caddyBlock {
 	var body []string
 	var raw []string
 	depth := 0
+	start := 0
 
-	for _, line := range lines {
+	for i, line := range lines {
 		code := strings.TrimSpace(stripComments(line))
 
 		if depth == 0 {
@@ -62,6 +69,7 @@ func parseCaddyfile(src string) []caddyBlock {
 				depth = open
 				raw = []string{line}
 				body = nil
+				start = i
 				continue
 			}
 			// Global options block or a stray directive — skip it.
@@ -76,6 +84,8 @@ func parseCaddyfile(src string) []caddyBlock {
 				Addresses: header,
 				Body:      strings.Join(body, "\n"),
 				Raw:       strings.Join(raw, "\n"),
+				StartLine: start,
+				EndLine:   i,
 			})
 			depth = 0
 			header, body, raw = nil, nil, nil
@@ -87,14 +97,40 @@ func parseCaddyfile(src string) []caddyBlock {
 }
 
 // splitAddresses turns "a.com, www.a.com" into its parts, dropping empties.
+// Caddy separates site addresses with commas *or* plain whitespace, so both
+// have to split — otherwise "a.com www.a.com" reads as one absurd hostname and
+// the block looks single-domain to editableByForm.
 func splitAddresses(addr string) []string {
 	var out []string
-	for _, part := range strings.Split(addr, ",") {
+	for _, part := range strings.FieldsFunc(addr, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	}) {
 		if p := strings.TrimSpace(part); p != "" {
 			out = append(out, p)
 		}
 	}
 	return out
+}
+
+// replaceBlock swaps one top-level block for text the user wrote, leaving every
+// other line of the file byte for byte as it was. The rest of a hand-written
+// Caddyfile is not ours to reformat.
+func replaceBlock(src string, blk caddyBlock, raw string) (string, error) {
+	lines := strings.Split(src, "\n")
+	if blk.StartLine < 0 || blk.EndLine < blk.StartLine || blk.EndLine >= len(lines) {
+		return "", fmt.Errorf("block is no longer where it was parsed from — reload and try again")
+	}
+	out := make([]string, 0, len(lines))
+	out = append(out, lines[:blk.StartLine]...)
+	out = append(out, strings.Split(strings.TrimRight(raw, "\r\n"), "\n")...)
+	out = append(out, lines[blk.EndLine+1:]...)
+	return strings.Join(out, "\n"), nil
+}
+
+// bareHost drops the scheme Caddy allows on a site address; it is routing, not
+// part of the hostname the panel keys sites by.
+func bareHost(addr string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(addr, "https://"), "http://")
 }
 
 // directiveArg finds the first occurrence of a directive at any nesting depth
