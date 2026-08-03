@@ -36,12 +36,16 @@ func intervalsFor(mode shared.PowerMode) syncIntervals {
 			watchdog: 5 * time.Second,
 		}
 	default:
+		// metrics stay fast because that is the live graph. The rest describe
+		// things that change when someone changes them, and every one of those
+		// pushes is answered immediately after a panel action anyway
+		// (RequestRefresh), so polling them hard only cost CPU.
 		return syncIntervals{
 			metrics:  3 * time.Second,
-			ports:    10 * time.Second,
-			docker:   12 * time.Second,
-			systemd:  12 * time.Second,
-			proxy:    12 * time.Second,
+			ports:    30 * time.Second,
+			docker:   30 * time.Second,
+			systemd:  30 * time.Second,
+			proxy:    30 * time.Second,
 			watchdog: 0,
 		}
 	}

@@ -18,6 +18,16 @@ import (
 // --- systemd ------------------------------------------------------------------
 
 func (c *linuxCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
+	// D-Bus first: no process spawns, no text to parse back. systemctl stays as
+	// the fallback for hosts where the bus is not reachable.
+	if units, ok := systemd.Units(); ok {
+		sort.Slice(units, func(i, j int) bool { return units[i].Name < units[j].Name })
+		return units, nil
+	}
+	return systemdUnitsViaCLI()
+}
+
+func systemdUnitsViaCLI() ([]shared.SystemdUnit, error) {
 	out, err := exec.Command("systemctl", "list-units", "--type=service", "--all",
 		"--no-legend", "--no-pager", "--plain").Output()
 	if err != nil {
@@ -94,6 +104,9 @@ func (c *linuxCollector) SystemdAction(unit, action string) (string, error) {
 	case "start", "stop", "restart":
 	default:
 		return "", fmt.Errorf("unknown systemd action %q", action)
+	}
+	if state, ok := systemd.Action(unit, action); ok {
+		return state, nil
 	}
 	out, err := exec.Command("systemctl", action, unit).CombinedOutput()
 	if err != nil {
@@ -175,29 +188,56 @@ func (c *linuxCollector) ListDir(path string) (shared.FSListing, error) {
 // a daemon (the pid in `screen -ls`) which owns the window's shell, so the
 // payload is a descendant rather than a direct child — an idle session bottoms
 // out at the shell itself.
-func screenPayload(sessionPID int) (int, string) {
-	type proc struct {
-		pid, ppid int
-		args      string
-	}
-	out, err := exec.Command("ps", "-eo", "pid=,ppid=,args=").Output()
-	if err != nil {
-		return 0, ""
-	}
-	var all []proc
-	for _, line := range strings.Split(string(out), "\n") {
-		f := strings.Fields(line)
-		if len(f) < 3 {
-			continue
-		}
-		pid, err1 := strconv.Atoi(f[0])
-		ppid, err2 := strconv.Atoi(f[1])
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		all = append(all, proc{pid: pid, ppid: ppid, args: strings.Join(f[2:], " ")})
-	}
+type procRow struct {
+	pid, ppid int
+	args      string
+}
 
+// processTable reads the whole table once from /proc. It used to be a `ps`
+// fork, and screenPayload called it per session — three sessions meant three
+// full process listings on every poll.
+func processTable() []procRow {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	var all []procRow
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/stat")
+		if err != nil {
+			continue // exited while we were walking
+		}
+		// comm sits in parentheses and can contain spaces, so parse around it.
+		closeIdx := strings.LastIndexByte(string(b), ')')
+		if closeIdx < 0 {
+			continue
+		}
+		fields := strings.Fields(string(b)[closeIdx+1:])
+		if len(fields) < 2 {
+			continue
+		}
+		ppid, err := strconv.Atoi(fields[1])
+		if err != nil {
+			continue
+		}
+		args := ""
+		if cb, err := os.ReadFile("/proc/" + e.Name() + "/cmdline"); err == nil {
+			// cmdline is NUL-separated, with a trailing NUL.
+			args = strings.TrimSpace(strings.ReplaceAll(strings.TrimRight(string(cb), "\x00"), "\x00", " "))
+		}
+		if args == "" {
+			continue // kernel thread: no command line, never a screen payload
+		}
+		all = append(all, procRow{pid: pid, ppid: ppid, args: args})
+	}
+	return all
+}
+
+func screenPayload(sessionPID int, all []procRow) (int, string) {
 	isShell := func(args string) bool {
 		first := args
 		if i := strings.IndexByte(args, ' '); i > 0 {
@@ -233,6 +273,12 @@ func screenPayload(sessionPID int) (int, string) {
 func (c *linuxCollector) ScreenSessions() ([]shared.ScreenSession, error) {
 	out, _ := exec.Command("screen", "-ls").Output()
 	// screen -ls exits 1 when there are no sessions; parse whatever we got.
+	// One process table for all sessions, read only if there is a session to
+	// resolve — a host with no screen sessions should pay nothing.
+	var table []procRow
+	if strings.Contains(string(out), ".") {
+		table = processTable()
+	}
 	var sessions []shared.ScreenSession
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
@@ -258,7 +304,7 @@ func (c *linuxCollector) ScreenSessions() ([]shared.ScreenSession, error) {
 				created = line[s+1 : s+e]
 			}
 		}
-		childPID, cmd := screenPayload(pid)
+		childPID, cmd := screenPayload(pid, table)
 		sessions = append(sessions, shared.ScreenSession{
 			PID:      pid,
 			Name:     fields[0][idx+1:],
@@ -332,7 +378,6 @@ func (c *linuxCollector) ScreenStart(req shared.ScreenStartRequest) error {
 	}
 	return nil
 }
-
 
 func (c *linuxCollector) ScreenStop(name string) error {
 	if _, err := screenName(name); err != nil {

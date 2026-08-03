@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"beacle/shared"
@@ -23,7 +24,33 @@ type caddyAdapter struct {
 	dir       string
 	caddyfile string
 	lastError string
+
+	// Everything below is a poll-loop cache. State() used to spawn a process
+	// per site per tick — `systemctl is-active` inside the site loop, plus
+	// `caddy version`, which starts the whole Caddy binary just to read a
+	// string. At a 12s interval that was a measurable share of a small VPS.
+	cacheMu    sync.Mutex
+	runningVal bool
+	runningAt  time.Time
+	versionVal string
+	versionAt  time.Time
+	probeCache map[string]probeResult
 }
+
+type probeResult struct {
+	port      int
+	listening bool
+	healthy   bool
+	at        time.Time
+}
+
+const (
+	// A proxy that just went down is worth noticing quickly; its version is
+	// not going to change between two polls.
+	runningCacheFor = 5 * time.Second
+	versionCacheFor = 10 * time.Minute
+	probeCacheFor   = 20 * time.Second
+)
 
 func newCaddyAdapter(cfg *Config) *caddyAdapter {
 	return &caddyAdapter{dir: cfg.CaddyDir, caddyfile: "/etc/caddy/Caddyfile"}
@@ -38,30 +65,61 @@ func (a *caddyAdapter) Detect() bool {
 	return true
 }
 
+// running is called several times while building one report — once for the
+// state, once for the site list, once per hand-written block. It used to spawn
+// systemctl every single time; now a tick pays for it at most once.
 func (a *caddyAdapter) running() bool {
-	out, err := exec.Command("systemctl", "is-active", "caddy").Output()
-	if err == nil && strings.TrimSpace(string(out)) == "active" {
-		return true
+	a.cacheMu.Lock()
+	if !a.runningAt.IsZero() && time.Since(a.runningAt) < runningCacheFor {
+		v := a.runningVal
+		a.cacheMu.Unlock()
+		return v
 	}
-	// fallback: admin endpoint
+	a.cacheMu.Unlock()
+
+	v := a.probeRunning()
+
+	a.cacheMu.Lock()
+	a.runningVal, a.runningAt = v, time.Now()
+	a.cacheMu.Unlock()
+	return v
+}
+
+func (a *caddyAdapter) probeRunning() bool {
+	// The admin endpoint answers on a loopback socket, so it is both cheaper
+	// than a process spawn and a better question: it says Caddy is serving,
+	// not merely that a unit is marked active.
 	if code, err := httpGetQuick("http://127.0.0.1:2019/config/"); err == nil && code < 500 {
 		return true
 	}
-	return false
+	out, err := exec.Command("systemctl", "is-active", "caddy").Output()
+	return err == nil && strings.TrimSpace(string(out)) == "active"
 }
 
+// version starts the Caddy binary, so it is asked once and then remembered —
+// the version only changes when the binary is replaced, which means a restart.
 func (a *caddyAdapter) version() string {
-	out, err := exec.Command("caddy", "version").Output()
-	if err != nil {
-		return ""
+	a.cacheMu.Lock()
+	if !a.versionAt.IsZero() && time.Since(a.versionAt) < versionCacheFor {
+		v := a.versionVal
+		a.cacheMu.Unlock()
+		return v
 	}
-	// A build that prints its banner to stderr leaves nothing here, and there is
-	// no version worth crashing the whole agent over.
-	fields := strings.Fields(string(out))
-	if len(fields) == 0 {
-		return ""
+	a.cacheMu.Unlock()
+
+	var v string
+	if out, err := exec.Command("caddy", "version").Output(); err == nil {
+		// A build that prints its banner to stderr leaves nothing here, and
+		// there is no version worth crashing the whole agent over.
+		if fields := strings.Fields(string(out)); len(fields) > 0 {
+			v = fields[0]
+		}
 	}
-	return fields[0]
+
+	a.cacheMu.Lock()
+	a.versionVal, a.versionAt = v, time.Now()
+	a.cacheMu.Unlock()
+	return v
 }
 
 // siteMeta is embedded as a JSON comment on the first line of each site file.
@@ -414,7 +472,7 @@ func (a *caddyAdapter) loadCaddyfileSites(managed []shared.ProxySite) []shared.P
 			ssl = shared.SSLPending
 		}
 
-		port, inUse, healthy := probeUpstream(upstream)
+		port, inUse, healthy := a.probeUpstream(upstream)
 		out = append(out, shared.ProxySite{
 			ID:              "caddyfile:" + domain,
 			Domain:          domain,
@@ -442,6 +500,28 @@ func (a *caddyAdapter) loadCaddyfileSites(managed []shared.ProxySite) []shared.P
 // anything behind this domain? A config pointing at a port nothing listens on
 // is the most common reverse proxy mistake, and Caddy will happily serve it
 // as a 502.
+// probeUpstream is the adapter's cached entry point. Each call is a TCP dial
+// plus an HTTP request with up to 1.6s of timeout, once per site — fine as an
+// answer to "is this site working", wasteful as something to redo every poll.
+func (a *caddyAdapter) probeUpstream(upstream string) (int, bool, bool) {
+	a.cacheMu.Lock()
+	if a.probeCache == nil {
+		a.probeCache = map[string]probeResult{}
+	}
+	if c, ok := a.probeCache[upstream]; ok && time.Since(c.at) < probeCacheFor {
+		a.cacheMu.Unlock()
+		return c.port, c.listening, c.healthy
+	}
+	a.cacheMu.Unlock()
+
+	port, listening, healthy := probeUpstream(upstream)
+
+	a.cacheMu.Lock()
+	a.probeCache[upstream] = probeResult{port: port, listening: listening, healthy: healthy, at: time.Now()}
+	a.cacheMu.Unlock()
+	return port, listening, healthy
+}
+
 func probeUpstream(upstream string) (port int, listening bool, healthy bool) {
 	port = upstreamPort(normalizeUpstream(upstream))
 	if port <= 0 {
@@ -551,7 +631,7 @@ func (a *caddyAdapter) siteFromMeta(m caddySiteMeta) shared.ProxySite {
 // siteFromMetaSSL is the single place a ProxySite is built, so the list view
 // and the save response can never disagree about a site's settings.
 func (a *caddyAdapter) siteFromMetaSSL(m caddySiteMeta, ssl shared.SSLStatus) shared.ProxySite {
-	port, listening, healthy := probeUpstream(m.Upstream)
+	port, listening, healthy := a.probeUpstream(m.Upstream)
 	return shared.ProxySite{
 		ID: m.ID, Domain: m.Domain, Upstream: m.Upstream,
 		SSL: ssl, Enabled: true, Provider: shared.ProxyProviderCaddy, Extra: m.Extra,
