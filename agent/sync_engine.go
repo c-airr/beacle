@@ -29,6 +29,11 @@ type SyncEngine struct {
 	reporter *Reporter
 	writeCh  chan<- []byte
 
+	// done is closed when the session this engine belongs to ends. Every send
+	// watches it, so a push that is already in flight when the socket drops
+	// gives up instead of writing into a channel nobody will read again.
+	done <-chan struct{}
+
 	mu          sync.RWMutex
 	mode        shared.PowerMode
 	modeVersion atomic.Uint32
@@ -49,6 +54,9 @@ func NewSyncEngine(cfg *Config, reporter *Reporter, writeCh chan<- []byte) *Sync
 }
 
 func (e *SyncEngine) Run(ctx context.Context) {
+	e.mu.Lock()
+	e.done = ctx.Done()
+	e.mu.Unlock()
 	go e.loop(ctx, syncMetrics)
 	go e.loop(ctx, syncPorts)
 	go e.loop(ctx, syncDocker)
@@ -268,7 +276,23 @@ func (e *SyncEngine) send(typ shared.AgentWSMessageType, fill func(*shared.Agent
 	if err != nil {
 		return err
 	}
+	e.mu.RLock()
+	done := e.done
+	e.mu.RUnlock()
+
+	// Checked before the send rather than alongside it: a select with several
+	// ready cases picks at random, so pairing them would sometimes write into a
+	// session that has already ended. PushAll runs in its own goroutine and can
+	// reach this line well after its session is gone.
 	select {
+	case <-done:
+		return fmt.Errorf("session ended before %s was sent", typ)
+	default:
+	}
+
+	select {
+	case <-done:
+		return fmt.Errorf("session ended before %s was sent", typ)
 	case e.writeCh <- out:
 		return nil
 	default:

@@ -195,21 +195,25 @@ func (c *WSClient) session() (registered bool, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var writeOnce sync.Once
-	closeWrite := func() { writeOnce.Do(func() { close(writeCh) }) }
-	defer closeWrite()
-
+	// writeCh is deliberately never closed. It used to be, and closing a channel
+	// that several goroutines are still writing to is a panic waiting for the
+	// right millisecond: a push loop that had already passed its context check
+	// would land its send on a channel closed a moment later, and the agent died
+	// with "send on closed channel" every time a session dropped mid-push.
+	//
+	// Cancelling the context is enough. writePump returns on ctx.Done, senders
+	// select on it alongside the send, and an abandoned buffer is garbage like
+	// anything else.
 	sync := NewSyncEngine(c.cfg, c.reporter, writeCh)
 	sync.SetPowerMode(powerMode)
 
 	errCh := make(chan error, 4)
 	go c.writePump(ctx, writeCh, writeText, writeControl, errCh)
-	go func() { errCh <- c.readLoop(conn, writeCh, sync) }()
+	go func() { errCh <- c.readLoop(ctx, conn, writeCh, sync) }()
 	go sync.Run(ctx)
 
 	err = <-errCh
 	cancel()
-	closeWrite()
 	return registered, err
 }
 
@@ -287,7 +291,7 @@ func (c *WSClient) writePump(
 	}
 }
 
-func (c *WSClient) readLoop(conn *websocket.Conn, writeCh chan<- []byte, sync *SyncEngine) error {
+func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn, writeCh chan<- []byte, sync *SyncEngine) error {
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
@@ -324,6 +328,8 @@ func (c *WSClient) readLoop(conn *websocket.Conn, writeCh chan<- []byte, sync *S
 			}
 			select {
 			case writeCh <- out:
+			case <-ctx.Done():
+				return ctx.Err() // session is finished; nobody is reading this
 			default:
 				log.Printf("ws write buffer full, dropping command result")
 			}
