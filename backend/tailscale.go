@@ -38,7 +38,7 @@ type tsStatusJSON struct {
 }
 
 func tailscaleStatus() ([]TailscaleDevice, error) {
-	out, err := exec.Command("tailscale", "status", "--json").Output()
+	out, err := hideConsole(exec.Command("tailscale", "status", "--json")).Output()
 	if err != nil {
 		return nil, fmt.Errorf("tailscale not available: %w", err)
 	}
@@ -82,7 +82,7 @@ func tailscaleReachable(ip string) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
-	if err := exec.CommandContext(ctx, "tailscale", "ping", "--c", "1", "--timeout", "3s", ip).Run(); err == nil {
+	if err := hideConsole(exec.CommandContext(ctx, "tailscale", "ping", "--c", "1", "--timeout", "3s", ip)).Run(); err == nil {
 		return true
 	}
 	if ctx.Err() != nil {
@@ -105,7 +105,7 @@ func tailscaleReachable(ip string) bool {
 }
 
 func tailscaleSelfIPv4() string {
-	out, err := exec.Command("tailscale", "ip", "-4").Output()
+	out, err := hideConsole(exec.Command("tailscale", "ip", "-4")).Output()
 	if err != nil {
 		return ""
 	}

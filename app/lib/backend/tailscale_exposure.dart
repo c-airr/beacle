@@ -32,10 +32,11 @@ Future<void> ensureBackendTailnetExposure({String? backendExe}) async {
 
   debugPrint('beacle: ensuring tailscale serve for TCP $backendPort');
   try {
+    // No runInShell: it would put a cmd.exe in front of every call, and a GUI
+    // app spawning a console process is already one visible window too many.
     final r = await Process.run(
       'tailscale',
       ['serve', '--bg', '--tcp=$backendPort', 'tcp://127.0.0.1:$backendPort'],
-      runInShell: true,
     );
     if (r.exitCode == 0) {
       debugPrint('beacle: tailscale serve running on TCP $backendPort');
@@ -50,7 +51,7 @@ Future<void> ensureBackendTailnetExposure({String? backendExe}) async {
 /// Is tailscaled currently holding the tailnet address for our port?
 Future<bool> _servesOurPort() async {
   try {
-    final r = await Process.run('tailscale', ['serve', 'status'], runInShell: true);
+    final r = await Process.run('tailscale', ['serve', 'status']);
     if (r.exitCode != 0) return false;
     return '${r.stdout}'.contains(':$backendPort');
   } catch (_) {
@@ -60,7 +61,7 @@ Future<bool> _servesOurPort() async {
 
 Future<void> _serveOff() async {
   try {
-    await Process.run('tailscale', ['serve', '--tcp=$backendPort', 'off'], runInShell: true);
+    await Process.run('tailscale', ['serve', '--tcp=$backendPort', 'off']);
     // tailscaled releases the listener asynchronously.
     await Future.delayed(const Duration(milliseconds: 600));
   } catch (_) {}
@@ -69,7 +70,7 @@ Future<void> _serveOff() async {
 /// This machine's Tailscale IPv4, or null when Tailscale is not up.
 Future<String?> _tailscaleIPv4() async {
   try {
-    final r = await Process.run('tailscale', ['ip', '-4'], runInShell: true);
+    final r = await Process.run('tailscale', ['ip', '-4']);
     if (r.exitCode != 0) return null;
     final ip = '${r.stdout}'.trim().split('\n').first.trim();
     return ip.isEmpty ? null : ip;

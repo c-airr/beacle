@@ -44,14 +44,20 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 	}
 }
 
-// hostReachable probes a VPS at most every 30 s. WatchOffline ticks every three
-// seconds, and shelling out to tailscale that often for a box that is simply
-// gone costs far more than it tells us.
+// reachProbeEvery is how often a VPS that is already known to be down gets
+// asked again. Each probe shells out to tailscale, and the answer only decides
+// which of two messages an existing alert carries — it is not worth a process
+// every half minute for a machine nobody is waiting on.
+const reachProbeEvery = 2 * time.Minute
+
+// hostReachable answers "is the machine there, or only the agent gone", from a
+// cache. WatchOffline ticks every three seconds; without this it would spawn a
+// tailscale process on nearly every tick.
 func (e *AlertEngine) hostReachable(id, host string) bool {
 	e.mu.Lock()
 	c, ok := e.reach[id]
 	e.mu.Unlock()
-	if ok && time.Since(c.at) < 30*time.Second {
+	if ok && time.Since(c.at) < reachProbeEvery {
 		return c.up
 	}
 	up := tailscaleReachable(host)
