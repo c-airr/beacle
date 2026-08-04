@@ -575,14 +575,18 @@ const (
 )
 
 type Alert struct {
-	ID        string        `json:"id"`
-	VPSID     string        `json:"vps_id"`
-	VPSName   string        `json:"vps_name"`
-	Type      AlertType     `json:"type"`
-	Severity  AlertSeverity `json:"severity"`
-	Message   string        `json:"message"`
-	CreatedAt time.Time     `json:"created_at"`
-	Resolved  bool          `json:"resolved"`
+	ID       string        `json:"id"`
+	VPSID    string        `json:"vps_id"`
+	VPSName  string        `json:"vps_name"`
+	Type     AlertType     `json:"type"`
+	Severity AlertSeverity `json:"severity"`
+	Message  string        `json:"message"`
+	// Key distinguishes alerts of the same type on one VPS — a container id, a
+	// unit name, a disk mount. Without it, one container recovering would
+	// resolve the alert for another that is still down.
+	Key       string    `json:"key,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	Resolved  bool      `json:"resolved"`
 }
 
 // ---------------------------------------------------------------------------

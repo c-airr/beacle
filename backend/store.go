@@ -438,6 +438,28 @@ func (s *Store) AddAlert(a shared.Alert) shared.Alert {
 	return a
 }
 
+// ResolveAlertsFor marks every open alert for one condition as resolved and
+// returns them, so the caller can tell the UI. A condition that has stopped
+// being true should stop being listed — an alert about five seconds of lost
+// connectivity half an hour ago is noise that trains people to ignore the list.
+func (s *Store) ResolveAlertsFor(vpsID string, t shared.AlertType, key string) []shared.Alert {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var changed []shared.Alert
+	for i := range s.state.Alerts {
+		a := &s.state.Alerts[i]
+		if a.Resolved || a.VPSID != vpsID || a.Type != t || a.Key != key {
+			continue
+		}
+		a.Resolved = true
+		changed = append(changed, *a)
+	}
+	if len(changed) > 0 {
+		s.persistLocked()
+	}
+	return changed
+}
+
 func (s *Store) ResolveAlert(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

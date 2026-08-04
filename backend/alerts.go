@@ -33,7 +33,7 @@ type reachProbe struct {
 }
 
 func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
-	return &AlertEngine{
+	e := &AlertEngine{
 		store:          store,
 		hub:            hub,
 		active:         map[string]bool{},
@@ -42,6 +42,16 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		prevServices:   map[string]map[string]string{},
 		reach:          map[string]reachProbe{},
 	}
+	// Alerts outlive the process that raised them. Without adopting the open
+	// ones, a restarted backend would neither resolve them when the condition
+	// clears — it would not know they exist — nor recognise the condition as
+	// already reported, and would raise a second alert beside the first.
+	for _, a := range store.ListAlerts() {
+		if !a.Resolved {
+			e.active[a.VPSID+"|"+string(a.Type)+"|"+a.Key] = true
+		}
+	}
+	return e
 }
 
 // reachProbeEvery is how often a VPS that is already known to be down gets
@@ -75,12 +85,26 @@ func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertS
 		return
 	}
 	e.active[id] = true
-	a := e.store.AddAlert(shared.Alert{VPSID: vps.ID, VPSName: vps.Name, Type: t, Severity: sev, Message: msg})
+	a := e.store.AddAlert(shared.Alert{
+		VPSID: vps.ID, VPSName: vps.Name, Type: t, Severity: sev, Message: msg, Key: key,
+	})
 	e.hub.Broadcast(shared.WSAlert, a)
 }
 
+// clear marks the condition as no longer holding — and resolves the alerts it
+// raised. Forgetting the active flag alone only allowed the alert to fire
+// again; the row itself stayed open forever, so a VPS that was unreachable for
+// five seconds an hour ago still reads as a problem.
 func (e *AlertEngine) clear(vpsID string, t shared.AlertType, key string) {
+	if !e.active[vpsID+"|"+string(t)+"|"+key] {
+		// Nothing was raised, so there is nothing to resolve. Checked first
+		// because clear() is called on every healthy sample of every metric.
+		return
+	}
 	delete(e.active, vpsID+"|"+string(t)+"|"+key)
+	for _, a := range e.store.ResolveAlertsFor(vpsID, t, key) {
+		e.hub.Broadcast(shared.WSAlert, a)
+	}
 }
 
 // sustained reports whether `over` has held continuously for SustainedSeconds.

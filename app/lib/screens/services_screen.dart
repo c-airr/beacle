@@ -100,9 +100,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
   int get _fleetNohupCount =>
       nohupByVps.values.fold<int>(0, (sum, jobs) => sum + jobs.length);
 
-  /// Loads nohup jobs from every server with an agent. Failures drop that one
-  /// server's list rather than the whole view — one unreachable box should not
-  /// blank out the other three.
+  /// Loads nohup jobs from every reachable server.
+  ///
+  /// A server that cannot be reached keeps whatever was last seen from it,
+  /// marked stale, instead of going blank. Losing the network for five seconds
+  /// should not erase the list of what you left running — and an empty list
+  /// reads as "nothing is running there", which is a different and much worse
+  /// claim than "we cannot ask right now".
   Future<void> _loadNohup() async {
     final state = context.read<AppState>();
     final hosts = state.vpsList.where((v) => v.online && !state.isReportStale(v)).toList();
@@ -111,11 +115,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
       try {
         return MapEntry(v.id, await state.api.nohupJobs(v.id));
       } catch (_) {
-        return MapEntry(v.id, <NohupJob>[]);
+        return MapEntry(v.id, null);
       }
     }));
 
-    if (mounted) setState(() => nohupByVps = Map.fromEntries(results));
+    if (!mounted) return;
+    setState(() {
+      for (final r in results) {
+        if (r.value != null) nohupByVps[r.key] = r.value!;
+      }
+    });
   }
 
   void _sortBy(SortKey key) {
@@ -881,13 +890,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// keep it up".
   /// A host's heading inside a fleet list. The actions belong to that host,
   /// not to the fleet: starting a session is always somewhere specific.
-  Widget _hostHeader(Vps vps, String detail, {List<Widget> actions = const []}) {
+  ///
+  /// When [offline] is set the rows below are the last thing seen rather than
+  /// the current state, and the badge says so — the difference between "nothing
+  /// is running there" and "we cannot ask right now" matters.
+  Widget _hostHeader(Vps vps, String detail,
+      {List<Widget> actions = const [], bool offline = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: BeacleColors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: BeacleColors.border),
+        border: Border.all(
+            color: offline ? BeacleColors.err.withValues(alpha: 0.4) : BeacleColors.border),
       ),
       child: Row(
         children: [
@@ -895,6 +910,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
           const SizedBox(width: 10),
           Text(vps.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
+          if (offline) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: BeacleColors.err.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(vps.status == 'agent_down' ? Icons.sensors_off : Icons.cloud_off,
+                    size: 11, color: BeacleColors.err),
+                const SizedBox(width: 5),
+                Text(vps.status == 'agent_down' ? 'agent down' : 'offline',
+                    style: const TextStyle(fontSize: 10, color: BeacleColors.err)),
+              ]),
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Text(detail,
                 style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
@@ -955,7 +987,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
               children: [
                 _hostHeader(
                   vps,
-                  live ? '${sessions.length} session(s)' : 'agent offline',
+                  live
+                      ? '${sessions.length} session(s)'
+                      : '${sessions.length} session(s) — last seen',
+                  offline: !live,
                   actions: [
                     SmallButton('New session', icon: Icons.add,
                         onPressed: live ? () => _startScreen(state, vps) : null),
@@ -965,7 +1000,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 if (sessions.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Text(live ? 'No screen sessions' : 'No data — agent offline',
+                    child: Text(live ? 'No screen sessions' : 'Nothing was running here when last seen',
                         style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                   )
                 else
@@ -1108,7 +1143,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
               children: [
                 _hostHeader(
                   vps,
-                  live ? '${jobs.where((j) => j.running).length}/${jobs.length} running' : 'agent offline',
+                  live
+                      ? '${jobs.where((j) => j.running).length}/${jobs.length} running'
+                      : '${jobs.length} job(s) — last seen',
+                  offline: !live,
                   actions: [
                     SmallButton('Run detached', icon: Icons.add,
                         onPressed: live ? () => _startNohup(state, vps) : null),
@@ -1118,7 +1156,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 if (jobs.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Text(live ? 'No nohup jobs' : 'No data — agent offline',
+                    child: Text(live ? 'No nohup jobs' : 'Nothing was running here when last seen',
                         style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                   )
                 else

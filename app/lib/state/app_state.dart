@@ -313,11 +313,19 @@ class AppState extends ChangeNotifier {
         break;
       case 'alert':
         final a = Alert.fromJson(payload as Map<String, dynamic>);
-        alerts.insert(0, a);
+        // The same alert arrives again when its condition clears, carrying the
+        // same id and resolved: true. Replacing it is what makes the row leave
+        // the active list instead of appearing twice.
+        final existing = alerts.indexWhere((x) => x.id == a.id);
+        if (existing >= 0) {
+          alerts[existing] = a;
+        } else {
+          alerts.insert(0, a);
+        }
         alertStream.add(a);
         // Muted conditions stay silent: muting is a promise to stop bringing
         // this one up, and a chime is bringing it up.
-        if (!a.resolved && !isMuted(a)) AlertSound.play(a.severity);
+        if (!a.resolved && existing < 0 && !isMuted(a)) AlertSound.play(a.severity);
         break;
       case 'link_update':
         final l = VpsLink.fromJson(payload as Map<String, dynamic>);
