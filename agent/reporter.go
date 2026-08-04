@@ -33,19 +33,28 @@ func (r *Reporter) RegisterRequest() shared.RegisterRequest {
 	}
 }
 
+// Every collector is timed here rather than at the push site, because the
+// watchdog collects the same data to look for changes and those runs were
+// invisible in the timings — which is how a stage costing two seconds could
+// run 400 times in 45 minutes without anything showing it.
+
 func (r *Reporter) Metrics() (shared.SystemMetrics, error) {
+	defer track("metrics")()
 	return r.col.Metrics()
 }
 
 func (r *Reporter) Ports() ([]shared.PortInfo, error) {
+	defer track("ports")()
 	return r.col.Ports()
 }
 
 func (r *Reporter) Docker() shared.DockerState {
+	defer track("docker")()
 	return r.col.Docker()
 }
 
 func (r *Reporter) Systemd() shared.ServicesState {
+	defer track("systemd")()
 	units, _ := r.col.SystemdUnits()
 	screens, _ := r.col.ScreenSessions()
 	return shared.ServicesState{
@@ -55,6 +64,7 @@ func (r *Reporter) Systemd() shared.ServicesState {
 }
 
 func (r *Reporter) Proxy() shared.ProxyState {
+	defer track("proxy")()
 	return r.proxy.State()
 }
 

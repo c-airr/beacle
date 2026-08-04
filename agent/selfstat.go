@@ -61,6 +61,18 @@ func track(stage string) func() {
 	}
 }
 
+// lastStageMs is how long a stage took the last time it ran, or 0 when it has
+// never run. The watchdog uses it to avoid polling something that costs more
+// than the interval it polls on.
+func lastStageMs(stage string) float64 {
+	selfStat.mu.Lock()
+	defer selfStat.mu.Unlock()
+	if s := selfStat.stages[stage]; s != nil {
+		return s.LastMs
+	}
+	return 0
+}
+
 // noteSystemdPath records how the last systemd read was served. The note is
 // only set when something went wrong, so an empty one means D-Bus is fine.
 func noteSystemdPath(path, note string) {

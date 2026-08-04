@@ -18,8 +18,6 @@ import (
 // --- systemd ------------------------------------------------------------------
 
 func (c *linuxCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
-	defer track("systemd")()
-
 	// D-Bus first: no process spawns, no text to parse back. systemctl stays as
 	// the fallback for hosts where the bus is not reachable.
 	if units, ok := systemd.Units(); ok {

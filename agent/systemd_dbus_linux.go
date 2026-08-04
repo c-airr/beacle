@@ -61,6 +61,23 @@ func (s *systemdBus) setLastError(err error) {
 	s.mu.Unlock()
 }
 
+// dropConnection throws the current connection away so the next call dials a
+// fresh one.
+//
+// Connected() is not enough on its own. A bus connection can fail a call with
+// "use of closed network connection" while still reporting itself as connected,
+// and connect() only redials when that check says otherwise — so one broken
+// socket meant every later call fell through to spawning systemctl, forever.
+// The agent looked like it had simply chosen the slow path.
+func (s *systemdBus) dropConnection() {
+	s.mu.Lock()
+	if s.conn != nil {
+		s.conn.Close()
+		s.conn = nil
+	}
+	s.mu.Unlock()
+}
+
 type cachedPID struct {
 	pid   int
 	state string // ActiveState|SubState when the PID was read
@@ -193,6 +210,10 @@ func (s *systemdBus) Units() ([]shared.SystemdUnit, bool) {
 	list, err := conn.ListUnitsByPatternsContext(ctx, nil, []string{"*.service"})
 	if err != nil {
 		s.setLastError(err)
+		// The call failing is the only reliable sign the socket is gone, so
+		// this is where the connection gets thrown away. Falling back once is
+		// fine; falling back forever is what happened before.
+		s.dropConnection()
 		return nil, false
 	}
 	s.setLastError(nil)

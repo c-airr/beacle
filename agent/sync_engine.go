@@ -167,34 +167,62 @@ func (e *SyncEngine) watchdog(ctx context.Context) {
 		prev := e.fp
 		e.fpMu.Unlock()
 
-		metrics, _ := e.reporter.Metrics()
-		docker := e.reporter.Docker()
-		systemd := e.reporter.Systemd()
-		proxy := e.reporter.Proxy()
-		ports, _ := e.reporter.Ports()
+		// Watching for a change means collecting the thing being watched, so a
+		// stage that costs more than a slice of the watchdog interval cannot be
+		// watched at this cadence — polling it here would quietly undo the
+		// interval that power mode just set.
+		//
+		// That is what used to happen: eco mode asks for systemd every 60s, and
+		// this loop collected it every 5s anyway. On a host where the D-Bus path
+		// had fallen back to spawning systemctl, that was two seconds of work
+		// every five, and the panel reported an idle server as busy.
+		//
+		// The cost is measured rather than assumed, so a stage that is cheap
+		// here (D-Bus systemd) stays watched and the same stage on a host where
+		// it is expensive does not.
+		budget := float64(wait.Milliseconds()) * watchdogCostShare
 
-		curMetrics := fingerprintMetrics(metrics)
-		curDocker := fingerprintDocker(docker)
-		curSystemd := fingerprintSystemd(systemd)
-		curProxy := fingerprintProxy(proxy)
-		curPorts := fingerprintPorts(ports)
-
-		if prev.metrics != "" && curMetrics != prev.metrics {
-			_ = e.pushMetrics()
+		if prev.metrics != "" && affordable("metrics", budget) {
+			metrics, _ := e.reporter.Metrics()
+			if fingerprintMetrics(metrics) != prev.metrics {
+				_ = e.pushMetrics()
+			}
 		}
-		if prev.docker != "" && curDocker != prev.docker {
-			_ = e.pushDocker()
+		if prev.ports != "" && affordable("ports", budget) {
+			ports, _ := e.reporter.Ports()
+			if fingerprintPorts(ports) != prev.ports {
+				_ = e.pushPorts()
+			}
 		}
-		if prev.systemd != "" && curSystemd != prev.systemd {
-			_ = e.pushSystemd()
+		if prev.proxy != "" && affordable("proxy", budget) {
+			if fingerprintProxy(e.reporter.Proxy()) != prev.proxy {
+				_ = e.pushProxy()
+			}
 		}
-		if prev.proxy != "" && curProxy != prev.proxy {
-			_ = e.pushProxy()
+		if prev.docker != "" && affordable("docker", budget) {
+			if fingerprintDocker(e.reporter.Docker()) != prev.docker {
+				_ = e.pushDocker()
+			}
 		}
-		if prev.ports != "" && curPorts != prev.ports {
-			_ = e.pushPorts()
+		if prev.systemd != "" && affordable("systemd", budget) {
+			if fingerprintSystemd(e.reporter.Systemd()) != prev.systemd {
+				_ = e.pushSystemd()
+			}
 		}
 	}
+}
+
+// watchdogCostShare is how much of the watchdog interval one stage may spend.
+// At 5s that allows 250ms — enough for metrics, ports, proxy and a healthy
+// D-Bus systemd read, and far too little for anything that forks processes.
+const watchdogCostShare = 0.05
+
+// affordable reports whether a stage is cheap enough to poll on the watchdog's
+// schedule. A stage that has never run is allowed one go, which is how it gets
+// measured in the first place.
+func affordable(stage string, budgetMs float64) bool {
+	cost := lastStageMs(stage)
+	return cost == 0 || cost <= budgetMs
 }
 
 func (e *SyncEngine) PushAll() {
@@ -206,7 +234,6 @@ func (e *SyncEngine) PushAll() {
 }
 
 func (e *SyncEngine) pushMetrics() error {
-	defer track("metrics")()
 	metrics, err := e.reporter.Metrics()
 	if err != nil {
 		log.Printf("metrics: %v", err)
@@ -221,7 +248,6 @@ func (e *SyncEngine) pushMetrics() error {
 }
 
 func (e *SyncEngine) pushPorts() error {
-	defer track("ports")()
 	ports, err := e.reporter.Ports()
 	if err != nil {
 		log.Printf("ports: %v", err)
@@ -236,7 +262,6 @@ func (e *SyncEngine) pushPorts() error {
 }
 
 func (e *SyncEngine) pushDocker() error {
-	defer track("docker")()
 	docker := e.reporter.Docker()
 	fp := fingerprintDocker(docker)
 	e.fpMu.Lock()
@@ -259,7 +284,6 @@ func (e *SyncEngine) pushSystemd() error {
 }
 
 func (e *SyncEngine) pushProxy() error {
-	defer track("proxy")()
 	proxy := e.reporter.Proxy()
 	fp := fingerprintProxy(proxy)
 	e.fpMu.Lock()
