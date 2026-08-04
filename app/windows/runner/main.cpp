@@ -22,9 +22,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
+  // The autostart entry appends this so a login launch goes straight to the
+  // tray. It is read here rather than in Dart because the window is created
+  // long before Dart could answer.
+  bool start_hidden = false;
+  for (const auto& argument : command_line_arguments) {
+    if (argument == "--minimised" || argument == "--minimized") {
+      start_hidden = true;
+      break;
+    }
+  }
+
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project);
+  FlutterWindow window(project, start_hidden);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"beacle", origin, size)) {

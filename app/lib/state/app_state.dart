@@ -8,6 +8,7 @@ import '../alert_sound.dart';
 import '../api/api_client.dart';
 import '../config.dart';
 import '../models/models.dart';
+import '../tray.dart';
 import '../user_config.dart';
 
 /// Central reactive state: VPS registry, live snapshots, alerts, links.
@@ -106,8 +107,13 @@ class AppState extends ChangeNotifier {
     closeBehaviour = v;
     _settings.raw['close_behaviour'] = v;
     _settings.save();
+    Tray.setCloseToTray(v == 'tray');
     notifyListeners();
   }
+
+  /// The runner starts with close-to-tray off and cannot read settings itself,
+  /// so the stored choice has to be pushed to it once Dart is up.
+  void applyTraySettings() => Tray.setCloseToTray(closeBehaviour == 'tray');
 
   bool get powerSaveMode => uiPowerMode != 'active';
 
@@ -127,6 +133,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> start() async {
     _loadMutes();
+    applyTraySettings();
     await refreshAll();
     _connectWs();
     _staleCheck?.cancel();

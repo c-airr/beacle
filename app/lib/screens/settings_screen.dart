@@ -12,6 +12,7 @@ import '../models/models.dart';
 import '../paths.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../tray.dart';
 import '../update/app_updater.dart';
 import '../widgets/common.dart';
 
@@ -136,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   value: autostartOn ?? false,
                   enabled: autostartOn != null,
                   onChanged: (v) async {
-                    final ok = await Autostart.setEnabled(v);
+                    final ok = await Autostart.setEnabled(v, minimised: state.startMinimised);
                     final now = await Autostart.isEnabled();
                     if (!mounted) return;
                     setState(() => autostartOn = now);
@@ -156,8 +157,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       detail: 'Beacle comes up in the tray instead of on screen. Alerts and sounds '
                           'still arrive; it just does not take the foreground.',
                       value: state.startMinimised,
-                      enabled: false,
-                      onChanged: state.setStartMinimised,
+                      enabled: Tray.supported,
+                      // The flag lives in the autostart command, so the entry is
+                      // rewritten rather than a setting merely stored.
+                      onChanged: (v) async {
+                        state.setStartMinimised(v);
+                        await Autostart.setEnabled(true, minimised: v);
+                      },
                     ),
                   ),
                 ],
@@ -178,25 +184,22 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 value: state.closeBehaviour,
                 options: const {'tray': 'Minimise to tray', 'quit': 'Close the app'},
                 onChanged: state.setCloseBehaviour,
-                enabled: false,
+                enabled: Tray.supported,
               ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: BeacleColors.warn.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: BeacleColors.warn.withValues(alpha: 0.3)),
+              if (!Tray.supported) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'The tray is only built for Windows so far. On macOS and Linux the window '
+                  'closes the app.',
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
                 ),
-                child: const Text(
-                  'The tray itself is not built yet: it needs the tray_manager and window_manager '
-                  'plugins, and Flutter refuses to build a Windows app with plugins unless Developer '
-                  'Mode is on (start ms-settings:developers). Turn it on and these two settings can '
-                  'be wired up — until then they would do nothing, so they are disabled.',
-                  style: TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.45),
+              ] else ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Right-click the tray icon for Show and Quit; double-click brings the window back.',
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
                 ),
-              ),
+              ],
             ],
           ),
         ),

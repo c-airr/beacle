@@ -22,7 +22,21 @@ class Autostart {
     }
   }
 
-  static Future<bool> setEnabled(bool on) async {
+  /// Whether the registered command starts the app straight into the tray.
+  static Future<bool> isMinimised() async {
+    if (!supported) return false;
+    try {
+      final r = await Process.run('reg', ['query', _keyPath, '/v', _valueName]);
+      return r.exitCode == 0 && '${r.stdout}'.contains('--minimised');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// [minimised] appends the flag the runner looks for at launch. It lives in
+  /// the registry command rather than in settings because the window is created
+  /// before Dart could read a setting and say otherwise.
+  static Future<bool> setEnabled(bool on, {bool minimised = false}) async {
     if (!supported) return false;
     try {
       if (!on) {
@@ -31,9 +45,10 @@ class Autostart {
         return r.exitCode == 0 || !await isEnabled();
       }
       final exe = Platform.resolvedExecutable;
+      final command = minimised ? '"$exe" --minimised' : '"$exe"';
       final r = await Process.run(
         'reg',
-        ['add', _keyPath, '/v', _valueName, '/t', 'REG_SZ', '/d', '"$exe"', '/f'],
+        ['add', _keyPath, '/v', _valueName, '/t', 'REG_SZ', '/d', command, '/f'],
       );
       return r.exitCode == 0;
     } catch (e) {
