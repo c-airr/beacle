@@ -19,19 +19,21 @@ import (
 )
 
 type linuxCollector struct {
-	mu            sync.Mutex
-	prevCPUIdle   uint64
-	prevCPUTotal  uint64
-	prevCoreIdle  []uint64
-	prevCoreTotal []uint64
-	prevNet       map[string][2]uint64 // iface -> rx, tx
-	prevNetAt     time.Time
-	docker        *dockerClient
+	mu sync.Mutex
+	// CPU usage is a rate between two counter readings, so the state that
+	// matters is when the last reading was taken, not just what it said.
+	// See cpu_sampler.go.
+	cpuAll    cpuSampler
+	cpuCores  multiSampler
+	prevNet   map[string][2]uint64 // iface -> rx, tx
+	prevNetAt time.Time
+	docker    *dockerClient
 
 	// Per-process CPU time from the last collection, so usage can be measured
 	// as a delta instead of read off ps as a lifetime average.
 	prevProcTicks map[int]uint64
 	prevProcAt    time.Time
+	lastProcPct   map[int]float64
 }
 
 // USER_HZ. The kernel reports process CPU time in these units and it has been
@@ -86,6 +88,17 @@ func (c *linuxCollector) procCPUDeltas() map[int]float64 {
 
 	c.mu.Lock()
 	prev, prevAt := c.prevProcTicks, c.prevProcAt
+
+	// The same short-window trap as the host CPU gauge: dividing a jiffy or two
+	// by a few milliseconds produces percentages in the hundreds. Two clicks on
+	// Refresh would be enough. Repeat the last answer and leave the counters
+	// alone, so the next window is measured from a reading that was compared
+	// against something.
+	if prev != nil && !prevAt.IsZero() && time.Since(prevAt) < minCPUWindow {
+		last := c.lastProcPct
+		c.mu.Unlock()
+		return last
+	}
 	c.prevProcTicks, c.prevProcAt = cur, time.Now()
 	c.mu.Unlock()
 
@@ -103,6 +116,10 @@ func (c *linuxCollector) procCPUDeltas() map[int]float64 {
 		pct := (float64(ticks-was) / clockTicksPerSec) / elapsed * 100
 		out[pid] = pct
 	}
+
+	c.mu.Lock()
+	c.lastProcPct = out
+	c.mu.Unlock()
 	return out
 }
 
@@ -186,32 +203,11 @@ func readPerCoreCPUTimes() []cpuSample {
 	return cores
 }
 
-func cpuDeltaPercent(prevIdle, prevTotal, idle, total uint64) float64 {
-	if prevTotal == 0 || total <= prevTotal {
-		return 0
-	}
-	dIdle := float64(idle - prevIdle)
-	dTotal := float64(total - prevTotal)
-	if dTotal <= 0 {
-		return 0
-	}
-	pct := (1 - dIdle/dTotal) * 100
-	if pct < 0 {
-		return 0
-	}
-	if pct > 100 {
-		return 100
-	}
-	return pct
-}
-
 func (c *linuxCollector) cpuPercent() float64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	idle, total := readCPUTimes()
-	pct := cpuDeltaPercent(c.prevCPUIdle, c.prevCPUTotal, idle, total)
-	c.prevCPUIdle, c.prevCPUTotal = idle, total
-	return pct
+	return c.cpuAll.sample(idle, total, time.Now())
 }
 
 func (c *linuxCollector) cpuPerCore() []float64 {
@@ -221,22 +217,12 @@ func (c *linuxCollector) cpuPerCore() []float64 {
 	if len(samples) == 0 {
 		return nil
 	}
-	out := make([]float64, len(samples))
-	if len(c.prevCoreTotal) != len(samples) {
-		c.prevCoreIdle = make([]uint64, len(samples))
-		c.prevCoreTotal = make([]uint64, len(samples))
-		for i, s := range samples {
-			c.prevCoreIdle[i] = s.idle
-			c.prevCoreTotal[i] = s.total
-		}
-		return out
-	}
+	idle := make([]uint64, len(samples))
+	total := make([]uint64, len(samples))
 	for i, s := range samples {
-		out[i] = cpuDeltaPercent(c.prevCoreIdle[i], c.prevCoreTotal[i], s.idle, s.total)
-		c.prevCoreIdle[i] = s.idle
-		c.prevCoreTotal[i] = s.total
+		idle[i], total[i] = s.idle, s.total
 	}
-	return out
+	return c.cpuCores.sample(idle, total, time.Now())
 }
 
 func cpuModel() (string, int) {
