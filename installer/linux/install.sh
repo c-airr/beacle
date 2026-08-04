@@ -19,14 +19,12 @@ ASSET="beacle-linux-x64.tar.gz"
 APP_ID="beacle"
 
 SYSTEM_WIDE=0
-VERSION="latest"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --system)  SYSTEM_WIDE=1 ;;
-    --version) VERSION="${2:-latest}"; shift ;;
     -h|--help)
-      echo "usage: install.sh [--system] [--version vX.Y.Z]"
+      echo "usage: install.sh [--system]"
       exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
@@ -37,18 +35,15 @@ if [ "$SYSTEM_WIDE" -eq 1 ]; then
   [ "$(id -u)" -eq 0 ] || { echo "beacle: --system needs root" >&2; exit 1; }
   PREFIX=/opt/beacle
   DESKTOP_DIR=/usr/share/applications
-  ICON_DIR=/usr/share/icons/hicolor
 else
   PREFIX="$HOME/.local/share/beacle"
   DESKTOP_DIR="$HOME/.local/share/applications"
-  ICON_DIR="$HOME/.local/share/icons/hicolor"
 fi
 
-if [ "$VERSION" = "latest" ]; then
-  URL="https://github.com/$REPO/releases/latest/download/$ASSET"
-else
-  URL="https://github.com/$REPO/releases/download/$VERSION/$ASSET"
-fi
+# Always the newest release. A pinned tag would mean an installer that goes
+# stale the moment the next version ships — someone downloading it months later
+# would silently get an old build.
+URL="https://github.com/$REPO/releases/latest/download/$ASSET"
 
 echo "[beacle] downloading $ASSET"
 TMP="$(mktemp -d)"
@@ -73,23 +68,13 @@ sed -e "s|^Exec=/opt/beacle/beacle|Exec=$PREFIX/beacle|" \
      | sed "s|/opt/beacle/beacle|$PREFIX/beacle|g" > "$DESKTOP_DIR/$APP_ID.desktop"
 chmod 644 "$DESKTOP_DIR/$APP_ID.desktop"
 
-# Icons go in the hicolor theme at the sizes GNOME actually asks for. A single
-# oversized PNG dumped in pixmaps renders blurry in the dash.
-if [ -d "$PREFIX/icons" ]; then
-  for size in 16 24 32 48 64 128 256 512; do
-    src="$PREFIX/icons/${size}x${size}.png"
-    [ -f "$src" ] || continue
-    dest="$ICON_DIR/${size}x${size}/apps"
-    mkdir -p "$dest"
-    cp -f "$src" "$dest/$APP_ID.png"
-  done
-fi
+# No icon is installed: there is no PNG set in the repo, only a Windows .ico.
+# The dash will show a generic placeholder until someone exports one, which
+# costs nothing but looks unfinished — worth revisiting before a public release.
 
-# Without these the entry can take a logout to appear in search.
+# Without this the entry can take a logout to appear in search.
 command -v update-desktop-database >/dev/null 2>&1 && \
   update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-command -v gtk-update-icon-cache >/dev/null 2>&1 && \
-  gtk-update-icon-cache -f -t "$ICON_DIR" 2>/dev/null || true
 
 echo
 echo "[beacle] installed to $PREFIX"

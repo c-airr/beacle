@@ -110,9 +110,6 @@ jobs:
           cp backend/beacle-backend "$bundle/"
           mkdir -p "$bundle/data/bin"
           cp dist/agent/beacle-agent-* "$bundle/data/bin/"
-          mkdir -p "$bundle/icons"
-          # Placeholder: the icon PNGs install.sh expects do not exist yet, see
-          # the open questions in installer/README.md.
           tar -czf beacle-linux-x64.tar.gz --transform 's,^bundle,beacle,' -C "$(dirname "$bundle")" bundle
 
       - uses: actions/upload-artifact@v4

@@ -12,7 +12,7 @@ before any of it goes live.
 | `windows/beacle.iss` | Inno Setup script. Downloads the payload from the GitHub release, installs per user, creates the Start Menu entry. |
 | `linux/beacle.desktop` | Application entry. This is the file that makes GNOME find the app. |
 | `linux/install.sh` | Downloads the payload, installs to `~/.local/share/beacle` or `/opt/beacle`, registers the entry and icons. |
-| `linux/uninstall.sh` | Removes it again, keeping config unless `--purge`. |
+| `linux/uninstall.sh` | Stops the app and backend, then removes both the install and the config. |
 | `ci/build-installers.yml.draft` | GitHub Actions draft. Deliberately **not** in `.github/workflows/`, so it does not run. |
 
 ## How it is meant to work
@@ -45,35 +45,46 @@ product name. `StartupWMClass` must match the class the window reports, or a
 running Beacle shows up as a second icon in the dash that cannot be pinned.
 Pinning itself is the user's move: right-click → Add to Favourites.
 
-## Open questions — answer these before activating anything
+## Decisions taken
 
-1. **Icons for Linux.** `install.sh` copies PNGs from `icons/` in the payload
-   at sizes 16–512. Those files do not exist; there is only
-   `app/windows/runner/resources/app_icon.ico`. Either export a set of PNGs or
-   drop the icon step and accept a generic icon in the dash.
+- **Always the latest release.** Neither installer pins a tag. A pinned
+  installer goes stale the moment the next version ships, and someone who
+  downloads it later gets an old build without being told. The version in
+  `beacle.iss` is cosmetic — it shows in Apps & Features and can be overridden
+  with `iscc /DAppVersion=1.2.3` — and does not decide what is downloaded.
 
-2. **`StartupWMClass`.** Set to `beacle` as a guess. It has to be checked
-   against what the built Linux app actually reports (`xprop WM_CLASS`) or
-   pinning misbehaves in exactly the way described above.
+- **Uninstalling removes everything.** Both uninstallers stop the app and the
+  backend first, then delete the install and the configuration. The backend
+  outliving the window is deliberate (the panel adopts a running one on next
+  launch), so an uninstall that only deleted files would leave it holding port
+  9930 and every agent socket with nothing left to stop it. Removing config
+  means the VPS registry and agent tokens go too, so a reinstall starts empty;
+  `--keep-config` on Linux opts out.
 
-3. **`--minimised` on Linux.** The desktop entry offers a "Start in the
-   background" action, but the flag is only handled in the Windows runner. On
-   Linux it is currently ignored, and the tray it implies does not exist there
-   either — see the tray note in `app/lib/tray.dart`.
+- **No Linux icon.** There is only a Windows `.ico` in the repo, so the dash
+  shows a generic placeholder. Exporting a PNG set later is a five-minute job
+  and the install script would need three lines back.
 
-4. **Config paths on Linux.** `uninstall.sh` removes `~/.config/beacle`, but
-   `app/lib/paths.dart` derives its directory from `APPDATA` and falls back to
-   `$HOME/Beacle`. One of the two has to move; `~/.config/beacle` is the
-   convention.
+- **No code signing.** Windows SmartScreen will warn on every download until
+  the binary earns reputation on its own. The only real fix is a certificate,
+  which costs money.
 
-5. **Versioning.** `beacle.iss` hardcodes `0.1.0` and the tag `v0.1.0` in three
-   places. It should read them from `app/pubspec.yaml`, or CI should pass them
-   in with `iscc /DAppVersion=...`.
+## Still open
 
-6. **Signing.** Unsigned, so Windows SmartScreen will warn on every download
-   until the binary builds reputation. A certificate is the only real fix and
-   costs money; worth deciding before the first public release rather than
-   after people start reporting it as a virus.
+1. **`StartupWMClass` is `com.example.beacle`.** That is the real value — it
+   comes from `APPLICATION_ID` in `app/linux/CMakeLists.txt`, which
+   `my_application.cc` hands to `g_set_prgname` — but it is still Flutter's
+   placeholder. Renaming it to something real means changing both that and this
+   line together, or GNOME stops matching the window to the entry.
+
+2. **Config paths on Linux.** `app/lib/paths.dart` derives its directory from
+   `APPDATA` and falls back to `$HOME/Beacle`, which is not where a Linux app
+   keeps things. `uninstall.sh` clears both spellings for now;
+   `~/.config/beacle` is the convention and the app should move to it.
+
+3. **`--minimised` is Windows-only.** The flag is handled in the Windows
+   runner. On Linux nothing reads it, and the tray it implies does not exist
+   there either — see `app/lib/tray.dart`.
 
 ## Trying it by hand
 

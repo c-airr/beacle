@@ -14,8 +14,8 @@
 ;   * an AppUserModelID on the shortcut, so pinning to the taskbar sticks to
 ;     the shortcut instead of spawning a second, unpinnable button
 ;   * an Apps & Features entry that removes the install cleanly
-;   * leaving %AppData%\Beacle alone on uninstall, because that is where the
-;     VPS registry and agent tokens live
+;   * an uninstall that stops the running app and its backend first, then takes
+;     %AppData%\Beacle with it
 
 #define AppName          "Beacle"
 #define AppPublisher     "c-airr"
@@ -23,11 +23,18 @@
 #define AppExeName       "beacle.exe"
 #define AppUserModelID   "c-airr.Beacle"
 
-; Bumped per release. The payload asset is looked up under this tag.
-#define AppVersion       "0.1.0"
-#define ReleaseTag       "v0.1.0"
+; Shown in Apps & Features. Cosmetic only — it does not decide what gets
+; downloaded, so an installer built once keeps working after later releases.
+; CI can override it: iscc /DAppVersion=1.2.3
+#ifndef AppVersion
+  #define AppVersion     "0.1.0"
+#endif
+
+; Always the newest release. Pinning a tag would mean this installer goes stale
+; the moment the next version ships, and someone downloading it later would
+; quietly get an old build.
 #define PayloadAsset     "beacle-windows-x64.zip"
-#define PayloadURL       "https://github.com/c-airr/beacle/releases/download/" + ReleaseTag + "/" + PayloadAsset
+#define PayloadURL       "https://github.com/c-airr/beacle/releases/latest/download/" + PayloadAsset
 
 [Setup]
 AppId={{8E4C9A61-2F7B-4D3E-9C15-BEAC1E000001}
@@ -83,13 +90,27 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; \
     Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; Stop both processes before deleting anything underneath them. The backend
+; deliberately outlives the window — the panel adopts a running one on the next
+; launch — so without this the uninstaller would delete the files while a
+; headless backend keeps holding port 9930 and every agent WebSocket, with
+; nothing left on disk to stop it.
+Filename: "{sys}\taskkill.exe"; Parameters: "/IM beacle.exe /F"; Flags: runhidden skipifdoesntexist; RunOnceId: "KillApp"
+Filename: "{sys}\taskkill.exe"; Parameters: "/IM beacle-backend.exe /F"; Flags: runhidden skipifdoesntexist; RunOnceId: "KillBackend"
+
 [UninstallDelete]
-; Files the app writes next to itself during updates; %AppData%\Beacle is
-; deliberately left alone.
+; Everything the app writes next to itself during updates.
 Type: filesandordirs; Name: "{app}\versions"
 Type: files; Name: "{app}\apply-update.bat"
 Type: files; Name: "{app}\rollback.bat"
 Type: filesandordirs; Name: "{app}\data"
+Type: dirifempty; Name: "{app}"
+
+; And the configuration, which is where the VPS registry and the agent tokens
+; live. Removing it is the whole point of uninstalling rather than deleting the
+; folder by hand, but it does mean a reinstall starts from nothing.
+Type: filesandordirs; Name: "{userappdata}\Beacle"
 
 [Code]
 var

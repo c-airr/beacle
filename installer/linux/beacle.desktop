@@ -13,14 +13,12 @@ Categories=System;Monitor;Network;RemoteAccess;
 # than the exact product name they may not remember.
 Keywords=vps;server;monitoring;docker;systemd;proxy;caddy;tailscale;infrastructure;panel;
 StartupNotify=true
-# Must match the application id the window reports, or GNOME shows a second,
-# unpinnable icon in the dash while the app is running.
-StartupWMClass=beacle
+# This has to be the class the running window reports, or GNOME cannot tell
+# that the thing you launched is the thing now running — you get a second icon
+# in the dash and pinning appears to do nothing.
+#
+# The value comes from APPLICATION_ID in app/linux/CMakeLists.txt, which
+# my_application.cc passes to g_set_prgname. It is still Flutter's placeholder;
+# if it is ever renamed to something real, this line has to move with it.
+StartupWMClass=com.example.beacle
 SingleMainWindow=true
-
-# Right-click actions on the dash icon and in the app grid.
-Actions=Minimised;
-
-[Desktop Action Minimised]
-Name=Start in the background
-Exec=/opt/beacle/beacle --minimised
