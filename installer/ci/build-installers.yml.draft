@@ -1,0 +1,143 @@
+> DRAFT — this file is deliberately not in .github/workflows/ and does not run.
+> Rename to build-installers.yml and move it there to activate. Read
+> installer/README.md first; there are open questions listed at the bottom of
+> it that this workflow assumes are already answered.
+
+name: Build installers
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish to"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Pinned rather than "latest": a runner that silently moves to a new
+          # Flutter is a build that breaks on a day nobody touched the code.
+          flutter-version: 3.44.4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Build backend
+        working-directory: backend
+        run: go build -ldflags "-H windowsgui" -o beacle-backend.exe .
+
+      - name: Build agent binaries
+        working-directory: agent
+        run: |
+          $env:GOOS='linux'; $env:GOARCH='amd64'
+          go build -o ../dist/agent/beacle-agent-amd64 .
+          $env:GOARCH='arm64'
+          go build -o ../dist/agent/beacle-agent-arm64 .
+
+      - name: Build app
+        working-directory: app
+        run: flutter build windows --release
+
+      - name: Assemble payload
+        shell: pwsh
+        run: |
+          $rel = "app/build/windows/x64/runner/Release"
+          Copy-Item backend/beacle-backend.exe "$rel/" -Force
+          New-Item -ItemType Directory -Force -Path "$rel/data/bin" | Out-Null
+          Copy-Item dist/agent/beacle-agent-* "$rel/data/bin/" -Force
+          # A stale example config and the ~ backup file the editor leaves
+          # behind have no business shipping to users.
+          Remove-Item "$rel/*.exe~","$rel/install.sh" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$rel/*" -DestinationPath beacle-windows-x64.zip -Force
+
+      - name: Build installer
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer\windows\beacle.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            beacle-windows-x64.zip
+            dist/installer/*.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Install Flutter Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - name: Build backend and agent
+        run: |
+          (cd backend && go build -o beacle-backend .)
+          mkdir -p dist/agent
+          (cd agent && GOOS=linux GOARCH=amd64 go build -o ../dist/agent/beacle-agent-amd64 .)
+          (cd agent && GOOS=linux GOARCH=arm64 go build -o ../dist/agent/beacle-agent-arm64 .)
+
+      - name: Build app
+        working-directory: app
+        run: flutter build linux --release
+
+      - name: Assemble payload
+        run: |
+          bundle="app/build/linux/x64/release/bundle"
+          cp backend/beacle-backend "$bundle/"
+          mkdir -p "$bundle/data/bin"
+          cp dist/agent/beacle-agent-* "$bundle/data/bin/"
+          mkdir -p "$bundle/icons"
+          # Placeholder: the icon PNGs install.sh expects do not exist yet, see
+          # the open questions in installer/README.md.
+          tar -czf beacle-linux-x64.tar.gz --transform 's,^bundle,beacle,' -C "$(dirname "$bundle")" bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            beacle-linux-x64.tar.gz
+            installer/linux/install.sh
+            installer/linux/uninstall.sh
+
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: |
+            artifacts/windows/beacle-windows-x64.zip
+            artifacts/windows/dist/installer/*.exe
+            artifacts/linux/beacle-linux-x64.tar.gz
+            artifacts/linux/install.sh
