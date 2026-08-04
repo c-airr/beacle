@@ -73,23 +73,49 @@ class _ServicesScreenState extends State<ServicesScreen> {
   List<ProcessInfo> processes = [];
   bool loadingProcs = false;
   Timer? _procTimer;
+  Timer? _nohupTimer;
   int _refreshSec = 10;
 
-  List<NohupJob> nohupJobs = [];
+  /// Keyed by VPS id: the nohup tab shows the whole fleet at once.
+  Map<String, List<NohupJob>> nohupByVps = {};
 
   /// Tabs that need the process list: the processes tab and the merged view.
   bool get _needsProcesses => tab == 0 || tab == 2;
 
+  /// screen and nohup span every server. Both answer "what did I leave running
+  /// out there", and with four or more boxes, clicking through a dropdown to
+  /// find out is the wrong shape for the question. The other tabs stay per-host
+  /// because 250 units times a fleet is a list nobody reads.
+  bool get _isFleetTab => tab == 3 || tab == 4;
+
+  int get _fleetScreenCount {
+    final state = context.read<AppState>();
+    var n = 0;
+    for (final v in state.vpsList) {
+      n += state.snapshots[v.id]?.services.screen.length ?? 0;
+    }
+    return n;
+  }
+
+  int get _fleetNohupCount =>
+      nohupByVps.values.fold<int>(0, (sum, jobs) => sum + jobs.length);
+
+  /// Loads nohup jobs from every server with an agent. Failures drop that one
+  /// server's list rather than the whole view — one unreachable box should not
+  /// blank out the other three.
   Future<void> _loadNohup() async {
     final state = context.read<AppState>();
-    final id = selectedId;
-    if (id == null) return;
-    try {
-      final jobs = await state.api.nohupJobs(id);
-      if (mounted && selectedId == id) setState(() => nohupJobs = jobs);
-    } catch (_) {
-      if (mounted && selectedId == id) setState(() => nohupJobs = []);
-    }
+    final hosts = state.vpsList.where((v) => v.online && !state.isReportStale(v)).toList();
+
+    final results = await Future.wait(hosts.map((v) async {
+      try {
+        return MapEntry(v.id, await state.api.nohupJobs(v.id));
+      } catch (_) {
+        return MapEntry(v.id, <NohupJob>[]);
+      }
+    }));
+
+    if (mounted) setState(() => nohupByVps = Map.fromEntries(results));
   }
 
   void _sortBy(SortKey key) {
@@ -191,22 +217,33 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   void dispose() {
     _procTimer?.cancel();
+    _nohupTimer?.cancel();
     super.dispose();
   }
 
-  /// Processes are pulled on demand (they are not part of the snapshot stream),
-  /// so only poll while their tab is actually open.
+  /// Processes and nohup jobs are pulled on demand (neither rides the snapshot
+  /// stream), so both only poll while a tab that shows them is open. screen
+  /// needs no polling of its own — it arrives with the snapshots.
   void _syncProcessPolling() {
     final sec = context.read<AppState>().portsRefreshSeconds;
     if (!_needsProcesses) {
       _procTimer?.cancel();
       _procTimer = null;
+    } else if (_procTimer == null || sec != _refreshSec) {
+      _refreshSec = sec;
+      _procTimer?.cancel();
+      _procTimer = Timer.periodic(Duration(seconds: sec), (_) => _loadProcesses(silent: true));
+    }
+
+    if (tab != 4) {
+      _nohupTimer?.cancel();
+      _nohupTimer = null;
       return;
     }
-    if (_procTimer != null && sec == _refreshSec) return;
-    _refreshSec = sec;
-    _procTimer?.cancel();
-    _procTimer = Timer.periodic(Duration(seconds: sec), (_) => _loadProcesses(silent: true));
+    if (_nohupTimer != null) return;
+    // Slower than processes: a detached job either runs or it does not, and
+    // this is one round trip per server in the fleet.
+    _nohupTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadNohup());
   }
 
   Future<void> _loadProcesses({bool silent = false}) async {
@@ -257,20 +294,30 @@ class _ServicesScreenState extends State<ServicesScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: vps.id,
-                  dropdownColor: BeacleColors.surfaceHi,
-                  style: const TextStyle(fontSize: 13, color: BeacleColors.text),
-                  items: [
-                    for (final v in withAgent)
-                      DropdownMenuItem(
-                          value: v.id,
-                          child: Row(children: [StatusDot(v.status, size: 7), const SizedBox(width: 8), Text(v.name)]))
-                  ],
-                  onChanged: (v) => setState(() => selectedId = v),
+              // Picking a server would mean nothing on the fleet tabs, so the
+              // dropdown is replaced by what is actually being shown.
+              if (_isFleetTab)
+                Row(children: [
+                  const Icon(Icons.dns_outlined, size: 15, color: BeacleColors.textDim),
+                  const SizedBox(width: 8),
+                  Text('All servers (${withAgent.length})',
+                      style: const TextStyle(fontSize: 13, color: BeacleColors.text)),
+                ])
+              else
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: vps.id,
+                    dropdownColor: BeacleColors.surfaceHi,
+                    style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                    items: [
+                      for (final v in withAgent)
+                        DropdownMenuItem(
+                            value: v.id,
+                            child: Row(children: [StatusDot(v.status, size: 7), const SizedBox(width: 8), Text(v.name)]))
+                    ],
+                    onChanged: (v) => setState(() => selectedId = v),
+                  ),
                 ),
-              ),
               const SizedBox(width: 16),
               SizedBox(
                 width: 240,
@@ -279,6 +326,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     hintText: switch (tab) {
                       0 => 'Filter everything...',
                       2 => 'Filter processes...',
+                      3 => 'Filter sessions...',
+                      4 => 'Filter jobs...',
                       _ => 'Filter services...',
                     },
                     prefixIcon: const Icon(Icons.search, size: 16),
@@ -305,8 +354,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           style: const TextStyle(fontSize: 12))),
                   ButtonSegment(value: 1, label: Text('systemd (${services.systemd.length})', style: const TextStyle(fontSize: 12))),
                   ButtonSegment(value: 2, label: Text('processes (${processes.length})', style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 3, label: Text('screen (${services.screen.length})', style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 4, label: Text('nohup (${nohupJobs.length})', style: const TextStyle(fontSize: 12))),
+                  // Fleet-wide counts, because these two tabs are fleet-wide.
+                  ButtonSegment(value: 3, label: Text('screen ($_fleetScreenCount)', style: const TextStyle(fontSize: 12))),
+                  ButtonSegment(value: 4, label: Text('nohup ($_fleetNohupCount)', style: const TextStyle(fontSize: 12))),
                 ],
                 selected: {tab},
                 onSelectionChanged: (s) {
@@ -324,8 +374,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
             0 => _allList(state, vps, services),
             1 => _systemdList(state, vps, services),
             2 => _processList(state, vps),
-            3 => _screenList(state, vps, services),
-            _ => _nohupList(state, vps),
+            3 => _fleetScreenList(state, withAgent),
+            _ => _fleetNohupList(state, withAgent),
           },
         ),
       ],
@@ -829,229 +879,308 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// reattach to, output goes to a file. Kept apart from screen because the
   /// two answer different questions — "let me watch this later" versus "just
   /// keep it up".
-  Widget _nohupList(AppState state, Vps vps) {
-    final live = vps.online && !state.isReportStale(vps);
-    var jobs = nohupJobs;
-    if (filter.isNotEmpty) {
-      jobs = jobs
-          .where((j) => j.name.toLowerCase().contains(filter) || j.command.toLowerCase().contains(filter))
+  /// A host's heading inside a fleet list. The actions belong to that host,
+  /// not to the fleet: starting a session is always somewhere specific.
+  Widget _hostHeader(Vps vps, String detail, {List<Widget> actions = const []}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: BeacleColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: BeacleColors.border),
+      ),
+      child: Row(
+        children: [
+          StatusDot(vps.status, size: 9),
+          const SizedBox(width: 10),
+          Text(vps.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(detail,
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                overflow: TextOverflow.ellipsis),
+          ),
+          ...actions,
+        ],
+      ),
+    );
+  }
+
+  /// Hosts worth drawing. Without a filter every server is listed, empty ones
+  /// included, because an empty host is still somewhere you might want to start
+  /// something. With a filter, servers with no match are dropped — three empty
+  /// sections between two hits is just noise.
+  List<Vps> _hostsWithMatches(List<Vps> hosts, int Function(Vps) matchCount) {
+    if (filter.isEmpty) return hosts;
+    return hosts.where((v) => matchCount(v) > 0).toList();
+  }
+
+  Widget _fleetScreenList(AppState state, List<Vps> hosts) {
+    List<ScreenSession> sessionsOf(Vps v) {
+      final all = state.snapshots[v.id]?.services.screen ?? const <ScreenSession>[];
+      if (filter.isEmpty) return all;
+      return all
+          .where((s) =>
+              s.name.toLowerCase().contains(filter) || s.command.toLowerCase().contains(filter))
           .toList();
     }
 
-    return Column(
+    final shown = _hostsWithMatches(hosts, (v) => sessionsOf(v).length);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Detached commands. Output goes to /var/log/beacle/<name>.log.',
-                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
-                ),
-              ),
-              SmallButton('Refresh', icon: Icons.refresh, onPressed: live ? _loadNohup : null),
-              const SizedBox(width: 8),
-              SmallButton('Run detached', icon: Icons.add,
-                  onPressed: live ? () => _startNohup(state, vps) : null),
-            ],
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text(
+            'Long-running scripts kept alive in GNU screen, across every server.',
+            style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
           ),
         ),
-        Expanded(
-          child: jobs.isEmpty
-              ? const Center(child: Text('No nohup jobs', style: TextStyle(color: BeacleColors.textDim)))
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  children: [
-                    for (final j in jobs)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: PanelCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: Row(children: [
-                            Icon(Icons.play_circle_outline, size: 18,
-                                color: j.running ? BeacleColors.ok : BeacleColors.textDim),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(j.name,
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 2),
-                                Text(j.command,
-                                    style: const TextStyle(fontSize: 11, fontFamily: 'Consolas'),
-                                    overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'PID ${j.pid}${j.dir.isEmpty ? '' : ' · ${j.dir}'} · started ${j.started}',
-                                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ]),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: (j.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(j.running ? 'running' : 'exited',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: j.running ? BeacleColors.ok : BeacleColors.textDim)),
-                            ),
-                            const SizedBox(width: 10),
-                            IconButton(
-                              icon: const Icon(Icons.article_outlined, size: 16),
-                              tooltip: 'Job output',
-                              onPressed: !live
-                                  ? null
-                                  : () => showLogsDialog(
-                                        context,
-                                        j.logFile,
-                                        () => state.api.nohupLogs(vps.id, j.name),
-                                      ),
-                            ),
-                            IconButton(
-                              icon: Icon(j.running ? Icons.stop : Icons.delete_outline, size: 16),
-                              tooltip: j.running ? 'Stop this job' : 'Remove this record',
-                              color: BeacleColors.err,
-                              onPressed: !live ? null : () => _stopNohup(state, vps, j),
-                            ),
-                          ]),
-                        ),
-                      ),
+        if (shown.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Center(
+              child: Text('Nothing matches the filter', style: TextStyle(color: BeacleColors.textDim)),
+            ),
+          ),
+        for (var i = 0; i < shown.length; i++) ...[
+          if (i > 0) const SizedBox(height: 22),
+          Builder(builder: (_) {
+            final vps = shown[i];
+            final live = vps.online && !state.isReportStale(vps);
+            final sessions = sessionsOf(vps);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _hostHeader(
+                  vps,
+                  live ? '${sessions.length} session(s)' : 'agent offline',
+                  actions: [
+                    SmallButton('New session', icon: Icons.add,
+                        onPressed: live ? () => _startScreen(state, vps) : null),
                   ],
                 ),
+                const SizedBox(height: 10),
+                if (sessions.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text(live ? 'No screen sessions' : 'No data — agent offline',
+                        style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                  )
+                else
+                  for (final s in sessions) _screenSessionCard(state, vps, s, live),
+              ],
+            );
+          }),
+        ],
+        const Padding(
+          padding: EdgeInsets.only(top: 14),
+          child: Text('Reattach on the server with screen -r <name>.',
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         ),
       ],
     );
   }
 
-  Widget _screenList(AppState state, Vps vps, ServicesState services) {
-    var sessions = services.screen;
-    if (filter.isNotEmpty) {
-      sessions = sessions.where((s) => s.name.toLowerCase().contains(filter)).toList();
-    }
-    final live = vps.online && !state.isReportStale(vps);
+  Widget _screenSessionCard(AppState state, Vps vps, ScreenSession s, bool live) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: PanelCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(children: [
+          Icon(Icons.terminal, size: 18, color: s.running ? BeacleColors.ok : BeacleColors.textDim),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 10),
+                if (s.attached)
+                  const Text('attached', style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+              ]),
+              const SizedBox(height: 2),
+              Text(
+                s.running ? s.command : 'idle — nothing running',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: s.running ? 'Consolas' : null,
+                  color: s.running ? BeacleColors.text : BeacleColors.textDim,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'PID ${s.pid}${s.running ? ' · child ${s.childPid}' : ''} · created ${s.created}',
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+              ),
+            ]),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: (s.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(s.running ? 'running' : 'idle',
+                style: TextStyle(
+                    fontSize: 11, color: s.running ? BeacleColors.ok : BeacleColors.textDim)),
+          ),
+          const SizedBox(width: 10),
+          // Start only into an idle session, stop only a busy one — the agent
+          // enforces the same rule.
+          IconButton(
+            icon: const Icon(Icons.add, size: 16),
+            tooltip: s.running ? 'Already running — stop it first' : 'Run a script here',
+            color: BeacleColors.ok,
+            onPressed: (!live || s.running) ? null : () => _startScreen(state, vps, existingName: s.name),
+          ),
+          IconButton(
+            icon: const Icon(Icons.stop, size: 16),
+            tooltip: s.running ? 'Send Ctrl+C' : 'Nothing to stop',
+            color: BeacleColors.err,
+            onPressed: (!live || !s.running) ? null : () => _stopScreen(state, vps, s),
+          ),
+          IconButton(
+            icon: const Icon(Icons.article_outlined, size: 16),
+            tooltip: 'Session output',
+            onPressed: !live
+                ? null
+                : () => showLogsDialog(
+                      context,
+                      'screen -S ${s.name} (hardcopy)',
+                      () => state.api.screenLogs(vps.id, s.name),
+                    ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 16),
+            tooltip: 'Delete this session',
+            color: BeacleColors.err,
+            onPressed: !live ? null : () => _killScreen(state, vps, s),
+          ),
+        ]),
+      ),
+    );
+  }
 
-    return Column(
+  Widget _fleetNohupList(AppState state, List<Vps> hosts) {
+    List<NohupJob> jobsOf(Vps v) {
+      final all = nohupByVps[v.id] ?? const <NohupJob>[];
+      if (filter.isEmpty) return all;
+      return all
+          .where((j) =>
+              j.name.toLowerCase().contains(filter) || j.command.toLowerCase().contains(filter))
+          .toList();
+    }
+
+    final shown = _hostsWithMatches(hosts, (v) => jobsOf(v).length);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Long-running scripts kept alive in GNU screen.',
-                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
-                ),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(children: [
+            const Expanded(
+              child: Text(
+                'Detached commands across every server. Output goes to /var/log/beacle/<name>.log.',
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
-              SmallButton(
-                'New session',
-                icon: Icons.add,
-                onPressed: live ? () => _startScreen(state, vps) : null,
-              ),
-            ],
-          ),
+            ),
+            SmallButton('Refresh', icon: Icons.refresh, onPressed: _loadNohup),
+          ]),
         ),
-        Expanded(
-          child: sessions.isEmpty
-              ? const Center(child: Text('No screen sessions', style: TextStyle(color: BeacleColors.textDim)))
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  children: [
-                    for (final s in sessions)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: PanelCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: Row(children: [
-                            Icon(Icons.terminal, size: 18,
-                                color: s.running ? BeacleColors.ok : BeacleColors.textDim),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Row(children: [
-                                  Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                  const SizedBox(width: 10),
-                                  if (s.attached)
-                                    const Text('attached',
-                                        style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
-                                ]),
-                                const SizedBox(height: 2),
-                                Text(
-                                  s.running ? s.command : 'idle — nothing running',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontFamily: s.running ? 'Consolas' : null,
-                                    color: s.running ? BeacleColors.text : BeacleColors.textDim,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'PID ${s.pid}${s.running ? ' · child ${s.childPid}' : ''} · created ${s.created}',
-                                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
-                                ),
-                              ]),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: (s.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(s.running ? 'running' : 'idle',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: s.running ? BeacleColors.ok : BeacleColors.textDim)),
-                            ),
-                            const SizedBox(width: 10),
-                            // Start only into an idle session, stop only a busy
-                            // one — the agent enforces the same rule.
-                            IconButton(
-                              icon: const Icon(Icons.add, size: 16),
-                              tooltip: s.running ? 'Already running — stop it first' : 'Run a script here',
-                              color: BeacleColors.ok,
-                              onPressed: (!live || s.running)
-                                  ? null
-                                  : () => _startScreen(state, vps, existingName: s.name),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.stop, size: 16),
-                              tooltip: s.running ? 'Send Ctrl+C' : 'Nothing to stop',
-                              color: BeacleColors.err,
-                              onPressed: (!live || !s.running) ? null : () => _stopScreen(state, vps, s),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.article_outlined, size: 16),
-                              tooltip: 'Session output',
-                              onPressed: !live
-                                  ? null
-                                  : () => showLogsDialog(
-                                        context,
-                                        'screen -S ${s.name} (hardcopy)',
-                                        () => state.api.screenLogs(vps.id, s.name),
-                                      ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 16),
-                              tooltip: 'Delete this session',
-                              color: BeacleColors.err,
-                              onPressed: !live ? null : () => _killScreen(state, vps, s),
-                            ),
-                          ]),
-                        ),
-                      ),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text('Reattach on the server with screen -r <name>.',
-                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-                    ),
+        if (shown.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Center(
+              child: Text('Nothing matches the filter', style: TextStyle(color: BeacleColors.textDim)),
+            ),
+          ),
+        for (var i = 0; i < shown.length; i++) ...[
+          if (i > 0) const SizedBox(height: 22),
+          Builder(builder: (_) {
+            final vps = shown[i];
+            final live = vps.online && !state.isReportStale(vps);
+            final jobs = jobsOf(vps);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _hostHeader(
+                  vps,
+                  live ? '${jobs.where((j) => j.running).length}/${jobs.length} running' : 'agent offline',
+                  actions: [
+                    SmallButton('Run detached', icon: Icons.add,
+                        onPressed: live ? () => _startNohup(state, vps) : null),
                   ],
                 ),
-        ),
+                const SizedBox(height: 10),
+                if (jobs.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text(live ? 'No nohup jobs' : 'No data — agent offline',
+                        style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                  )
+                else
+                  for (final j in jobs) _nohupJobCard(state, vps, j, live),
+              ],
+            );
+          }),
+        ],
       ],
+    );
+  }
+
+  Widget _nohupJobCard(AppState state, Vps vps, NohupJob j, bool live) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: PanelCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(children: [
+          Icon(Icons.play_circle_outline, size: 18,
+              color: j.running ? BeacleColors.ok : BeacleColors.textDim),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(j.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(j.command,
+                  style: const TextStyle(fontSize: 11, fontFamily: 'Consolas'),
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text(
+                'PID ${j.pid}${j.dir.isEmpty ? '' : ' · ${j.dir}'} · started ${j.started}',
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ]),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: (j.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(j.running ? 'running' : 'exited',
+                style: TextStyle(
+                    fontSize: 11, color: j.running ? BeacleColors.ok : BeacleColors.textDim)),
+          ),
+          const SizedBox(width: 10),
+          IconButton(
+            icon: const Icon(Icons.article_outlined, size: 16),
+            tooltip: 'Job output',
+            onPressed: !live
+                ? null
+                : () => showLogsDialog(context, j.logFile, () => state.api.nohupLogs(vps.id, j.name)),
+          ),
+          IconButton(
+            icon: Icon(j.running ? Icons.stop : Icons.delete_outline, size: 16),
+            tooltip: j.running ? 'Stop this job' : 'Remove this record',
+            color: BeacleColors.err,
+            onPressed: !live ? null : () => _stopNohup(state, vps, j),
+          ),
+        ]),
+      ),
     );
   }
 }
