@@ -38,6 +38,27 @@ type systemdBus struct {
 	// the state, so an unchanged state means the cached PID is still right.
 	mainPIDs  map[string]cachedPID
 	mainPIDMu sync.Mutex
+
+	// Why the last attempt to use the bus failed, for the selfstat endpoint.
+	// A silent fallback to spawning systemctl looks identical from the panel
+	// and costs everything this file was written to save.
+	lastErr string
+}
+
+func (s *systemdBus) LastError() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastErr
+}
+
+func (s *systemdBus) setLastError(err error) {
+	s.mu.Lock()
+	if err == nil {
+		s.lastErr = ""
+	} else {
+		s.lastErr = err.Error()
+	}
+	s.mu.Unlock()
 }
 
 type cachedPID struct {
@@ -160,6 +181,7 @@ func (s *systemdBus) mainPID(ctx context.Context, conn *sd.Conn, name, state str
 func (s *systemdBus) Units() ([]shared.SystemdUnit, bool) {
 	conn, err := s.connect()
 	if err != nil {
+		s.setLastError(err)
 		return nil, false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -170,8 +192,10 @@ func (s *systemdBus) Units() ([]shared.SystemdUnit, bool) {
 	// asking for --all here.
 	list, err := conn.ListUnitsByPatternsContext(ctx, nil, []string{"*.service"})
 	if err != nil {
+		s.setLastError(err)
 		return nil, false
 	}
+	s.setLastError(nil)
 	fileStates := s.unitFileStates(ctx, conn)
 
 	units := make([]shared.SystemdUnit, 0, len(list))

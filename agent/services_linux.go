@@ -18,12 +18,18 @@ import (
 // --- systemd ------------------------------------------------------------------
 
 func (c *linuxCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
+	defer track("systemd")()
+
 	// D-Bus first: no process spawns, no text to parse back. systemctl stays as
 	// the fallback for hosts where the bus is not reachable.
 	if units, ok := systemd.Units(); ok {
+		noteSystemdPath("dbus", "")
 		sort.Slice(units, func(i, j int) bool { return units[i].Name < units[j].Name })
 		return units, nil
 	}
+	// Falling back is invisible from the panel and costs everything the D-Bus
+	// path was written to save, so it gets recorded rather than shrugged off.
+	noteSystemdPath("systemctl", systemd.LastError())
 	return systemdUnitsViaCLI()
 }
 
@@ -81,19 +87,43 @@ func attachMainPIDs(units []shared.SystemdUnit) {
 	if err != nil {
 		return // no PIDs is a missing column, not a failed collection
 	}
+	// systemctl separates each unit with a blank line but gives no promise
+	// about the order of properties inside a block. Reading them as a stream
+	// and pairing "the last Id seen" with "the next MainPID" attaches a unit's
+	// PID to whichever unit happened to come before it the moment the order
+	// flips — which is how services ended up showing the PID, CPU and memory of
+	// completely unrelated processes.
+	//
+	// A block is collected whole and only then interpreted.
 	pids := map[string]int{}
 	var id string
+	pid := 0
+
+	flush := func() {
+		if id != "" && pid > 0 {
+			pids[id] = pid
+		}
+		id, pid = "", 0
+	}
+
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(line, "Id="):
-			id = strings.TrimPrefix(line, "Id=")
-		case strings.HasPrefix(line, "MainPID="):
-			if pid, err := strconv.Atoi(strings.TrimPrefix(line, "MainPID=")); err == nil && pid > 0 && id != "" {
-				pids[id] = pid
+		if line == "" {
+			flush()
+			continue
+		}
+		if v, ok := strings.CutPrefix(line, "Id="); ok {
+			id = v
+			continue
+		}
+		if v, ok := strings.CutPrefix(line, "MainPID="); ok {
+			if n, err := strconv.Atoi(v); err == nil {
+				pid = n
 			}
 		}
 	}
+	flush() // the final block has no blank line after it
+
 	for i := range units {
 		units[i].MainPID = pids[units[i].Name]
 	}

@@ -50,6 +50,13 @@ func (s *APIServer) Routes() http.Handler {
 		jsonOut(w, 200, map[string]any{"ok": true, "version": AgentVersion})
 	})
 
+	// Self-measurement. Answers "what is this agent spending its time on"
+	// without needing a shell on the box:
+	//   curl http://127.0.0.1:9930/api/vps/<id>/agent/debug/selfstat
+	mux.HandleFunc("GET /api/debug/selfstat", a(func(w http.ResponseWriter, r *http.Request) {
+		jsonOut(w, 200, collectSelfStat())
+	}))
+
 	// system
 	mux.HandleFunc("GET /api/system", a(func(w http.ResponseWriter, r *http.Request) {
 		m, err := s.col.Metrics()

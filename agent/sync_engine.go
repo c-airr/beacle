@@ -74,6 +74,7 @@ func (e *SyncEngine) SetPowerMode(mode shared.PowerMode) {
 	e.mu.Lock()
 	e.mode = mode
 	e.mu.Unlock()
+	notePowerMode(string(mode))
 	e.modeVersion.Add(1)
 	go e.PushAll()
 }
@@ -205,6 +206,7 @@ func (e *SyncEngine) PushAll() {
 }
 
 func (e *SyncEngine) pushMetrics() error {
+	defer track("metrics")()
 	metrics, err := e.reporter.Metrics()
 	if err != nil {
 		log.Printf("metrics: %v", err)
@@ -219,6 +221,7 @@ func (e *SyncEngine) pushMetrics() error {
 }
 
 func (e *SyncEngine) pushPorts() error {
+	defer track("ports")()
 	ports, err := e.reporter.Ports()
 	if err != nil {
 		log.Printf("ports: %v", err)
@@ -233,6 +236,7 @@ func (e *SyncEngine) pushPorts() error {
 }
 
 func (e *SyncEngine) pushDocker() error {
+	defer track("docker")()
 	docker := e.reporter.Docker()
 	fp := fingerprintDocker(docker)
 	e.fpMu.Lock()
@@ -255,6 +259,7 @@ func (e *SyncEngine) pushSystemd() error {
 }
 
 func (e *SyncEngine) pushProxy() error {
+	defer track("proxy")()
 	proxy := e.reporter.Proxy()
 	fp := fingerprintProxy(proxy)
 	e.fpMu.Lock()
