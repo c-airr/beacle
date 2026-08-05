@@ -60,12 +60,23 @@ Get-ChildItem $distAgent -Recurse -File | ForEach-Object { Write-Host "  $($_.Fu
 $iss = "$root\installer\windows\beacle.iss"
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue
 if (-not $iscc) {
-    $isccPath = 'C:\Program Files (x86)\Inno Setup 6\iscc.exe'
-    if (Test-Path $isccPath) { $iscc = [pscustomobject]@{ Source = $isccPath } }
+    $isccPaths = @(
+        'C:\Program Files (x86)\Inno Setup 6\iscc.exe',
+        'C:\Program Files\Inno Setup 6\iscc.exe',
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\iscc.exe"
+    )
+    foreach ($p in $isccPaths) {
+        if (Test-Path $p) { $iscc = [pscustomobject]@{ Source = $p }; break }
+    }
 }
 if ($iscc) {
     Write-Host '[installer] building beacle.iss' -ForegroundColor Cyan
-    & $iscc.Source $iss
+    # Pull the version out of pubspec.yaml so the installer shows the same
+    # number as the app, without a second place to bump it.
+    $pubspec = Get-Content "$root\app\pubspec.yaml" -Raw
+    $verMatch = [regex]::Match($pubspec, '(?m)^version:\s*([^\s]+)')
+    $appVer = if ($verMatch.Success) { $verMatch.Groups[1].Value } else { '0.0.0' }
+    & $iscc.Source "/DAppVersion=$appVer" $iss
     if (Test-Path "$root\dist\installer") {
         Get-ChildItem "$root\dist\installer\*.exe" | ForEach-Object {
             Write-Host "  installer: $($_.FullName.Replace($root, '.'))"
