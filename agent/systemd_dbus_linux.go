@@ -106,9 +106,13 @@ func (s *systemdBus) connect() (*sd.Conn, error) {
 		s.conn.Close()
 		s.conn = nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	conn, err := sd.NewSystemConnectionContext(ctx)
+	// Do not dial with a cancellable timeout context. go-systemd passes that
+	// context to godbus as the connection's lifetime — the moment the context
+	// ends, godbus closes the socket. We used to WithTimeout(5s)+defer cancel
+	// here, so cancel ran as soon as connect() returned and every later
+	// ListUnits failed with "use of closed network connection". The agent then
+	// fell through to systemctl on every poll (~2s, enough to spike a core).
+	conn, err := sd.NewSystemConnectionContext(context.Background())
 	if err != nil {
 		return nil, err
 	}
