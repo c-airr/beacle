@@ -38,15 +38,16 @@ func intervalsFor(mode shared.PowerMode) syncIntervals {
 			watchdog: 0,
 		}
 	default:
-		// Continuous feel: metrics every second, the rest often enough that
-		// docker/services/proxy do not sit on stale snapshots for half a minute.
+		// Active = the user is looking at the panel. Twice as fast as eco so
+		// the live graph and the docker/services lists move while the window is
+		// open, without burning a core on a server nobody is watching.
 		return syncIntervals{
-			metrics:  1 * time.Second,
-			ports:    8 * time.Second,
-			docker:   10 * time.Second,
-			systemd:  8 * time.Second,
-			proxy:    8 * time.Second,
-			watchdog: 2 * time.Second, // metrics only
+			metrics:  500 * time.Millisecond,
+			ports:    4 * time.Second,
+			docker:   5 * time.Second,
+			systemd:  4 * time.Second,
+			proxy:    4 * time.Second,
+			watchdog: 1 * time.Second, // metrics only
 		}
 	}
 }
