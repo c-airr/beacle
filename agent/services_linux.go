@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"beacle/shared"
@@ -212,6 +213,23 @@ func (c *linuxCollector) ListDir(path string) (shared.FSListing, error) {
 
 // --- screen --------------------------------------------------------------------
 
+// screenAvailable caches whether the screen binary exists. Systemd collection
+// calls ScreenSessions every tick; forking `screen -ls` only to get
+// "executable file not found" on hosts that never installed it was free noise
+// on every poll.
+var (
+	screenOnce sync.Once
+	screenOK   bool
+)
+
+func screenAvailable() bool {
+	screenOnce.Do(func() {
+		_, err := exec.LookPath("screen")
+		screenOK = err == nil
+	})
+	return screenOK
+}
+
 // screenPayload reports what is executing inside a screen session. screen forks
 // a daemon (the pid in `screen -ls`) which owns the window's shell, so the
 // payload is a descendant rather than a direct child — an idle session bottoms
@@ -299,6 +317,9 @@ func screenPayload(sessionPID int, all []procRow) (int, string) {
 }
 
 func (c *linuxCollector) ScreenSessions() ([]shared.ScreenSession, error) {
+	if !screenAvailable() {
+		return nil, nil
+	}
 	out, _ := exec.Command("screen", "-ls").Output()
 	// screen -ls exits 1 when there are no sessions; parse whatever we got.
 	// One process table for all sessions, read only if there is a session to

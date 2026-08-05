@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"beacle/shared"
@@ -21,12 +22,42 @@ import (
 // agent works even when the docker CLI is not installed.
 type dockerClient struct {
 	http *http.Client
+
+	// prevStats keeps the last one-shot reading per container so CPU% can be
+	// computed across polls. The Engine API's default (one-shot=false) waits
+	// ~1s inside dockerd for a second sample on every call — with N running
+	// containers that was N seconds of work every collection, which is what
+	// selfstat measured as docker: 1129ms on a nearly idle host.
+	statsMu   sync.Mutex
+	prevStats map[string]dockerCPUSample
+
+	// inspectCache avoids a full /containers/{id}/json round-trip for every
+	// container on every poll when the container has not changed state.
+	inspectMu    sync.Mutex
+	inspectCache map[string]cachedInspect
 }
+
+type dockerCPUSample struct {
+	totalUsage  uint64
+	systemUsage uint64
+	at          time.Time
+}
+
+type cachedInspect struct {
+	state        string
+	restartCount int
+	exitCode     int
+	at           time.Time
+}
+
+const inspectCacheFor = 60 * time.Second
 
 func newDockerClient() *dockerClient {
 	return &dockerClient{
 		http: &http.Client{
-			Timeout: 20 * time.Second,
+			// Collection must stay well under the sync interval. A hung dockerd
+			// used to pin a collector for the full 20s and pile work behind it.
+			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 					var d net.Dialer
@@ -34,6 +65,8 @@ func newDockerClient() *dockerClient {
 				},
 			},
 		},
+		prevStats:    map[string]dockerCPUSample{},
+		inspectCache: map[string]cachedInspect{},
 	}
 }
 
@@ -189,11 +222,7 @@ func (c *linuxCollector) Docker() shared.DockerState {
 				PrivatePort: p.PrivatePort, PublicPort: p.PublicPort, Protocol: p.Type, IP: p.IP,
 			})
 		}
-		var ins apiInspect
-		if err := c.docker.get("/containers/"+rc.ID+"/json", &ins); err == nil {
-			ci.RestartCount = ins.RestartCount
-			ci.ExitCode = ins.State.ExitCode
-		}
+		ci.RestartCount, ci.ExitCode = c.docker.inspectExtras(rc.ID, rc.State)
 		st.Containers = append(st.Containers, ci)
 
 		if proj := ci.ComposeProject; proj != "" {
@@ -273,7 +302,31 @@ func (c *linuxCollector) Docker() shared.DockerState {
 			st.Stats = append(st.Stats, stat)
 		}
 	}
+	c.docker.pruneCaches(st.Containers)
 	return st
+}
+
+// pruneCaches drops readings for containers that are gone, so a recreate under
+// a new id cannot compute CPU% against a stranger's counters.
+func (d *dockerClient) pruneCaches(containers []shared.ContainerInfo) {
+	live := make(map[string]bool, len(containers))
+	for _, c := range containers {
+		live[c.ID] = true
+	}
+	d.statsMu.Lock()
+	for id := range d.prevStats {
+		if !live[id] {
+			delete(d.prevStats, id)
+		}
+	}
+	d.statsMu.Unlock()
+	d.inspectMu.Lock()
+	for id := range d.inspectCache {
+		if !live[id] {
+			delete(d.inspectCache, id)
+		}
+	}
+	d.inspectMu.Unlock()
 }
 
 func (c *linuxCollector) DockerAction(id, action string) error {
@@ -286,9 +339,33 @@ func (c *linuxCollector) DockerAction(id, action string) error {
 	return fmt.Errorf("unknown docker action %q", action)
 }
 
+// inspectExtras returns RestartCount and ExitCode, reusing a short cache so a
+// fleet of stopped containers does not mean a fleet of inspect round-trips.
+func (d *dockerClient) inspectExtras(id, state string) (restartCount, exitCode int) {
+	d.inspectMu.Lock()
+	if c, ok := d.inspectCache[id]; ok && c.state == state && time.Since(c.at) < inspectCacheFor {
+		d.inspectMu.Unlock()
+		return c.restartCount, c.exitCode
+	}
+	d.inspectMu.Unlock()
+
+	var ins apiInspect
+	if err := d.get("/containers/"+id+"/json", &ins); err != nil {
+		return 0, 0
+	}
+	d.inspectMu.Lock()
+	d.inspectCache[id] = cachedInspect{
+		state: state, restartCount: ins.RestartCount, exitCode: ins.State.ExitCode, at: time.Now(),
+	}
+	d.inspectMu.Unlock()
+	return ins.RestartCount, ins.State.ExitCode
+}
+
 func (c *linuxCollector) DockerStats(id string) (shared.ContainerStats, error) {
 	var s apiStats
-	if err := c.docker.get("/containers/"+id+"/stats?stream=false&one-shot=false", &s); err != nil {
+	// one-shot=true: a single counter reading, returned immediately. CPU% is
+	// derived from the previous reading we kept ourselves (see prevStats).
+	if err := c.docker.get("/containers/"+id+"/stats?stream=false&one-shot=true", &s); err != nil {
 		return shared.ContainerStats{}, err
 	}
 	out := shared.ContainerStats{
@@ -306,14 +383,24 @@ func (c *linuxCollector) DockerStats(id string) (shared.ContainerStats, error) {
 	if out.MemLimit > 0 {
 		out.MemPercent = float64(out.MemUsage) / float64(out.MemLimit) * 100
 	}
-	cpuDelta := float64(s.CPUStats.CPUUsage.TotalUsage - s.PreCPUStats.CPUUsage.TotalUsage)
-	sysDelta := float64(s.CPUStats.SystemUsage - s.PreCPUStats.SystemUsage)
-	if sysDelta > 0 && cpuDelta > 0 {
-		cpus := float64(s.CPUStats.OnlineCPUs)
-		if cpus == 0 {
-			cpus = 1
+
+	total := s.CPUStats.CPUUsage.TotalUsage
+	system := s.CPUStats.SystemUsage
+	c.docker.statsMu.Lock()
+	prev, had := c.docker.prevStats[id]
+	c.docker.prevStats[id] = dockerCPUSample{totalUsage: total, systemUsage: system, at: time.Now()}
+	c.docker.statsMu.Unlock()
+
+	if had && system > prev.systemUsage && total >= prev.totalUsage {
+		cpuDelta := float64(total - prev.totalUsage)
+		sysDelta := float64(system - prev.systemUsage)
+		if sysDelta > 0 && cpuDelta > 0 {
+			cpus := float64(s.CPUStats.OnlineCPUs)
+			if cpus == 0 {
+				cpus = 1
+			}
+			out.CPUPercent = cpuDelta / sysDelta * cpus * 100
 		}
-		out.CPUPercent = cpuDelta / sysDelta * cpus * 100
 	}
 	for _, n := range s.Networks {
 		out.NetRxBytes += n.RxBytes
