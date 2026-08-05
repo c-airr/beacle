@@ -20,11 +20,9 @@ import (
 
 type linuxCollector struct {
 	mu sync.Mutex
-	// CPU usage is a rate between two counter readings, so the state that
-	// matters is when the last reading was taken, not just what it said.
-	// See cpu_sampler.go.
-	cpuAll    cpuSampler
-	cpuCores  multiSampler
+	// CPU is sampled by cpuMon on its own ticker — see cpu_monitor_linux.go.
+	// The fields that used to live here (cpuAll / cpuCores) moved with it.
+	cpuMon    *cpuMonitor
 	prevNet   map[string][2]uint64 // iface -> rx, tx
 	prevNetAt time.Time
 	docker    *dockerClient
@@ -125,6 +123,7 @@ func (c *linuxCollector) procCPUDeltas() map[int]float64 {
 
 func newCollector(cfg *Config) Collector {
 	return &linuxCollector{
+		cpuMon:  newCPUMonitor(),
 		prevNet: map[string][2]uint64{},
 		docker:  newDockerClient(),
 	}
@@ -203,26 +202,27 @@ func readPerCoreCPUTimes() []cpuSample {
 	return cores
 }
 
-func (c *linuxCollector) cpuPercent() float64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	idle, total := readCPUTimes()
-	return c.cpuAll.sample(idle, total, time.Now())
+func osHostname() (string, error) { return os.Hostname() }
+
+func readKernelRelease() string {
+	b, err := os.ReadFile("/proc/sys/kernel/osrelease")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
-func (c *linuxCollector) cpuPerCore() []float64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	samples := readPerCoreCPUTimes()
-	if len(samples) == 0 {
-		return nil
+func readPrettyName() string {
+	b, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return "Linux"
 	}
-	idle := make([]uint64, len(samples))
-	total := make([]uint64, len(samples))
-	for i, s := range samples {
-		idle[i], total[i] = s.idle, s.total
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "PRETTY_NAME=") {
+			return strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), `"`)
+		}
 	}
-	return c.cpuCores.sample(idle, total, time.Now())
+	return "Linux"
 }
 
 func cpuModel() (string, int) {
@@ -386,7 +386,6 @@ func (c *linuxCollector) networkStats() []shared.NetworkStats {
 // --- Metrics -----------------------------------------------------------------
 
 func (c *linuxCollector) Metrics() (shared.SystemMetrics, error) {
-	hostname, _ := os.Hostname()
 	memTotal, memAvail, memFree, memCached, memBuffers, swapTotal, swapFree := readMeminfo()
 	memUsed := uint64(0)
 	if memTotal > memAvail {
@@ -406,28 +405,15 @@ func (c *linuxCollector) Metrics() (shared.SystemMetrics, error) {
 	if b, err := os.ReadFile("/proc/uptime"); err == nil {
 		fmt.Sscanf(string(b), "%f", &uptime)
 	}
-	kernel := ""
-	if b, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
-		kernel = strings.TrimSpace(string(b))
-	}
-	osName := "Linux"
-	if b, err := os.ReadFile("/etc/os-release"); err == nil {
-		for _, line := range strings.Split(string(b), "\n") {
-			if strings.HasPrefix(line, "PRETTY_NAME=") {
-				osName = strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), `"`)
-				break
-			}
-		}
-	}
-	model, cores := cpuModel()
-	perCore := c.cpuPerCore()
+
+	pct, perCore, model, cores, hostname, osName, kernel := c.cpuMon.snapshot()
 
 	m := shared.SystemMetrics{
 		Hostname:           hostname,
 		OS:                 osName,
 		Kernel:             kernel,
 		Arch:               runtime.GOARCH,
-		CPUPercent:         c.cpuPercent(),
+		CPUPercent:         pct,
 		CPUCores:           cores,
 		CPUModel:           model,
 		CPUPerCore:         perCore,

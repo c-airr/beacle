@@ -19,6 +19,11 @@ import "time"
 //
 // cpuSampler refuses to answer from a window that short and repeats its last
 // real measurement instead.
+//
+// Metrics no longer drives sampling at all — see cpu_monitor_linux.go. The
+// guard here still matters for the monitor's own ticker (and for tests), and
+// documents the failure mode the panel kept showing: load 0.06 with one core
+// at 95%.
 type cpuSampler struct {
 	prevIdle  uint64
 	prevTotal uint64

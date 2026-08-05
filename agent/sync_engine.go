@@ -114,18 +114,43 @@ func (e *SyncEngine) loop(ctx context.Context, kind syncKind) {
 
 func (e *SyncEngine) intervalFor(kind syncKind) time.Duration {
 	iv := e.intervals()
+	var base time.Duration
+	var stage string
 	switch kind {
 	case syncPorts:
-		return iv.ports
+		base, stage = iv.ports, "ports"
 	case syncDocker:
-		return iv.docker
+		base, stage = iv.docker, "docker"
 	case syncSystemd:
-		return iv.systemd
+		base, stage = iv.systemd, "systemd"
 	case syncProxy:
-		return iv.proxy
+		base, stage = iv.proxy, "proxy"
 	default:
-		return iv.metrics
+		base, stage = iv.metrics, "metrics"
 	}
+	return stretchExpensive(base, stage)
+}
+
+// stretchExpensive backs off a stage whose last run was slow. A systemd read
+// that fell through to spawning systemctl was measured at ~1.8s — polling that
+// every 30s is already a lot, and anything faster quietly pins a core for a
+// visible fraction of each minute. Stretching to at least a minute (or 4× the
+// cost, whichever is longer) keeps the panel updated without the agent being
+// the busiest thing on an idle VPS.
+func stretchExpensive(base time.Duration, stage string) time.Duration {
+	cost := lastStageMs(stage)
+	if cost < 250 {
+		return base
+	}
+	// Four times the measured cost, floored at a minute.
+	stretched := time.Duration(cost*4) * time.Millisecond
+	if stretched < time.Minute {
+		stretched = time.Minute
+	}
+	if stretched > base {
+		return stretched
+	}
+	return base
 }
 
 func (e *SyncEngine) pusher(kind syncKind) func() error {
