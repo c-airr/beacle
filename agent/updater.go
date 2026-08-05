@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"beacle/shared"
@@ -112,35 +113,55 @@ func fetchGitHubAsset(goarch string) (stamp, downloadURL string, err error) {
 // 	return stamp, nil
 // }
 
-// Update downloads the binary from the GitHub release and restarts. That is
-// the whole contract: fetch what is on agentbeta right now, swap it in, come
-// back up.
+// Update downloads the binary and restarts. Config is never touched.
 //
-// Nothing is compared first. The release is a rolling tag overwritten in
-// place, so its metadata cannot answer "did this change" honestly — a rebuild
-// under the same tag keeps the digest and timestamp it had before. Every
-// version of this that tried to be clever ended up refusing to download.
+// Prefer the panel backend's /download/agent redirect: that URL is owned by
+// whatever backend the agent is talking to, so a build that was wrongly
+// compiled against a missing release tag (the 0.5-beta 404) can still recover
+// as long as the backend points at agentbeta. Direct GitHub is the fallback
+// when the backend is unreachable.
 func (u *Updater) Update() (string, error) {
-	// The asset URL is fixed and derivable, so the API call is only worth
-	// making for the tidier download link; failing it changes nothing.
-	_, url, err := fetchGitHubAsset(runtime.GOARCH)
-	if err != nil || url == "" {
-		url = shared.AgentGitHubBinaryURL(runtime.GOARCH)
-	}
+	url := u.downloadURL()
 	bin, err := u.binPath()
 	if err != nil {
 		return "", err
 	}
 
-	client := &http.Client{Timeout: 3 * time.Minute}
+	client := &http.Client{
+		Timeout: 3 * time.Minute,
+		// Follow the backend's 302 to GitHub; without this we would save the
+		// HTML redirect body as the "binary".
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			return nil
+		},
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("download: %w", err)
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
+		resp.Body.Close()
+		// Last resort: baked-in GitHub URL (agentbeta), for builds whose
+		// compiled tag pointed at a release that never existed.
+		fallback := shared.AgentGitHubBinaryURL(runtime.GOARCH)
+		if fallback == url {
+			return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
+		}
+		resp, err = client.Get(fallback)
+		if err != nil {
+			return "", fmt.Errorf("download: %w", err)
+		}
+		url = fallback
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
+		}
 	}
+	defer resp.Body.Close()
+
 	tmp := bin + ".new"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
@@ -164,12 +185,19 @@ func (u *Updater) Update() (string, error) {
 		return "", fmt.Errorf("swap binary: %w", err)
 	}
 	u.restartSoon()
-	// The size is worth reporting: against a rolling tag it is the only thing
-	// distinguishing "a new build arrived" from "the same bytes came down
-	// again", and the answer decides whether to go looking further.
-	return fmt.Sprintf("downloaded %s from GitHub %s (%.1f MB), restarting",
-		shared.AgentGitHubAssetName(runtime.GOARCH), shared.AgentReleaseTag,
-		float64(n)/(1024*1024)), nil
+	return fmt.Sprintf("downloaded %s (%.1f MB) from %s, restarting",
+		shared.AgentGitHubAssetName(runtime.GOARCH),
+		float64(n)/(1024*1024), url), nil
+}
+
+// downloadURL is where Update pulls the next binary from. Backend first so the
+// release tag lives in one place (shared.AgentReleaseTag on the panel), not
+// frozen inside every agent build.
+func (u *Updater) downloadURL() string {
+	if u.cfg != nil && u.cfg.BackendURL != "" {
+		return strings.TrimRight(u.cfg.BackendURL, "/") + "/download/agent?arch=" + runtime.GOARCH
+	}
+	return shared.AgentGitHubBinaryURL(runtime.GOARCH)
 }
 
 // Rollback restores the previous binary and restarts.
