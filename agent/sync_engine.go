@@ -38,6 +38,9 @@ type SyncEngine struct {
 	mode        shared.PowerMode
 	modeVersion atomic.Uint32
 
+	pushMu     sync.Mutex
+	pushQueued bool
+
 	fpMu sync.Mutex
 	fp   struct {
 		metrics, docker, systemd, proxy, ports string
@@ -76,11 +79,31 @@ func (e *SyncEngine) SetPowerMode(mode shared.PowerMode) {
 	e.mu.Unlock()
 	notePowerMode(string(mode))
 	e.modeVersion.Add(1)
-	go e.PushAll()
+	e.schedulePushAll()
 }
 
 func (e *SyncEngine) RequestRefresh() {
-	go e.PushAll()
+	e.schedulePushAll()
+}
+
+// schedulePushAll coalesces wake-up storms: SetPowerMode and RequestRefresh
+// both used to fire PushAll at once, so coming back from eco ran docker/systemd
+// twice back-to-back and the panel sat on a spinner for several seconds.
+func (e *SyncEngine) schedulePushAll() {
+	e.pushMu.Lock()
+	if e.pushQueued {
+		e.pushMu.Unlock()
+		return
+	}
+	e.pushQueued = true
+	e.pushMu.Unlock()
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		e.pushMu.Lock()
+		e.pushQueued = false
+		e.pushMu.Unlock()
+		e.PushAll()
+	}()
 }
 
 func (e *SyncEngine) intervals() syncIntervals {
@@ -192,46 +215,13 @@ func (e *SyncEngine) watchdog(ctx context.Context) {
 		prev := e.fp
 		e.fpMu.Unlock()
 
-		// Watching for a change means collecting the thing being watched, so a
-		// stage that costs more than a slice of the watchdog interval cannot be
-		// watched at this cadence — polling it here would quietly undo the
-		// interval that power mode just set.
-		//
-		// That is what used to happen: eco mode asks for systemd every 60s, and
-		// this loop collected it every 5s anyway. On a host where the D-Bus path
-		// had fallen back to spawning systemctl, that was two seconds of work
-		// every five, and the panel reported an idle server as busy.
-		//
-		// The cost is measured rather than assumed, so a stage that is cheap
-		// here (D-Bus systemd) stays watched and the same stage on a host where
-		// it is expensive does not.
-		budget := float64(wait.Milliseconds()) * watchdogCostShare
-
-		if prev.metrics != "" && affordable("metrics", budget) {
+		// Metrics only. Watching docker/systemd/ports here is what made an
+		// idle box look busy — those stages stay on their own intervals and
+		// on RequestRefresh after panel actions.
+		if prev.metrics != "" {
 			metrics, _ := e.reporter.Metrics()
 			if fingerprintMetrics(metrics) != prev.metrics {
 				_ = e.pushMetrics()
-			}
-		}
-		if prev.ports != "" && affordable("ports", budget) {
-			ports, _ := e.reporter.Ports()
-			if fingerprintPorts(ports) != prev.ports {
-				_ = e.pushPorts()
-			}
-		}
-		if prev.proxy != "" && affordable("proxy", budget) {
-			if fingerprintProxy(e.reporter.Proxy()) != prev.proxy {
-				_ = e.pushProxy()
-			}
-		}
-		if prev.docker != "" && affordable("docker", budget) {
-			if fingerprintDocker(e.reporter.Docker()) != prev.docker {
-				_ = e.pushDocker()
-			}
-		}
-		if prev.systemd != "" && affordable("systemd", budget) {
-			if fingerprintSystemd(e.reporter.Systemd()) != prev.systemd {
-				_ = e.pushSystemd()
 			}
 		}
 	}
@@ -255,11 +245,19 @@ func affordable(stage string, budgetMs float64) bool {
 }
 
 func (e *SyncEngine) PushAll() {
+	// Metrics first and alone so the live graph moves before the heavier
+	// snapshots finish — otherwise waking from eco looked like a 5–7s stall.
 	_ = e.pushMetrics()
-	_ = e.pushPorts()
-	_ = e.pushDocker()
-	_ = e.pushSystemd()
-	_ = e.pushProxy()
+
+	var wg sync.WaitGroup
+	for _, fn := range []func() error{e.pushPorts, e.pushDocker, e.pushSystemd, e.pushProxy} {
+		wg.Add(1)
+		go func(fn func() error) {
+			defer wg.Done()
+			_ = fn()
+		}(fn)
+	}
+	wg.Wait()
 }
 
 func (e *SyncEngine) pushMetrics() error {

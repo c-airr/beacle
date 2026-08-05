@@ -18,15 +18,15 @@ type syncIntervals struct {
 func intervalsFor(mode shared.PowerMode) syncIntervals {
 	switch mode {
 	case shared.PowerModeEco:
+		// Still live enough that walking back to the panel does not feel frozen.
+		// Watchdog is metrics-only (see sync_engine) — ~1ms, not docker.
 		return syncIntervals{
-			metrics:  5 * time.Second,
-			ports:    30 * time.Second,
-			docker:   45 * time.Second,
-			systemd:  30 * time.Second,
-			proxy:    30 * time.Second,
-			// No watchdog: even "cheap" stages every 5s still produced visible
-			// spikes on the host gauge. Interval ticks + RequestRefresh cover it.
-			watchdog: 0,
+			metrics:  3 * time.Second,
+			ports:    20 * time.Second,
+			docker:   20 * time.Second,
+			systemd:  20 * time.Second,
+			proxy:    20 * time.Second,
+			watchdog: 3 * time.Second,
 		}
 	case shared.PowerModeSleep:
 		return syncIntervals{
@@ -38,13 +38,15 @@ func intervalsFor(mode shared.PowerMode) syncIntervals {
 			watchdog: 0,
 		}
 	default:
+		// Continuous feel: metrics every second, the rest often enough that
+		// docker/services/proxy do not sit on stale snapshots for half a minute.
 		return syncIntervals{
-			metrics:  2 * time.Second,
-			ports:    15 * time.Second,
-			docker:   20 * time.Second,
-			systemd:  15 * time.Second,
-			proxy:    15 * time.Second,
-			watchdog: 0,
+			metrics:  1 * time.Second,
+			ports:    8 * time.Second,
+			docker:   10 * time.Second,
+			systemd:  8 * time.Second,
+			proxy:    8 * time.Second,
+			watchdog: 2 * time.Second, // metrics only
 		}
 	}
 }

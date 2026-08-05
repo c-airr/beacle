@@ -119,14 +119,14 @@ class AppState extends ChangeNotifier {
 
   int get portsRefreshSeconds => switch (uiPowerMode) {
         'sleep' => 90,
-        'eco' => 30,
-        _ => 10,
+        'eco' => 15,
+        _ => 5,
       };
 
   int get staleThresholdSeconds => switch (uiPowerMode) {
         'sleep' => 100,
-        'eco' => 40,
-        _ => 10,
+        'eco' => 25,
+        _ => 8,
       };
 
   final StreamController<Alert> alertStream = StreamController.broadcast();

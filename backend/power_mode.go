@@ -29,9 +29,8 @@ func (s *Server) setUIPowerMode(mode shared.PowerMode) {
 		return
 	}
 	s.agentHub.SetPowerMode(mode)
-	if mode == shared.PowerModeActive {
-		s.agentHub.RequestRefreshAll()
-	}
+	// Agent SetPowerMode already PushAlls. A second RequestRefresh on wake
+	// doubled docker/systemd work and made the panel hang for seconds.
 }
 
 func (s *Server) handleUIPowerMode(w http.ResponseWriter, r *http.Request) {
