@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-const appVersion = '0.1.0';
+const appVersion = '0.5.0';
 const githubRepo = 'beacle/beacle'; // change to your fork
 
 class UpdateInfo {

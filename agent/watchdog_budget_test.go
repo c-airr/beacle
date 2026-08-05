@@ -11,8 +11,7 @@ import "testing"
 // fallen back to spawning systemctl each collection cost ~2s. Roughly 400
 // collections in 45 minutes against the ~46 the interval called for.
 func TestWatchdogSkipsStagesItCannotAfford(t *testing.T) {
-	// A 5s watchdog interval, the eco default.
-	budget := float64((5000)) * watchdogCostShare
+	budget := float64(5000) * watchdogCostShare
 	if budget != 250 {
 		t.Fatalf("budget = %.0fms, expected 250ms for a 5s interval", budget)
 	}
@@ -22,8 +21,8 @@ func TestWatchdogSkipsStagesItCannotAfford(t *testing.T) {
 		"metrics": {LastMs: 0.6},
 		"ports":   {LastMs: 11.7},
 		"proxy":   {LastMs: 4.2},
-		"docker":  {LastMs: 1129.8}, // measured on a real host
-		"systemd": {LastMs: 1792.4}, // measured on the same host, via systemctl
+		"docker":  {LastMs: 188.0}, // measured with one-shot stats — still too heavy
+		"systemd": {LastMs: 1792.4}, // systemctl fallback
 	}
 	selfStat.mu.Unlock()
 
@@ -41,6 +40,16 @@ func TestWatchdogSkipsStagesItCannotAfford(t *testing.T) {
 	}
 }
 
+func TestDockerNeverOnWatchdog(t *testing.T) {
+	selfStat.mu.Lock()
+	selfStat.stages = map[string]*stageStat{"docker": {LastMs: 40}} // under budget, still banned
+	selfStat.mu.Unlock()
+
+	if affordable("docker", 250) {
+		t.Error("docker was allowed on the watchdog — it must not be, regardless of cost")
+	}
+}
+
 // The same stage can be cheap or expensive depending on the host, so the
 // decision has to come from measurement rather than a hardcoded list. A
 // D-Bus systemd read is milliseconds and belongs in the watchdog.
@@ -55,12 +64,16 @@ func TestCheapSystemdStaysWatched(t *testing.T) {
 }
 
 // A stage nobody has timed yet gets one run, which is how it becomes measured.
+// Docker is the exception — it is never invited onto the watchdog.
 func TestUnmeasuredStageIsAllowedOnce(t *testing.T) {
 	selfStat.mu.Lock()
 	selfStat.stages = map[string]*stageStat{}
 	selfStat.mu.Unlock()
 
-	if !affordable("docker", 250) {
+	if !affordable("systemd", 250) {
 		t.Error("an unmeasured stage was skipped, so it could never be measured")
+	}
+	if affordable("docker", 250) {
+		t.Error("unmeasured docker was allowed on the watchdog")
 	}
 }

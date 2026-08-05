@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Beacle VPS agent — everything from GitHub release agentbeta.
+# Beacle VPS agent — everything from GitHub release 0.5-beta.
 # Usage:
-#   curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh | sudo bash -s http://<desktop-tailscale-ip>:9930
+#   curl -fsSL https://github.com/c-airr/beacle/releases/download/0.5-beta/install.sh | sudo bash -s http://<desktop-tailscale-ip>:9930
 set -euo pipefail
 
 BACKEND_URL="${1:-${BEACLE_BACKEND_URL:-}}"
-AMD_URL="https://github.com/c-airr/beacle/releases/download/agentbeta/beacle-agent-amd64"
-ARM_URL="https://github.com/c-airr/beacle/releases/download/agentbeta/beacle-agent-arm64"
+AMD_URL="https://github.com/c-airr/beacle/releases/download/0.5-beta/beacle-agent-amd64"
+ARM_URL="https://github.com/c-airr/beacle/releases/download/0.5-beta/beacle-agent-arm64"
 INSTALL_DIR=/opt/beacle-agent
 CONFIG="$INSTALL_DIR/config.json"
 BIN="$INSTALL_DIR/beacle-agent"

@@ -13,7 +13,7 @@ import (
 	"beacle/shared"
 )
 
-// handleDownloadAgent redirects to the public GitHub agentbeta asset.
+// handleDownloadAgent redirects to the public GitHub 0.5-beta asset.
 func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
 	arch := r.URL.Query().Get("arch")
 	if arch == "" {

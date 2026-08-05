@@ -242,10 +242,14 @@ func (e *SyncEngine) watchdog(ctx context.Context) {
 // D-Bus systemd read, and far too little for anything that forks processes.
 const watchdogCostShare = 0.05
 
-// affordable reports whether a stage is cheap enough to poll on the watchdog's
-// schedule. A stage that has never run is allowed one go, which is how it gets
-// measured in the first place.
+// docker is never watched on the 5s loop, even when it fits the budget. A
+// ~150–200ms Engine API pass every five seconds was twelve collections a
+// minute and showed up as 10–20% CPU spikes on an idle VPS. The interval
+// loop plus RequestRefresh after panel actions are enough for docker.
 func affordable(stage string, budgetMs float64) bool {
+	if stage == "docker" {
+		return false
+	}
 	cost := lastStageMs(stage)
 	return cost == 0 || cost <= budgetMs
 }

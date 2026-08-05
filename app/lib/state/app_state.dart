@@ -38,7 +38,7 @@ class AppState extends ChangeNotifier {
   Timer? _idleTimer;
   Timer? _sampleTimer;
 
-  static const _idleTimeout = Duration(seconds: 45);
+  static const _idleTimeout = Duration(seconds: 120);
 
   DateTime alertsSeenAt = DateTime.now();
   int get unseenAlerts => alerts
@@ -118,15 +118,15 @@ class AppState extends ChangeNotifier {
   bool get powerSaveMode => uiPowerMode != 'active';
 
   int get portsRefreshSeconds => switch (uiPowerMode) {
-        'sleep' => 120,
-        'eco' => 45,
+        'sleep' => 90,
+        'eco' => 30,
         _ => 10,
       };
 
   int get staleThresholdSeconds => switch (uiPowerMode) {
-        'sleep' => 130,
-        'eco' => 50,
-        _ => 12,
+        'sleep' => 100,
+        'eco' => 40,
+        _ => 10,
       };
 
   final StreamController<Alert> alertStream = StreamController.broadcast();

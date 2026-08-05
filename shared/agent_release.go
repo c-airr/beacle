@@ -6,7 +6,7 @@ import "fmt"
 const (
 	AgentGitHubOwner = "c-airr"
 	AgentGitHubRepo  = "beacle"
-	AgentReleaseTag  = "agentbeta"
+	AgentReleaseTag  = "0.5-beta"
 )
 
 // AgentGitHubAssetName returns the release asset for a Go GOARCH value.
@@ -35,7 +35,7 @@ func AgentGitHubInstallURL() string {
 	)
 }
 
-// AgentGitHubReleaseAPI is the GitHub API endpoint for the agentbeta release metadata.
+// AgentGitHubReleaseAPI is the GitHub API endpoint for the 0.5-beta release metadata.
 func AgentGitHubReleaseAPI() string {
 	return fmt.Sprintf(
 		"https://api.github.com/repos/%s/%s/releases/tags/%s",
