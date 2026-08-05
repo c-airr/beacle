@@ -54,7 +54,29 @@ if (-not (Test-Path "$dataDest\state.json")) {
 Write-Host '[5/5] agent release layout (upload to GitHub Releases):' -ForegroundColor Cyan
 Get-ChildItem $distAgent -Recurse -File | ForEach-Object { Write-Host "  $($_.FullName.Replace($root, '.'))" }
 
+# Build the Windows installer when Inno Setup is installed. Silent skip
+# otherwise — the rest of the build still works without it, and a dev box
+# without Inno should not fail a release build of everything else.
+$iss = "$root\installer\windows\beacle.iss"
+$iscc = Get-Command iscc -ErrorAction SilentlyContinue
+if (-not $iscc) {
+    $isccPath = 'C:\Program Files (x86)\Inno Setup 6\iscc.exe'
+    if (Test-Path $isccPath) { $iscc = [pscustomobject]@{ Source = $isccPath } }
+}
+if ($iscc) {
+    Write-Host '[installer] building beacle.iss' -ForegroundColor Cyan
+    & $iscc.Source $iss
+    if (Test-Path "$root\dist\installer") {
+        Get-ChildItem "$root\dist\installer\*.exe" | ForEach-Object {
+            Write-Host "  installer: $($_.FullName.Replace($root, '.'))"
+        }
+    }
+} else {
+    Write-Host '[installer] Inno Setup not found — skipping beacle.iss (install Inno Setup 6 to build it)' -ForegroundColor Yellow
+}
+
 Write-Host 'Done.' -ForegroundColor Green
 Write-Host "  Run: $releaseDir\beacle.exe"
 Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh | sudo bash -s http://<tailscale-ip>:9930'
 Write-Host '  Upload to GitHub agentbeta: dist/agent/install.sh, beacle-agent-amd64, beacle-agent-arm64'
+Write-Host '  Upload to GitHub latest: dist/installer/*.exe, installer/linux/install.sh, installer/linux/uninstall.sh'

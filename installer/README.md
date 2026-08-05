@@ -1,9 +1,9 @@
-# Installer — groundwork
+# Installer
 
-Nothing here is wired up. `scripts/build.ps1` does not know this directory
-exists, no workflow runs it, and no application code imports it. It is a draft
-of how installing Beacle should work, written so the shape can be argued with
-before any of it goes live.
+The installer is wired into the build. `scripts/build.ps1` runs the Inno
+Setup script when Inno Setup is installed, and `.github/workflows/build-installers.yml`
+builds both the Windows installer and the Linux install scripts in CI and
+attaches them to the release.
 
 ## What is here
 
@@ -13,7 +13,7 @@ before any of it goes live.
 | `linux/beacle.desktop` | Application entry. This is the file that makes GNOME find the app. |
 | `linux/install.sh` | Downloads the payload, installs to `~/.local/share/beacle` or `/opt/beacle`, registers the entry and icons. |
 | `linux/uninstall.sh` | Stops the app and backend, then removes both the install and the config. |
-| `ci/build-installers.yml.draft` | GitHub Actions draft. Deliberately **not** in `.github/workflows/`, so it does not run. |
+| `ci/build-installers.yml.draft` | Left as a reference. The live workflow is `.github/workflows/build-installers.yml`. |
 
 ## How it is meant to work
 

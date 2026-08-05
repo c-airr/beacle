@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Beacle desktop installer for Linux.
 #
-# NOT WIRED UP YET. Nothing builds or publishes this; it is here so the shape
-# of the Linux install can be reviewed before it goes live.
+# Wired into the release: .github/workflows/build-installers.yml uploads this
+# alongside the payload, and the release's "latest" link points at it.
 #
-# Usage (once the release assets exist):
-#   curl -fsSL https://github.com/c-airr/beacle/releases/latest/download/install-desktop.sh | bash
+# Usage:
+#   curl -fsSL https://github.com/c-airr/beacle/releases/latest/download/install.sh | bash
 #   sudo ./install.sh --system     # /opt, all users
 #
 # Defaults to a per-user install under ~/.local, which needs no root and is
