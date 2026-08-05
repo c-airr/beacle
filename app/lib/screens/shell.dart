@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../update/app_updater.dart';
 import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/alerts_panel.dart';
@@ -113,6 +114,7 @@ class AppShellState extends State<AppShell> {
                 child: Column(
                   children: [
                     _buildTopBar(state),
+                    if (state.availableUpdate != null) _buildUpdateBanner(state),
                     Expanded(child: IndexedStack(index: index, children: _screens)),
                   ],
                 ),
@@ -205,6 +207,42 @@ class AppShellState extends State<AppShell> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUpdateBanner(AppState state) {
+    final info = state.availableUpdate!;
+    return Material(
+      color: BeacleColors.surface.withValues(alpha: 0.95),
+      child: InkWell(
+        onTap: () {
+          context.read<AppState>().bumpActivity();
+          setState(() => index = items.length - 1); // Settings
+        },
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: BeacleColors.ok.withValues(alpha: 0.08),
+            border: Border(bottom: BorderSide(color: BeacleColors.border.withValues(alpha: 0.5))),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.system_update, size: 14, color: BeacleColors.ok),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Beacle ${info.version} is available — you are on $appVersion. Open Settings → Updates to install.',
+                  style: TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('Settings', style: TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
       ),
     );
   }

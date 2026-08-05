@@ -26,7 +26,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   String? updateStatus;
   UpdateInfo? staged;
+  UpdateInfo? available;
   bool checking = false;
+  bool downloading = false;
   late final TabController _tabs = TabController(length: 3, vsync: this);
   bool? autostartOn;
 
@@ -44,10 +46,28 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     Autostart.isEnabled().then((v) {
       if (mounted) setState(() => autostartOn = v);
     });
+    // The Status tab used to show "Not checked yet" until the user pressed
+    // Refresh. Loading once on init means the Tailscale section is already
+    // populated by the time the user opens Settings.
+    _loadTailscale();
+    _tabs.addListener(_onTabChanged);
+    // Seed the Updates tab with whatever the startup check already found, so
+    // the Update button is not greyed out for a second check on first open.
+    final state = context.read<AppState>();
+    available = state.availableUpdate;
+  }
+
+  void _onTabChanged() {
+    // Re-fetch when the user comes back to the Status tab, so a stale device
+    // list does not sit there for the whole session.
+    if (_tabs.index == 2 && !tsLoading) {
+      _loadTailscale();
+    }
   }
 
   @override
   void dispose() {
+    _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
     super.dispose();
   }
@@ -274,6 +294,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Widget _updatesTab(AppState state) {
+    final hasPrev = AppUpdater.hasPrevious;
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -286,33 +307,84 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               'Updates are fetched from GitHub Releases. Your settings are never overwritten.',
               style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+            // The forward flow is Check → Update → Apply. Check only looks at
+            // GitHub; Update downloads and stages; Apply swaps the install
+            // and restarts. Rollback is the side exit, only present when an
+            // in-place update left a previous build behind.
             Wrap(
               spacing: 8,
               runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SmallButton('Check for updates', icon: Icons.system_update, onPressed: checking ? null : () async {
+                SmallButton('Check for updates', icon: Icons.search, onPressed: checking || downloading ? null : () async {
                   setState(() {
                     checking = true;
                     updateStatus = null;
                   });
                   try {
-                    final info = await AppUpdater.checkForUpdate();
-                    if (info == null) {
-                      setState(() => updateStatus = 'You are on the latest version.');
-                    } else {
-                      final msg = await AppUpdater.downloadAndStage(info);
-                      setState(() {
-                        staged = info;
-                        updateStatus = msg;
-                      });
-                    }
+                    final info = await state.recheckForUpdate();
+                    setState(() {
+                      available = info;
+                      updateStatus = info == null
+                          ? 'You are on the latest version.'
+                          : 'Version ${info.version} is available.';
+                    });
                   } catch (e) {
                     setState(() => updateStatus = 'Update check failed: $e');
                   } finally {
                     setState(() => checking = false);
                   }
                 }),
+                if (available != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: BeacleColors.surfaceHi,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: BeacleColors.border),
+                          ),
+                          child: Text('v$appVersion', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6),
+                          child: Icon(Icons.arrow_forward, size: 16, color: BeacleColors.ok),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: BeacleColors.ok.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: BeacleColors.ok.withValues(alpha: 0.4)),
+                          ),
+                          child: Text('v${available!.version}', style: const TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (available != null)
+                  SmallButton('Update', icon: Icons.system_update, color: BeacleColors.ok, onPressed: downloading ? null : () async {
+                    setState(() {
+                      downloading = true;
+                      updateStatus = null;
+                    });
+                    try {
+                      final msg = await AppUpdater.downloadAndStage(available!);
+                      setState(() {
+                        staged = available;
+                        updateStatus = msg;
+                      });
+                    } catch (e) {
+                      setState(() => updateStatus = '$e');
+                    } finally {
+                      setState(() => downloading = false);
+                    }
+                  }),
                 if (staged != null)
                   SmallButton('Apply and restart', icon: Icons.restart_alt, color: BeacleColors.ok, onPressed: () async {
                     try {
@@ -321,7 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       setState(() => updateStatus = '$e');
                     }
                   }),
-                if (AppUpdater.hasPrevious)
+                if (hasPrev)
                   SmallButton('Rollback', icon: Icons.history, color: BeacleColors.warn, onPressed: () async {
                     try {
                       await AppUpdater.rollbackAndRestart();
@@ -331,186 +403,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   }),
               ],
             ),
-            if (checking) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator(minHeight: 3)),
+            if (checking || downloading)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: LinearProgressIndicator(minHeight: 3, color: checking ? null : BeacleColors.ok),
+              ),
             if (updateStatus != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Text(updateStatus!, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
               ),
-
-            // ================================================================
-            // PLANNED UPDATE UI — commented until the flow in app_updater.dart
-            // is switched over. Uncomment together with the PLANNED block
-            // there, and delete the Wrap above: these buttons replace it.
-            //
-            // Needs two extra fields on this State:
-            //   UpdateInfo? available;   // set by Check, null keeps Update grey
-            //   bool autoUpdate = AppUpdater.autoUpdateEnabled;
-            //
-            // The split matters: Check never downloads, so Update can be grey
-            // until GitHub actually has something newer than appVersion.
-            // ================================================================
-            //
-            // Wrap(
-            //   spacing: 8,
-            //   runSpacing: 8,
-            //   children: [
-            //     // Always available — you can ask the question at any time.
-            //     SmallButton('Check for updates', icon: Icons.search,
-            //         onPressed: checking ? null : () async {
-            //       setState(() {
-            //         checking = true;
-            //         updateStatus = null;
-            //       });
-            //       try {
-            //         final info = await AppUpdater.availableUpdate();
-            //         setState(() {
-            //           available = info;
-            //           updateStatus = info == null
-            //               ? 'You are on the latest version.'
-            //               : 'Version ${info.version} is available.';
-            //         });
-            //       } catch (e) {
-            //         setState(() => updateStatus = 'Update check failed: $e');
-            //       } finally {
-            //         setState(() => checking = false);
-            //       }
-            //     }),
-            //
-            //     // Grey until a check found something. Nothing was downloaded
-            //     // before this point, so this button is the only thing that
-            //     // touches the network for the payload.
-            //     SmallButton('Update', icon: Icons.system_update,
-            //         color: available == null ? null : BeacleColors.ok,
-            //         onPressed: available == null || checking ? null : () async {
-            //       setState(() => checking = true);
-            //       try {
-            //         final msg = await AppUpdater.downloadAndStage(available!);
-            //         setState(() {
-            //           staged = available;
-            //           updateStatus = msg;
-            //         });
-            //       } catch (e) {
-            //         setState(() => updateStatus = '$e');
-            //       } finally {
-            //         setState(() => checking = false);
-            //       }
-            //     }),
-            //
-            //     if (staged != null)
-            //       SmallButton('Apply and restart', icon: Icons.restart_alt,
-            //           color: BeacleColors.ok, onPressed: () async {
-            //         try {
-            //           await AppUpdater.applyAndRestart();
-            //         } catch (e) {
-            //           setState(() => updateStatus = '$e');
-            //         }
-            //       }),
-            //
-            //     const Spacer(),
-            //
-            //     // Deliberately at the far end from Update: this is the "I
-            //     // know which build I want" path, not part of the normal
-            //     // forward flow. Empty on a rolling tag — the beta overwrites
-            //     // one release, so there is nothing to pick between yet.
-            //     SmallButton('Choose version', icon: Icons.list, onPressed: () async {
-            //       final versions = await AppUpdater.selectableVersions();
-            //       if (!context.mounted) return;
-            //       if (versions.isEmpty) {
-            //         setState(() => updateStatus =
-            //             'No tagged releases to choose from yet — the beta is a rolling tag.');
-            //         return;
-            //       }
-            //       final picked = await showDialog<UpdateInfo>(
-            //         context: context,
-            //         builder: (ctx) => SimpleDialog(
-            //           title: const Text('Install a specific version'),
-            //           children: [
-            //             for (final v in versions)
-            //               SimpleDialogOption(
-            //                 onPressed: () => Navigator.pop(ctx, v),
-            //                 child: Row(children: [
-            //                   Text('v${v.version}', style: const TextStyle(fontSize: 13)),
-            //                   if (v.version == appVersion) ...[
-            //                     const SizedBox(width: 8),
-            //                     const Text('current',
-            //                         style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-            //                   ],
-            //                 ]),
-            //               ),
-            //           ],
-            //         ),
-            //       );
-            //       if (picked == null || picked.version == appVersion) return;
-            //       setState(() => checking = true);
-            //       try {
-            //         final msg = await AppUpdater.installVersion(picked);
-            //         setState(() {
-            //           staged = picked;
-            //           updateStatus = 'Version ${picked.version} staged. $msg';
-            //         });
-            //       } catch (e) {
-            //         setState(() => updateStatus = '$e');
-            //       } finally {
-            //         setState(() => checking = false);
-            //       }
-            //     }),
-            //
-            //     // Goes to the release below the one running — normally the
-            //     // second-to-last. It is fetched from GitHub, so this works on
-            //     // a fresh install that has no versions/previous folder.
-            //     SmallButton('Rollback', icon: Icons.history, color: BeacleColors.warn,
-            //         onPressed: checking ? null : () async {
-            //       setState(() {
-            //         checking = true;
-            //         updateStatus = null;
-            //       });
-            //       try {
-            //         final target = await AppUpdater.rollbackTarget();
-            //         if (target == null) {
-            //           setState(() => updateStatus = 'No earlier release to roll back to.');
-            //           return;
-            //         }
-            //         final msg = await AppUpdater.rollbackToRelease(target);
-            //         setState(() {
-            //           staged = target;
-            //           updateStatus = 'Rolling back to ${target.version}. $msg';
-            //         });
-            //       } catch (e) {
-            //         setState(() => updateStatus = '$e');
-            //       } finally {
-            //         setState(() => checking = false);
-            //       }
-            //     }),
-            //   ],
-            // ),
-            //
-            // const SizedBox(height: 14),
-            // // Off by default. Nothing installs itself unless this is on.
-            // Row(children: [
-            //   Expanded(
-            //     child: Column(
-            //       crossAxisAlignment: CrossAxisAlignment.start,
-            //       children: [
-            //         const Text('Automatic updates', style: TextStyle(fontSize: 13)),
-            //         const SizedBox(height: 2),
-            //         Text(
-            //           autoUpdate
-            //               ? 'Checks GitHub every 6 hours and installs new releases on its own.'
-            //               : 'Off — updates only happen when you press Update.',
-            //           style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.35),
-            //         ),
-            //       ],
-            //     ),
-            //   ),
-            //   Switch(
-            //     value: autoUpdate,
-            //     onChanged: (v) => setState(() {
-            //       autoUpdate = v;
-            //       AppUpdater.setAutoUpdate(v);
-            //     }),
-            //   ),
-            // ]),
           ]),
         ),
         const SizedBox(height: 16),
@@ -521,19 +423,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               'Agents auto-update from the backend every 6 hours. You can also trigger update/rollback per VPS. Agent config files are never overwritten.',
               style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
-            // PLANNED — swap for this when auto-update becomes opt-in. The
-            // sentence above stops being true the moment the setting exists,
-            // and agent/updater.go AutoUpdateLoop has to read the same flag:
-            // right now it ticks every 6 h no matter what the panel says.
-            //
-            // Text(
-            //   AppUpdater.autoUpdateEnabled
-            //       ? 'Agents follow the automatic updates setting above: they check every 6 hours. '
-            //         'Update and rollback per VPS still work here. Agent config files are never overwritten.'
-            //       : 'Automatic updates are off, so agents only update when you press Update here. '
-            //         'Agent config files are never overwritten.',
-            //   style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
-            // ),
             const SizedBox(height: 12),
             if (state.vpsList.isEmpty)
               const Text('No VPS yet — add one in the VPS tab.', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))

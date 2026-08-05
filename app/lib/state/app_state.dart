@@ -9,6 +9,7 @@ import '../api/api_client.dart';
 import '../config.dart';
 import '../models/models.dart';
 import '../tray.dart';
+import '../update/app_updater.dart';
 import '../user_config.dart';
 
 /// Central reactive state: VPS registry, live snapshots, alerts, links.
@@ -31,6 +32,11 @@ class AppState extends ChangeNotifier {
 
   /// UI power mode sent to backend: active, eco, or sleep.
   String uiPowerMode = 'active';
+
+  /// A newer desktop-app release found on GitHub, or null when up to date.
+  /// Set once on startup so the shell can show a banner; the Settings →
+  /// Updates tab re-checks on demand and refreshes this.
+  UpdateInfo? availableUpdate;
 
   IOWebSocketChannel? _ws;
   Timer? _reconnect;
@@ -145,6 +151,32 @@ class AppState extends ChangeNotifier {
     _sampleTimer = Timer.periodic(const Duration(seconds: 60), (_) => _sampleFleet());
     _sampleFleet();
     _scheduleIdleTimer();
+    _checkForUpdate();
+  }
+
+  /// Looks for a newer desktop-app release on GitHub. Detection only —
+  /// nothing is downloaded until the user presses Update in Settings. The
+  /// first check is delayed so it never races a cold start.
+  Future<void> _checkForUpdate() async {
+    try {
+      final info = await AppUpdater.availableUpdate();
+      if (availableUpdate?.version != info?.version) {
+        availableUpdate = info;
+        notifyListeners();
+      }
+    } catch (_) {
+      // A failed check is not worth surfacing as an error: the banner simply
+      // stays hidden and the Settings tab will report the failure on demand.
+    }
+  }
+
+  /// Re-check on demand from the Settings tab. Returns the same info the
+  /// banner reads, so the two can never disagree.
+  Future<UpdateInfo?> recheckForUpdate() async {
+    final info = await AppUpdater.availableUpdate();
+    availableUpdate = info;
+    notifyListeners();
+    return info;
   }
 
   /// Set when the power mode changes: agents keep the old tick rate until the
