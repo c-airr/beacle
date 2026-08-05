@@ -25,7 +25,7 @@ foreach ($pair in @{ amd64 = 'linux-amd64'; arm64 = 'linux-arm64' }.GetEnumerato
     Copy-Item $outFolder $outGh -Force
     Copy-Item $outFolder "$distAgent\$($pair.Value)\$ghName" -Force
     Copy-Item $outFolder $outBackend -Force
-    Write-Host "  built $($pair.Value) -> dist/agent/$ghName (upload to GitHub 0.5-beta)"
+    Write-Host "  built $($pair.Value) -> dist/agent/$ghName (upload to GitHub agentbeta)"
 }
 Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
 $ver = & go run . -version 2>$null
@@ -56,5 +56,5 @@ Get-ChildItem $distAgent -Recurse -File | ForEach-Object { Write-Host "  $($_.Fu
 
 Write-Host 'Done.' -ForegroundColor Green
 Write-Host "  Run: $releaseDir\beacle.exe"
-Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/0.5-beta/install.sh | sudo bash -s http://<tailscale-ip>:9930'
-Write-Host '  Upload to GitHub 0.5-beta: dist/agent/install.sh, beacle-agent-amd64, beacle-agent-arm64'
+Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh | sudo bash -s http://<tailscale-ip>:9930'
+Write-Host '  Upload to GitHub agentbeta: dist/agent/install.sh, beacle-agent-amd64, beacle-agent-arm64'

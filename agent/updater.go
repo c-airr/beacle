@@ -15,7 +15,7 @@ import (
 )
 
 // Updater implements agent self-update with rollback. Binaries come from the
-// public GitHub release (0.5-beta). Config is never touched.
+// public GitHub release (agentbeta). Config is never touched.
 type Updater struct {
 	cfg *Config
 }
@@ -113,7 +113,7 @@ func fetchGitHubAsset(goarch string) (stamp, downloadURL string, err error) {
 // }
 
 // Update downloads the binary from the GitHub release and restarts. That is
-// the whole contract: fetch what is on 0.5-beta right now, swap it in, come
+// the whole contract: fetch what is on agentbeta right now, swap it in, come
 // back up.
 //
 // Nothing is compared first. The release is a rolling tag overwritten in

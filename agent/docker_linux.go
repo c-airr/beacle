@@ -30,11 +30,21 @@ type dockerClient struct {
 	// selfstat measured as docker: 1129ms on a nearly idle host.
 	statsMu   sync.Mutex
 	prevStats map[string]dockerCPUSample
+	lastStats []shared.ContainerStats
+	statsAt   time.Time
 
 	// inspectCache avoids a full /containers/{id}/json round-trip for every
 	// container on every poll when the container has not changed state.
 	inspectMu    sync.Mutex
 	inspectCache map[string]cachedInspect
+
+	// images/volumes/networks barely change; refreshing them on every docker
+	// tick was pure dockerd CPU for no visible gain.
+	invMu        sync.Mutex
+	images       []shared.ImageInfo
+	volumes      []shared.DockerVolume
+	networks     []shared.DockerNetwork
+	inventoryAt  time.Time
 }
 
 type dockerCPUSample struct {
@@ -50,7 +60,11 @@ type cachedInspect struct {
 	at           time.Time
 }
 
-const inspectCacheFor = 60 * time.Second
+const (
+	inspectCacheFor   = 60 * time.Second
+	dockerStatsEvery  = 45 * time.Second
+	dockerInventoryFor = 3 * time.Minute
+)
 
 func newDockerClient() *dockerClient {
 	return &dockerClient{
@@ -250,15 +264,35 @@ func (c *linuxCollector) Docker() shared.DockerState {
 	}
 	sort.Slice(st.Compose, func(i, j int) bool { return st.Compose[i].Name < st.Compose[j].Name })
 
+	c.docker.attachInventory(&st)
+	c.docker.attachStats(c, &st)
+	c.docker.pruneCaches(st.Containers)
+	return st
+}
+
+func (d *dockerClient) attachInventory(st *shared.DockerState) {
+	d.invMu.Lock()
+	fresh := !d.inventoryAt.IsZero() && time.Since(d.inventoryAt) < dockerInventoryFor
+	if fresh {
+		st.Images = append([]shared.ImageInfo(nil), d.images...)
+		st.Volumes = append([]shared.DockerVolume(nil), d.volumes...)
+		st.Networks = append([]shared.DockerNetwork(nil), d.networks...)
+		d.invMu.Unlock()
+		return
+	}
+	d.invMu.Unlock()
+
+	var images []shared.ImageInfo
 	var imgs []apiImage
-	if err := c.docker.get("/images/json", &imgs); err == nil {
+	if err := d.get("/images/json", &imgs); err == nil {
 		for _, im := range imgs {
-			st.Images = append(st.Images, shared.ImageInfo{
+			images = append(images, shared.ImageInfo{
 				ID: im.ID, Tags: im.RepoTags, SizeBytes: im.Size, CreatedAt: im.Created,
 			})
 		}
 	}
 
+	var volumes []shared.DockerVolume
 	var vols struct {
 		Volumes []struct {
 			Name       string `json:"Name"`
@@ -268,42 +302,69 @@ func (c *linuxCollector) Docker() shared.DockerState {
 			CreatedAt  string `json:"CreatedAt"`
 		} `json:"Volumes"`
 	}
-	if err := c.docker.get("/volumes", &vols); err == nil {
+	if err := d.get("/volumes", &vols); err == nil {
 		for _, v := range vols.Volumes {
-			st.Volumes = append(st.Volumes, shared.DockerVolume{
+			volumes = append(volumes, shared.DockerVolume{
 				Name: v.Name, Driver: v.Driver, Mountpoint: v.Mountpoint, Scope: v.Scope, CreatedAt: v.CreatedAt,
 			})
 		}
-		sort.Slice(st.Volumes, func(i, j int) bool { return st.Volumes[i].Name < st.Volumes[j].Name })
+		sort.Slice(volumes, func(i, j int) bool { return volumes[i].Name < volumes[j].Name })
 	}
 
+	var networks []shared.DockerNetwork
 	var nets []struct {
-		ID         string `json:"Id"`
-		Name       string `json:"Name"`
-		Driver     string `json:"Driver"`
-		Scope      string `json:"Scope"`
+		ID         string         `json:"Id"`
+		Name       string         `json:"Name"`
+		Driver     string         `json:"Driver"`
+		Scope      string         `json:"Scope"`
 		Containers map[string]any `json:"Containers"`
 	}
-	if err := c.docker.get("/networks", &nets); err == nil {
+	if err := d.get("/networks", &nets); err == nil {
 		for _, n := range nets {
-			st.Networks = append(st.Networks, shared.DockerNetwork{
+			networks = append(networks, shared.DockerNetwork{
 				ID: n.ID, Name: n.Name, Driver: n.Driver, Scope: n.Scope, Containers: len(n.Containers),
 			})
 		}
-		sort.Slice(st.Networks, func(i, j int) bool { return st.Networks[i].Name < st.Networks[j].Name })
+		sort.Slice(networks, func(i, j int) bool { return networks[i].Name < networks[j].Name })
 	}
 
-	// live stats for running containers
+	d.invMu.Lock()
+	d.images, d.volumes, d.networks = images, volumes, networks
+	d.inventoryAt = time.Now()
+	d.invMu.Unlock()
+
+	st.Images = images
+	st.Volumes = volumes
+	st.Networks = networks
+}
+
+// attachStats fills live container stats at most once per dockerStatsEvery.
+// Doing it on every docker tick (and once per running container) was the main
+// remaining cost after one-shot — dockerd still has to walk cgroups.
+func (d *dockerClient) attachStats(c *linuxCollector, st *shared.DockerState) {
+	d.statsMu.Lock()
+	if !d.statsAt.IsZero() && time.Since(d.statsAt) < dockerStatsEvery && len(d.lastStats) > 0 {
+		st.Stats = append([]shared.ContainerStats(nil), d.lastStats...)
+		d.statsMu.Unlock()
+		return
+	}
+	d.statsMu.Unlock()
+
+	var stats []shared.ContainerStats
 	for _, ci := range st.Containers {
 		if ci.State != "running" {
 			continue
 		}
 		if stat, err := c.DockerStats(ci.ID); err == nil {
-			st.Stats = append(st.Stats, stat)
+			stats = append(stats, stat)
 		}
 	}
-	c.docker.pruneCaches(st.Containers)
-	return st
+
+	d.statsMu.Lock()
+	d.lastStats = stats
+	d.statsAt = time.Now()
+	d.statsMu.Unlock()
+	st.Stats = stats
 }
 
 // pruneCaches drops readings for containers that are gone, so a recreate under
