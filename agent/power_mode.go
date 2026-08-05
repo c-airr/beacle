@@ -24,7 +24,10 @@ func intervalsFor(mode shared.PowerMode) syncIntervals {
 			docker:   60 * time.Second,
 			systemd:  60 * time.Second,
 			proxy:    60 * time.Second,
-			watchdog: 5 * time.Second,
+			// Watchdog off: even a "cheap" docker read (~200ms) every 5s was
+			// twelve collections a minute and showed up as 10–20% spikes on an
+			// idle box. Panel actions already call RequestRefresh.
+			watchdog: 0,
 		}
 	case shared.PowerModeSleep:
 		return syncIntervals{
@@ -33,7 +36,7 @@ func intervalsFor(mode shared.PowerMode) syncIntervals {
 			docker:   120 * time.Second,
 			systemd:  120 * time.Second,
 			proxy:    120 * time.Second,
-			watchdog: 5 * time.Second,
+			watchdog: 0,
 		}
 	default:
 		// metrics stay fast because that is the live graph. The rest describe
