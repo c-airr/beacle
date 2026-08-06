@@ -91,7 +91,7 @@ The desktop app sends `eco` when idle, `sleep` when minimized/background.
 WebSockets stay connected; backend only sets agent power mode.
 
 Install script and agent binaries are on the public GitHub release `agentbeta`
-(`install.sh`, `beacle-agent-amd64`, `beacle-agent-arm64`). The UI one-liner is
-`curl -fsSL …/agentbeta/install.sh | sudo bash -s <backend-url>`.
+(`install_agent.sh`, `beacle-agent-amd64`, `beacle-agent-arm64`). The UI one-liner is
+`curl -fsSL …/agentbeta/install_agent.sh | sudo bash -s <backend-url>`.
 `GET /download/agent?arch=amd64` redirects to the GitHub asset. Clicking
 **Update agent** makes the VPS pull the latest asset from GitHub directly.

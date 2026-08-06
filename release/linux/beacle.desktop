@@ -1,0 +1,24 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Beacle
+GenericName=VPS Panel
+Comment=Manage your VPS fleet — monitoring, Docker, systemd and reverse proxy over Tailscale
+Exec=/opt/beacle/beacle %U
+Icon=beacle
+Terminal=false
+Categories=System;Monitor;Network;RemoteAccess;
+# GNOME searches Keywords as well as Name and Comment, so this is what makes
+# the app turn up when someone types "vps", "docker" or "monitoring" rather
+# than the exact product name they may not remember.
+Keywords=vps;server;monitoring;docker;systemd;proxy;caddy;tailscale;infrastructure;panel;
+StartupNotify=true
+# This has to be the class the running window reports, or GNOME cannot tell
+# that the thing you launched is the thing now running — you get a second icon
+# in the dash and pinning appears to do nothing.
+#
+# The value comes from APPLICATION_ID in app/linux/CMakeLists.txt, which
+# my_application.cc passes to g_set_prgname. It is still Flutter's placeholder;
+# if it is ever renamed to something real, this line has to move with it.
+StartupWMClass=com.example.beacle
+SingleMainWindow=true

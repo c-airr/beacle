@@ -1,5 +1,7 @@
-# Assembles release/ from a finished Windows build.
-# Run after scripts/build.ps1 (or at least after flutter build windows --release).
+# Assembles release/ with the split layout:
+#   windows/  — Flutter app + backend zip (NO agents) + setup.exe
+#   linux/    — install_app.sh (+ uninstall, desktop); tar.gz needs Linux/CI
+#   agent/    — beacle-agent-amd64/arm64 + install_agent.sh  (upload to agentbeta)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $rel = "$root\release"
@@ -11,15 +13,20 @@ if (-not (Test-Path "$winRel\beacle.exe")) {
 
 New-Item -ItemType Directory -Force -Path "$rel\windows","$rel\linux","$rel\agent" | Out-Null
 
-Write-Host '[1/4] beacle-windows-x64.zip' -ForegroundColor Cyan
+Write-Host '[1/4] beacle-windows-x64.zip (app + backend, no agents)' -ForegroundColor Cyan
 $staging = "$rel\_win_staging"
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 Copy-Item "$winRel\*" $staging -Recurse -Force
 Remove-Item "$staging\*.exe~","$staging\install.sh","$staging\beacle.config.json.example" -ErrorAction SilentlyContinue
+# Agents live on the agentbeta release, not in the desktop zip.
+if (Test-Path "$staging\data\bin") {
+    Get-ChildItem "$staging\data\bin" -File | Where-Object {
+        $_.Name -like 'beacle-agent*'
+    } | Remove-Item -Force
+}
+# Keep an empty data/bin so the backend still has the folder.
 New-Item -ItemType Directory -Force -Path "$staging\data\bin" | Out-Null
-Copy-Item "$root\dist\agent\beacle-agent-amd64","$root\dist\agent\beacle-agent-arm64" "$staging\data\bin\" -Force -ErrorAction SilentlyContinue
-Copy-Item "$root\backend\data\bin\*" "$staging\data\bin\" -Force -ErrorAction SilentlyContinue
 $zip = "$rel\windows\beacle-windows-x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path "$staging\*" -DestinationPath $zip -Force
@@ -39,24 +46,28 @@ if ($iscc) {
     & $iscc "/DAppVersion=$appVer" "$root\installer\windows\beacle.iss"
     Copy-Item "$root\dist\installer\beacle-setup-$appVer.exe" "$rel\windows\" -Force
 } else {
-    Write-Host '  Inno Setup not found — skip' -ForegroundColor Yellow
+    Write-Host '  Inno Setup not found - skip' -ForegroundColor Yellow
 }
 
-Write-Host '[3/4] Linux install scripts' -ForegroundColor Cyan
-Copy-Item "$root\installer\linux\install.sh","$root\installer\linux\uninstall.sh","$root\installer\linux\beacle.desktop" "$rel\linux\" -Force
+Write-Host '[3/4] Linux desktop installers' -ForegroundColor Cyan
+Copy-Item "$root\installer\linux\install_app.sh" "$rel\linux\" -Force
+Copy-Item "$root\installer\linux\install.sh" "$rel\linux\" -Force
+Copy-Item "$root\installer\linux\uninstall.sh" "$rel\linux\" -Force
+Copy-Item "$root\installer\linux\beacle.desktop" "$rel\linux\" -Force
 if (-not (Test-Path "$rel\linux\beacle-linux-x64.tar.gz")) {
     Set-Content "$rel\linux\LINUX_TARBALL_MISSING.txt" @(
         'beacle-linux-x64.tar.gz is not built on Windows.',
         'Build via GitHub Actions or on a Linux machine with Flutter + GTK deps.',
-        'See release/README.md'
+        'Contents: Flutter bundle + beacle-backend (NO agents).'
     )
 }
 
-Write-Host '[4/4] Agent binaries' -ForegroundColor Cyan
+Write-Host '[4/4] Agent binaries + install_agent.sh' -ForegroundColor Cyan
 Copy-Item "$root\dist\agent\beacle-agent-amd64","$root\dist\agent\beacle-agent-arm64" "$rel\agent\" -Force -ErrorAction SilentlyContinue
-Copy-Item "$root\dist\agent\install.sh","$root\dist\agent\VERSION","$root\dist\agent\README.md" "$rel\agent\" -Force -ErrorAction SilentlyContinue
+Copy-Item "$root\dist\agent\install_agent.sh","$root\dist\agent\install.sh" "$rel\agent\" -Force
+Copy-Item "$root\dist\agent\VERSION","$root\dist\agent\README.md" "$rel\agent\" -Force -ErrorAction SilentlyContinue
 
-Write-Host 'Done — contents of release/:' -ForegroundColor Green
+Write-Host 'Done - contents of release/:' -ForegroundColor Green
 Get-ChildItem $rel -Recurse -File | ForEach-Object {
     '{0,12:N0}  {1}' -f $_.Length, $_.FullName.Replace("$root\", '')
 }

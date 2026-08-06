@@ -88,6 +88,6 @@ if ($iscc) {
 
 Write-Host 'Done.' -ForegroundColor Green
 Write-Host "  Run: $releaseDir\beacle.exe"
-Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install.sh | sudo bash -s http://<tailscale-ip>:9930'
-Write-Host '  Upload to GitHub agentbeta: dist/agent/install.sh, beacle-agent-amd64, beacle-agent-arm64'
-Write-Host '  Upload to GitHub latest: dist/installer/*.exe, installer/linux/install.sh, installer/linux/uninstall.sh'
+Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/download/agentbeta/install_agent.sh | sudo bash -s http://<tailscale-ip>:9930'
+Write-Host '  Upload to GitHub agentbeta: install_agent.sh, beacle-agent-amd64, beacle-agent-arm64'
+Write-Host '  Upload to GitHub latest: beacle-windows-x64.zip, beacle-setup-*.exe, install_app.sh'

@@ -50,10 +50,8 @@ jobs:
         run: |
           $rel = "app/build/windows/x64/runner/Release"
           Copy-Item backend/beacle-backend.exe "$rel/" -Force
+          # Agents are NOT bundled — they live on the agentbeta release.
           New-Item -ItemType Directory -Force -Path "$rel/data/bin" | Out-Null
-          Copy-Item dist/agent/beacle-agent-* "$rel/data/bin/" -Force
-          # A stale example config and the ~ backup file the editor leaves
-          # behind have no business shipping to users.
           Remove-Item "$rel/*.exe~","$rel/install.sh" -ErrorAction SilentlyContinue
           Compress-Archive -Path "$rel/*" -DestinationPath beacle-windows-x64.zip -Force
 
@@ -107,8 +105,8 @@ jobs:
         run: |
           bundle="app/build/linux/x64/release/bundle"
           cp backend/beacle-backend "$bundle/"
+          # Agents stay on agentbeta — not inside the desktop tarball.
           mkdir -p "$bundle/data/bin"
-          cp dist/agent/beacle-agent-* "$bundle/data/bin/"
           tar -czf beacle-linux-x64.tar.gz --transform 's,^bundle,beacle,' -C "$(dirname "$bundle")" bundle
 
       - uses: actions/upload-artifact@v4
@@ -116,6 +114,7 @@ jobs:
           name: linux
           path: |
             beacle-linux-x64.tar.gz
+            installer/linux/install_app.sh
             installer/linux/install.sh
             installer/linux/uninstall.sh
 
@@ -136,5 +135,6 @@ jobs:
             artifacts/windows/beacle-windows-x64.zip
             artifacts/windows/dist/installer/*.exe
             artifacts/linux/beacle-linux-x64.tar.gz
+            artifacts/linux/install_app.sh
             artifacts/linux/install.sh
             artifacts/linux/uninstall.sh

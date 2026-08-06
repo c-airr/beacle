@@ -5,10 +5,10 @@
 ; try it by hand: install Inno Setup and run
 ;     iscc installer\windows\beacle.iss
 ;
-; This is a downloading installer, not a bundle. The payload lives on the
-; GitHub release and is fetched at install time, which keeps the file people
-; download small and means a new build needs a new release asset rather than a
-; new installer.
+; This is a downloading installer, not a fat bundle. At install time it
+; fetches beacle-windows-x64.zip from releases/latest (Flutter app + backend).
+; VPS agent binaries are NOT in that zip — they live on the agentbeta release
+; and are installed on servers via install_agent.sh.
 ;
 ; What it takes care of beyond copying files:
 ;   * a Start Menu entry, which is what makes Windows Search find "Beacle"
@@ -19,7 +19,7 @@
 ;     %AppData%\Beacle with it
 
 #define AppName          "Beacle"
-#define AppPublisher     "c-airr"
+#define AppPublisher     "realairr_"
 #define AppURL           "https://github.com/c-airr/beacle"
 #define AppExeName       "beacle.exe"
 #define AppUserModelID   "c-airr.Beacle"

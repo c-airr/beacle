@@ -27,10 +27,10 @@ func AgentGitHubBinaryURL(goarch string) string {
 	)
 }
 
-// AgentGitHubInstallURL is the install.sh on the same public release.
+// AgentGitHubInstallURL is the VPS install script on the agentbeta release.
 func AgentGitHubInstallURL() string {
 	return fmt.Sprintf(
-		"https://github.com/%s/%s/releases/download/%s/install.sh",
+		"https://github.com/%s/%s/releases/download/%s/install_agent.sh",
 		AgentGitHubOwner, AgentGitHubRepo, AgentReleaseTag,
 	)
 }

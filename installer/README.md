@@ -9,23 +9,23 @@ attaches them to the release.
 
 | File | What it does |
 |---|---|
-| `windows/beacle.iss` | Inno Setup script. Downloads the payload from the GitHub release, installs per user, creates the Start Menu entry. |
+| `windows/beacle.iss` | Inno Setup. Downloads `beacle-windows-x64.zip` (app+backend) from latest. |
 | `linux/beacle.desktop` | Application entry. This is the file that makes GNOME find the app. |
-| `linux/install.sh` | Downloads the payload, installs to `~/.local/share/beacle` or `/opt/beacle`, registers the entry and icons. |
+| `linux/install_app.sh` | Desktop Linux installer — detects arch, downloads tar.gz from latest. |
+| `linux/install.sh` | Compat alias → `install_app.sh`. |
 | `linux/uninstall.sh` | Stops the app and backend, then removes both the install and the config. |
 | `ci/build-installers.yml.draft` | Left as a reference. The live workflow is `.github/workflows/build-installers.yml`. |
 
 ## How it is meant to work
 
 The installer people download is small and fetches the real payload from the
-GitHub release. Two assets per release:
+GitHub release. Desktop assets (no agents inside):
 
-- `beacle-windows-x64.zip` — `beacle.exe`, `beacle-backend.exe`,
-  `flutter_windows.dll`, `data/` including the agent binaries
+- `beacle-windows-x64.zip` — `beacle.exe`, `beacle-backend.exe`, Flutter runtime
 - `beacle-linux-x64.tar.gz` — the same for Linux
 
-That split means shipping a new build is uploading a new asset, not rebuilding
-and re-signing an installer.
+VPS agents are a separate release (`agentbeta`): `beacle-agent-amd64`,
+`beacle-agent-arm64`, `install_agent.sh`.
 
 ## Making the app findable
 
@@ -92,8 +92,8 @@ Pinning itself is the user's move: right-click → Add to Favourites.
 # Windows — needs Inno Setup installed
 iscc installer\windows\beacle.iss
 
-# Linux
-bash installer/linux/install.sh
+# Linux desktop
+bash installer/linux/install_app.sh
 ```
 
 Both expect release assets that do not exist yet, so both will fail at the
