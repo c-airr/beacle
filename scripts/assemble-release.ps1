@@ -6,7 +6,7 @@ $rel = "$root\release"
 $winRel = "$root\app\build\windows\x64\runner\Release"
 
 if (-not (Test-Path "$winRel\beacle.exe")) {
-    throw "No Windows build at $winRel — run scripts/build.ps1 first."
+    throw "No Windows build at $winRel - run scripts/build.ps1 first."
 }
 
 New-Item -ItemType Directory -Force -Path "$rel\windows","$rel\linux","$rel\agent" | Out-Null

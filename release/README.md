@@ -5,12 +5,15 @@ Rebuild with: `powershell -File scripts/assemble-release.ps1`
 
 ## Upload checklist
 
-### Desktop release (tag `v0.5.0` or similar)
+### Desktop release (tag `v0.9.0` / branch `0.9-beta`)
+
+Installer always fetches from `releases/latest` — upload these assets
+so that latest points at this release:
 
 | File | Upload as |
 |---|---|
 | `windows/beacle-windows-x64.zip` | `beacle-windows-x64.zip` |
-| `windows/beacle-setup-0.5.0.exe` | `beacle-setup-0.5.0.exe` |
+| `windows/beacle-setup-0.9.0.exe` | `beacle-setup-0.9.0.exe` |
 | `linux/install.sh` | `install.sh` (desktop) |
 | `linux/uninstall.sh` | `uninstall.sh` |
 | `linux/beacle-linux-x64.tar.gz` | **not built on Windows** — needs Linux or CI |

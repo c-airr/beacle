@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-const appVersion = '0.5.0';
+const appVersion = '0.9.0';
 // Same repo as config.dart's agent release — kept here too so the updater
 // does not need a cross-file import just to read a constant.
 const githubRepo = 'c-airr/beacle';
