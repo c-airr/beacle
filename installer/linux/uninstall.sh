@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Removes a Beacle desktop install. NOT WIRED UP YET — see installer/README.md.
+# Removes a Beacle desktop install. Uploaded next to install.sh on the release.
 #
 # Stops what is running first. The backend outlives the window on purpose (the
 # panel adopts a running one on the next launch), so an uninstall that only

@@ -20,3 +20,11 @@ dist/agent/linux-amd64/
 dist/agent/linux-arm64/
 agent/beacle-agent*
 backend/beacle-backend*
+
+# Local release staging (payloads are large; README stays).
+release/windows/
+release/linux/*.tar.gz
+release/linux/LINUX_TARBALL_MISSING.txt
+release/agent/beacle-agent*
+release/agent/VERSION
+
