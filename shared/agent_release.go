@@ -21,9 +21,16 @@ func AgentGitHubAssetName(goarch string) string {
 
 // AgentGitHubBinaryURL is the direct download URL for the agent binary.
 func AgentGitHubBinaryURL(goarch string) string {
+	return AgentGitHubBinaryURLTag(AgentReleaseTag, goarch)
+}
+
+// AgentGitHubBinaryURLTag points at the binary inside a specific release tag,
+// for the version picker in Settings (installing a chosen release, not just
+// the rolling default).
+func AgentGitHubBinaryURLTag(tag, goarch string) string {
 	return fmt.Sprintf(
 		"https://github.com/%s/%s/releases/download/%s/%s",
-		AgentGitHubOwner, AgentGitHubRepo, AgentReleaseTag, AgentGitHubAssetName(goarch),
+		AgentGitHubOwner, AgentGitHubRepo, tag, AgentGitHubAssetName(goarch),
 	)
 }
 

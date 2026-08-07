@@ -14,12 +14,16 @@ import (
 )
 
 // handleDownloadAgent redirects to the public GitHub agentbeta asset.
+// ?tag= pins a specific release for the version picker in Settings.
 func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
 	arch := r.URL.Query().Get("arch")
 	if arch == "" {
 		arch = "amd64"
 	}
 	url := shared.AgentGitHubBinaryURL(arch)
+	if tag := r.URL.Query().Get("tag"); tag != "" {
+		url = shared.AgentGitHubBinaryURLTag(tag, arch)
+	}
 	w.Header().Set("X-Beacle-Agent-Source", url)
 	http.Redirect(w, r, url, http.StatusFound)
 }

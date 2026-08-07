@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -327,7 +328,18 @@ func (s *APIServer) Routes() http.Handler {
 
 	// update / rollback
 	mux.HandleFunc("POST /api/update", a(func(w http.ResponseWriter, r *http.Request) {
-		msg, err := s.upd.Update()
+		// Optional {"tag": "..."} pins a specific GitHub release (Settings
+		// version picker); empty body = the panel's default release.
+		var req struct {
+			Tag string `json:"tag"`
+		}
+		if r.Body != nil {
+			b, _ := io.ReadAll(r.Body)
+			if len(b) > 0 {
+				_ = json.Unmarshal(b, &req)
+			}
+		}
+		msg, err := s.upd.Update(req.Tag)
 		if err != nil {
 			jsonErr(w, 500, err.Error())
 			return

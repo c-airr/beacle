@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../user_config.dart';
+
 const appVersion = '0.5.0';
 // Same repo as config.dart's agent release — kept here too so the updater
 // does not need a cross-file import just to read a constant.
@@ -52,9 +54,31 @@ class AppUpdater {
   /// Detection only, nothing is fetched. null keeps the Update button grey.
   static Future<UpdateInfo?> availableUpdate() async {
     for (final r in await releases()) {
-      if (_isNewer(r.version, appVersion)) return r;
+      if (isNewer(r.version, appVersion)) return r;
     }
     return null;
+  }
+
+  // --- rollback notification suppression -------------------------------
+  //
+  // After a deliberate rollback/downgrade the latest GitHub release is still
+  // "newer" than what is running, so the update banner would nag forever.
+  // The version the user walked away from is persisted in settings.json
+  // (%AppData%\Beacle) and the banner stays hidden until GitHub publishes
+  // something newer still.
+  static const _suppressKey = 'suppress_app_update_version';
+
+  static String? get suppressedVersion => UserSettings.load().raw[_suppressKey] as String?;
+
+  static void suppressNotificationsFor(String version) {
+    final s = UserSettings.load();
+    s.raw[_suppressKey] = version;
+    s.save();
+  }
+
+  static void clearSuppression() {
+    final s = UserSettings.load();
+    if (s.raw.remove(_suppressKey) != null) s.save();
   }
 
   /// Downloads the update and stages it; applied on next launch.
@@ -101,6 +125,9 @@ start "" "$_installDir\\beacle.exe"
   static Future<void> rollbackAndRestart() async {
     final prev = Directory('${_versionsDir.path}\\previous');
     if (!prev.existsSync()) throw Exception('no previous version to roll back to');
+    // Rolling back to an older build must not resurrect the "new version"
+    // banner for the release we are deliberately leaving.
+    suppressNotificationsFor(appVersion);
     final script = File('$_installDir\\rollback.bat');
     script.writeAsStringSync('''
 @echo off
@@ -114,15 +141,18 @@ start "" "$_installDir\\beacle.exe"
 
   /// Tolerates "v1.2.3", "1.2" and build suffixes; anything unparsable counts
   /// as 0 so a malformed tag can never look newer than a real one.
-  static bool _isNewer(String a, String b) {
+  static bool isNewer(String a, String b) => compareVersions(a, b) > 0;
+
+  /// Semver compare: negative = a older, 0 = equal, positive = a newer.
+  static int compareVersions(String a, String b) {
     List<int> parts(String v) =>
         v.split(RegExp(r'[.\-+]')).map((p) => int.tryParse(p) ?? 0).toList();
     final x = parts(a), y = parts(b);
     for (var i = 0; i < (x.length > y.length ? x.length : y.length); i++) {
       final xi = i < x.length ? x[i] : 0;
       final yi = i < y.length ? y[i] : 0;
-      if (xi != yi) return xi > yi;
+      if (xi != yi) return xi - yi;
     }
-    return false;
+    return 0;
   }
 }

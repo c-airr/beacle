@@ -120,8 +120,8 @@ func fetchGitHubAsset(goarch string) (stamp, downloadURL string, err error) {
 // compiled against a missing release tag (the 0.5-beta 404) can still recover
 // as long as the backend points at agentbeta. Direct GitHub is the fallback
 // when the backend is unreachable.
-func (u *Updater) Update() (string, error) {
-	url := u.downloadURL()
+func (u *Updater) Update(tag string) (string, error) {
+	url := u.downloadURL(tag)
 	bin, err := u.binPath()
 	if err != nil {
 		return "", err
@@ -147,6 +147,9 @@ func (u *Updater) Update() (string, error) {
 		// Last resort: baked-in GitHub URL (agentbeta), for builds whose
 		// compiled tag pointed at a release that never existed.
 		fallback := shared.AgentGitHubBinaryURL(runtime.GOARCH)
+		if tag != "" {
+			fallback = shared.AgentGitHubBinaryURLTag(tag, runtime.GOARCH)
+		}
 		if fallback == url {
 			return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
 		}
@@ -192,10 +195,18 @@ func (u *Updater) Update() (string, error) {
 
 // downloadURL is where Update pulls the next binary from. Backend first so the
 // release tag lives in one place (shared.AgentReleaseTag on the panel), not
-// frozen inside every agent build.
-func (u *Updater) downloadURL() string {
+// frozen inside every agent build. A non-empty tag pins a specific release
+// chosen in the Settings version picker.
+func (u *Updater) downloadURL(tag string) string {
 	if u.cfg != nil && u.cfg.BackendURL != "" {
-		return strings.TrimRight(u.cfg.BackendURL, "/") + "/download/agent?arch=" + runtime.GOARCH
+		url := strings.TrimRight(u.cfg.BackendURL, "/") + "/download/agent?arch=" + runtime.GOARCH
+		if tag != "" {
+			url += "&tag=" + tag
+		}
+		return url
+	}
+	if tag != "" {
+		return shared.AgentGitHubBinaryURLTag(tag, runtime.GOARCH)
 	}
 	return shared.AgentGitHubBinaryURL(runtime.GOARCH)
 }

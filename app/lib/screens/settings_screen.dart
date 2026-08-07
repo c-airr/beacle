@@ -13,6 +13,7 @@ import '../paths.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../tray.dart';
+import '../update/agent_updater.dart';
 import '../update/app_updater.dart';
 import '../widgets/common.dart';
 
@@ -29,6 +30,15 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   UpdateInfo? available;
   bool checking = false;
   bool downloading = false;
+
+  // Agent updates: filled by "Check for updates" against GitHub, never
+  // assumed — the Update buttons only exist once a newer release is seen.
+  AgentReleaseInfo? agentLatest;
+  bool agentChecking = false;
+  String? agentUpdateStatus;
+  final Set<String> agentUpdating = {};
+  bool agentPickerBusy = false;
+
   late final TabController _tabs = TabController(length: 3, vsync: this);
   bool? autostartOn;
 
@@ -401,6 +411,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       setState(() => updateStatus = '$e');
                     }
                   }),
+                SmallButton('Choose version…', icon: Icons.list_alt, onPressed: downloading ? null : _pickDesktopVersion),
               ],
             ),
             if (checking || downloading)
@@ -420,9 +431,31 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           title: 'AGENT UPDATES',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text(
-              'Agents auto-update from the backend every 6 hours. You can also trigger update/rollback per VPS. Agent config files are never overwritten.',
+              'Agent updates are pulled from the GitHub release on demand. Press "Check for updates" to compare your agents against the latest release — Update buttons appear only when a newer agent actually exists. Agent config files are never overwritten.',
               style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SmallButton('Check for updates', icon: Icons.search,
+                    onPressed: agentChecking ? null : () => _checkAgentUpdates(state)),
+                if (agentLatest != null) _latestAgentChip(agentLatest!),
+                if (agentChecking)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            if (agentUpdateStatus != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(agentUpdateStatus!, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+              ),
             const SizedBox(height: 12),
             if (state.vpsList.isEmpty)
               const Text('No VPS yet — add one in the VPS tab.', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
@@ -439,28 +472,296 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       SizedBox(width: 140, child: Text(v.name, style: const TextStyle(fontSize: 13))),
                       Text('v${v.agentVersion.isEmpty ? '?' : v.agentVersion}',
                           style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
-                      SmallButton('Update', icon: Icons.system_update_alt, onPressed: !v.online ? null : () async {
-                        try {
-                          final r = await state.api.agentUpdate(v.id);
-                          if (context.mounted) showToast(context, '${v.name}: $r');
-                        } catch (e) {
-                          if (context.mounted) showToast(context, '$e', error: true);
-                        }
-                      }),
-                      SmallButton('Rollback', icon: Icons.history, onPressed: !v.online ? null : () async {
-                        try {
-                          final r = await state.api.agentRollback(v.id);
-                          if (context.mounted) showToast(context, '${v.name}: $r');
-                        } catch (e) {
-                          if (context.mounted) showToast(context, '$e', error: true);
-                        }
-                      }),
+                      if (_agentUpdateAvailable(v))
+                        SmallButton(
+                          agentUpdating.contains(v.id) ? 'Updating…' : 'Update',
+                          icon: Icons.system_update_alt,
+                          color: BeacleColors.ok,
+                          onPressed: !v.online || agentUpdating.contains(v.id)
+                              ? null
+                              : () => _updateAgent(state, v, null),
+                        ),
+                      SmallButton('Choose version…', icon: Icons.list_alt,
+                          onPressed: !v.online || agentPickerBusy ? null : () => _pickAgentVersion(state, v)),
                     ],
                   ),
                 ),
           ]),
         ),
       ],
+    );
+  }
+
+  /// Chip next to "Check for updates" showing what GitHub currently offers.
+  Widget _latestAgentChip(AgentReleaseInfo info) {
+    final label = info.version != null
+        ? 'latest: v${info.version}'
+        : 'latest build: ${info.publishedAt?.toLocal().toString().substring(0, 16) ?? info.tag}';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: BeacleColors.surfaceHi,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: BeacleColors.border),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+    );
+  }
+
+  /// The Update button exists only after a successful check proved something
+  /// newer is out there, and stays hidden for the release the user
+  /// deliberately downgraded away from.
+  bool _agentUpdateAvailable(Vps v) {
+    if (!v.online || agentLatest == null) return false;
+    final latest = agentLatest!.version;
+    if (latest == null) {
+      // Rolling release without a VERSION asset — no ordering possible, so
+      // the user decides; the build date in the chip says how fresh it is.
+      return true;
+    }
+    if (v.agentVersion.isEmpty) return true;
+    return AgentUpdater.isActionable(latest, v.agentVersion);
+  }
+
+  Future<void> _checkAgentUpdates(AppState state) async {
+    setState(() {
+      agentChecking = true;
+      agentUpdateStatus = null;
+    });
+    try {
+      final info = await AgentUpdater.latestAgentRelease();
+      if (!mounted) return;
+      if (info == null) {
+        setState(() => agentUpdateStatus = 'Could not read the agent release from GitHub.');
+        return;
+      }
+      // A release newer than the one the user walked away from makes the
+      // suppression obsolete.
+      final suppressed = AgentUpdater.suppressedVersion;
+      if (info.version != null &&
+          suppressed != null &&
+          AppUpdater.isNewer(info.version!, suppressed)) {
+        AgentUpdater.clearSuppression();
+      }
+      setState(() {
+        agentLatest = info;
+        final outdated = state.vpsList.where(_agentUpdateAvailable).length;
+        if (info.version == null) {
+          agentUpdateStatus =
+              'Latest build published ${info.publishedAt?.toLocal().toString().substring(0, 16) ?? 'unknown'} — '
+              'no VERSION asset on the release, so agents cannot be compared by version.';
+        } else if (outdated == 0) {
+          agentUpdateStatus = 'All agents are up to date (v${info.version}).';
+        } else {
+          agentUpdateStatus = 'Agent v${info.version} is available for $outdated VPS.';
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => agentUpdateStatus = 'Agent update check failed: $e');
+    } finally {
+      if (mounted) setState(() => agentChecking = false);
+    }
+  }
+
+  Future<void> _updateAgent(AppState state, Vps v, String? tag) async {
+    setState(() => agentUpdating.add(v.id));
+    try {
+      final r = await state.api.agentUpdate(v.id, tag: tag);
+      if (mounted) showToast(context, '${v.name}: $r');
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    } finally {
+      if (mounted) setState(() => agentUpdating.remove(v.id));
+    }
+  }
+
+  /// Version picker for one VPS: every GitHub release that ships agent
+  /// binaries. Downgrades ask twice so a misclick cannot roll an agent back.
+  Future<void> _pickAgentVersion(AppState state, Vps v) async {
+    setState(() => agentPickerBusy = true);
+    List<AgentReleaseInfo> releases;
+    try {
+      releases = await AgentUpdater.agentReleases();
+    } catch (e) {
+      if (mounted) showToast(context, 'Could not load releases: $e', error: true);
+      setState(() => agentPickerBusy = false);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => agentPickerBusy = false);
+    if (releases.isEmpty) {
+      showToast(context, 'No releases with agent binaries found.', error: true);
+      return;
+    }
+    final chosen = await showDialog<AgentReleaseInfo>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BeacleColors.surface,
+        title: Text('Agent version for ${v.name}', style: const TextStyle(fontSize: 15)),
+        content: SizedBox(
+          width: 420,
+          height: 320,
+          child: ListView(
+            children: [
+              for (final r in releases)
+                ListTile(
+                  dense: true,
+                  title: Text(r.version != null ? 'v${r.version}' : r.tag,
+                      style: const TextStyle(fontSize: 13)),
+                  subtitle: Text(
+                    '${r.tag}${r.prerelease ? ' · pre-release' : ''}'
+                    '${r.publishedAt != null ? ' · ${r.publishedAt!.toLocal().toString().substring(0, 16)}' : ''}',
+                    style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                  ),
+                  trailing: r.version != null && r.version == v.agentVersion
+                      ? const Text('current', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      : null,
+                  onTap: () => Navigator.of(ctx).pop(r),
+                ),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel'))],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    final downgrade = chosen.version != null &&
+        v.agentVersion.isNotEmpty &&
+        AppUpdater.compareVersions(chosen.version!, v.agentVersion) < 0;
+    final label = chosen.version != null ? 'v${chosen.version}' : chosen.tag;
+    final ok = await _confirmInstall(
+      title: 'Install $label on ${v.name}?',
+      message: 'The agent will download the binary from the "$label" release and restart.',
+      downgrade: downgrade,
+      downgradeMessage:
+          '${v.name} is running v${v.agentVersion}. Installing $label is a DOWNGRADE.',
+    );
+    if (ok != true || !mounted) return;
+    if (downgrade && agentLatest?.version != null) {
+      AgentUpdater.suppressNotificationsFor(agentLatest!.version!);
+    }
+    await _updateAgent(state, v, chosen.tag);
+  }
+
+  /// Version picker for the desktop app: stable GitHub releases only (drafts
+  /// and pre-releases are filtered out inside AppUpdater.releases).
+  Future<void> _pickDesktopVersion() async {
+    List<UpdateInfo> releases;
+    try {
+      releases = await AppUpdater.releases();
+    } catch (e) {
+      if (mounted) showToast(context, 'Could not load releases: $e', error: true);
+      return;
+    }
+    if (!mounted) return;
+    if (releases.isEmpty) {
+      showToast(context, 'No stable releases found for this platform.', error: true);
+      return;
+    }
+    final chosen = await showDialog<UpdateInfo>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BeacleColors.surface,
+        title: const Text('Install a specific version', style: TextStyle(fontSize: 15)),
+        content: SizedBox(
+          width: 420,
+          height: 320,
+          child: ListView(
+            children: [
+              for (final r in releases)
+                ListTile(
+                  dense: true,
+                  title: Text('v${r.version}', style: const TextStyle(fontSize: 13)),
+                  subtitle: r.notes.trim().isEmpty
+                      ? null
+                      : Text(r.notes.trim().split('\n').first,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  trailing: r.version == appVersion
+                      ? const Text('current', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      : null,
+                  onTap: () => Navigator.of(ctx).pop(r),
+                ),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel'))],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    if (chosen.version == appVersion) {
+      showToast(context, 'v$appVersion is already installed.');
+      return;
+    }
+    final downgrade = AppUpdater.compareVersions(chosen.version, appVersion) < 0;
+    final ok = await _confirmInstall(
+      title: 'Install v${chosen.version}?',
+      message: 'The release will be downloaded and staged; apply it with "Apply and restart".',
+      downgrade: downgrade,
+      downgradeMessage: 'You are on v$appVersion. Installing v${chosen.version} is a DOWNGRADE.',
+    );
+    if (ok != true || !mounted) return;
+    if (downgrade) {
+      // After the restart the running build is older than GitHub's latest —
+      // remember what we walked away from so the banner does not nag.
+      AppUpdater.suppressNotificationsFor(available?.version ?? appVersion);
+    }
+    setState(() {
+      downloading = true;
+      updateStatus = null;
+    });
+    try {
+      final msg = await AppUpdater.downloadAndStage(chosen);
+      setState(() {
+        staged = chosen;
+        updateStatus = msg;
+      });
+    } catch (e) {
+      setState(() => updateStatus = '$e');
+    } finally {
+      setState(() => downloading = false);
+    }
+  }
+
+  /// One confirmation for updates, two for downgrades — going back a version
+  /// must be impossible to trigger by accident.
+  Future<bool?> _confirmInstall({
+    required String title,
+    required String message,
+    required bool downgrade,
+    String? downgradeMessage,
+  }) async {
+    final first = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BeacleColors.surface,
+        title: Text(title, style: const TextStyle(fontSize: 15)),
+        content: Text(message, style: const TextStyle(fontSize: 13, color: BeacleColors.textDim)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Continue')),
+        ],
+      ),
+    );
+    if (first != true || !mounted || !downgrade) return first;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BeacleColors.surface,
+        title: const Text('Confirm downgrade', style: TextStyle(fontSize: 15, color: BeacleColors.warn)),
+        content: Text(
+          '${downgradeMessage ?? 'This installs an older version.'}\n\nAre you absolutely sure?',
+          style: const TextStyle(fontSize: 13, color: BeacleColors.textDim),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes, downgrade', style: TextStyle(color: BeacleColors.warn)),
+          ),
+        ],
+      ),
     );
   }
 

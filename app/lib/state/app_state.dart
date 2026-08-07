@@ -160,23 +160,38 @@ class AppState extends ChangeNotifier {
   Future<void> _checkForUpdate() async {
     try {
       final info = await AppUpdater.availableUpdate();
-      if (availableUpdate?.version != info?.version) {
-        availableUpdate = info;
-        notifyListeners();
-      }
+      _applyUpdateInfo(info);
     } catch (_) {
       // A failed check is not worth surfacing as an error: the banner simply
       // stays hidden and the Settings tab will report the failure on demand.
     }
   }
 
-  /// Re-check on demand from the Settings tab. Returns the same info the
-  /// banner reads, so the two can never disagree.
+  /// Re-check on demand from the Settings tab. Returns the unfiltered info so
+  /// the tab can tell the truth even about a suppressed version, while the
+  /// banner still respects a deliberate rollback.
   Future<UpdateInfo?> recheckForUpdate() async {
     final info = await AppUpdater.availableUpdate();
-    availableUpdate = info;
-    notifyListeners();
+    _applyUpdateInfo(info);
     return info;
+  }
+
+  void _applyUpdateInfo(UpdateInfo? info) {
+    var banner = info;
+    final suppressed = AppUpdater.suppressedVersion;
+    if (banner != null && suppressed != null) {
+      if (AppUpdater.isNewer(banner.version, suppressed)) {
+        // GitHub moved past the version the user rolled back from — the
+        // suppression has served its purpose.
+        AppUpdater.clearSuppression();
+      } else {
+        banner = null;
+      }
+    }
+    if (availableUpdate?.version != banner?.version) {
+      availableUpdate = banner;
+      notifyListeners();
+    }
   }
 
   /// Set when the power mode changes: agents keep the old tick rate until the

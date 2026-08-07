@@ -222,8 +222,12 @@ class ApiClient {
   Future<Map<String, dynamic>> proxyValidate(String vpsId) async =>
       (await post(_a(vpsId, 'proxy/validate'))) as Map<String, dynamic>;
 
-  Future<String> agentUpdate(String vpsId) async =>
-      ((await post(_a(vpsId, 'update'))) as Map)['result'] as String? ?? '';
+  /// [tag] pins a specific GitHub release (Settings version picker);
+  /// null = the panel's default rolling release.
+  Future<String> agentUpdate(String vpsId, {String? tag}) async =>
+      ((await post(_a(vpsId, 'update'), body: tag == null ? const {} : {'tag': tag})) as Map)['result']
+          as String? ??
+      '';
 
   Future<String> agentRollback(String vpsId) async =>
       ((await post(_a(vpsId, 'rollback'))) as Map)['result'] as String? ?? '';
