@@ -34,11 +34,22 @@ func AgentGitHubBinaryURLTag(tag, goarch string) string {
 	)
 }
 
-// AgentGitHubInstallURL is the install.sh on the same public release.
+// AgentGitHubLatestBinaryURL points at the binary on GitHub's Latest release
+// (same place install_agent.sh pulls from).
+func AgentGitHubLatestBinaryURL(goarch string) string {
+	return fmt.Sprintf(
+		"https://github.com/%s/%s/releases/latest/download/%s",
+		AgentGitHubOwner, AgentGitHubRepo, AgentGitHubAssetName(goarch),
+	)
+}
+
+// AgentGitHubInstallURL is the VPS one-liner script on the Latest release.
+// /releases/latest/download/ follows GitHub's current non-prerelease Latest
+// and keeps Add-VPS copy-paste current without baking a tag into every build.
 func AgentGitHubInstallURL() string {
 	return fmt.Sprintf(
-		"https://github.com/%s/%s/releases/download/%s/install.sh",
-		AgentGitHubOwner, AgentGitHubRepo, AgentReleaseTag,
+		"https://github.com/%s/%s/releases/latest/download/install_agent.sh",
+		AgentGitHubOwner, AgentGitHubRepo,
 	)
 }
 

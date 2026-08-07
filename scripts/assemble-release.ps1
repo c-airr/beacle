@@ -54,7 +54,7 @@ if (-not (Test-Path "$rel\linux\beacle-linux-x64.tar.gz")) {
 
 Write-Host '[4/4] Agent binaries' -ForegroundColor Cyan
 Copy-Item "$root\dist\agent\beacle-agent-amd64","$root\dist\agent\beacle-agent-arm64" "$rel\agent\" -Force -ErrorAction SilentlyContinue
-Copy-Item "$root\dist\agent\install.sh","$root\dist\agent\VERSION","$root\dist\agent\README.md" "$rel\agent\" -Force -ErrorAction SilentlyContinue
+Copy-Item "$root\dist\agent\install_agent.sh","$root\dist\agent\install.sh","$root\dist\agent\VERSION","$root\dist\agent\README.md" "$rel\agent\" -Force -ErrorAction SilentlyContinue
 
 Write-Host 'Done — contents of release/:' -ForegroundColor Green
 Get-ChildItem $rel -Recurse -File | ForEach-Object {

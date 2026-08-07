@@ -66,6 +66,12 @@ class AppShellState extends State<AppShell> {
     ];
     final state = context.read<AppState>();
     _alertSub = state.alertStream.stream.listen((a) {
+      if (a.resolved) {
+        // Condition cleared — yank the toast immediately so a recovering
+        // agent does not leave a red "offline" strip for another six seconds.
+        if (mounted) setState(() => _toasts.removeWhere((t) => t.id == a.id));
+        return;
+      }
       setState(() => _toasts.add(a));
       Future.delayed(const Duration(seconds: 6), () {
         if (mounted) setState(() => _toasts.remove(a));
@@ -377,15 +383,25 @@ class _AlertToast extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = alert.severity == 'critical' ? BeacleColors.err : BeacleColors.warn;
     return Container(
-      width: 300,
+      width: 320,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: BeacleColors.glass,
+        color: BeacleColors.surfaceHi,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
       ),
-      child: Text(alert.message, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            alert.vpsName.isEmpty ? alert.type : '${alert.vpsName} · ${alert.type}',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+          ),
+          const SizedBox(height: 4),
+          Text(alert.message, style: const TextStyle(fontSize: 13, color: BeacleColors.text, height: 1.3)),
+        ],
+      ),
     );
   }
 }

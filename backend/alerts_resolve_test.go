@@ -99,3 +99,20 @@ func TestRestartAdoptsOpenAlerts(t *testing.T) {
 		}
 	}
 }
+
+// Regression: a reconnecting agent often gets Status=online from its first
+// snapshot before WatchOffline runs. clearReachability must still close the
+// row — gating on "status is still offline" left the alert hanging forever.
+func TestClearReachabilityResolvesWhileAlreadyOnline(t *testing.T) {
+	store, e := newStoreAndEngine(t)
+	e.fire(testVPS, shared.AlertAgentDown, shared.SeverityCritical, "", "agent down")
+	e.fire(testVPS, shared.AlertAgentOffline, shared.SeverityCritical, "", "offline")
+
+	e.clearReachability(testVPS.ID)
+
+	for _, a := range store.ListAlerts() {
+		if !a.Resolved {
+			t.Errorf("alert %s still open after clearReachability", a.Type)
+		}
+	}
+}

@@ -133,7 +133,14 @@ class _AlertRow extends StatelessWidget {
                     Text(time, style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
                   ]),
                   const SizedBox(height: 2),
-                  Text(alert.message, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                  Text(
+                    alert.message,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: alert.resolved ? BeacleColors.textDim : BeacleColors.text,
+                    ),
+                  ),
                 ],
               ),
             ),

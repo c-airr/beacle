@@ -435,7 +435,14 @@ class _LogsDialogState extends State<_LogsDialog> {
 
 void showToast(BuildContext context, String msg, {bool error = false}) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg),
+    content: Text(
+      msg,
+      style: TextStyle(
+        fontSize: 13,
+        color: error ? Colors.white : BeacleColors.text,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
     backgroundColor: error ? BeacleColors.err : BeacleColors.surfaceHi,
     behavior: SnackBarBehavior.floating,
     duration: const Duration(seconds: 3),

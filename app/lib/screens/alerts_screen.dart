@@ -71,6 +71,32 @@ class _AlertsScreenState extends State<AlertsScreen> {
                         if (AlertSound.enabled) AlertSound.play('warning');
                       }),
             ),
+            if (AlertSound.supported && AlertSound.enabled) ...[
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 110,
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  ),
+                  child: Slider(
+                    value: AlertSound.volumePercent.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    label: '${AlertSound.volumePercent}%',
+                    onChanged: (v) => setState(() => AlertSound.setVolumePercent(v.round())),
+                    onChangeEnd: (_) => AlertSound.play('warning'),
+                  ),
+                ),
+              ),
+              Text(
+                '${AlertSound.volumePercent}%',
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+              ),
+            ],
             const SizedBox(width: 4),
             if (active.isNotEmpty)
               SmallButton(
@@ -319,7 +345,14 @@ class _AlertRow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
-                    Text(alert.message, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    Text(
+                      alert.message,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        color: alert.resolved ? BeacleColors.textDim : BeacleColors.text,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       alert.resolved ? 'resolved · started ${fmtAgo(alert.createdAt)}' : 'since ${fmtAgo(alert.createdAt)}',

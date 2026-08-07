@@ -6,7 +6,7 @@ import (
 	"beacle/shared"
 )
 
-// vpsInstallCommand — curl install.sh from GitHub; backend URL is only agent config.
+// vpsInstallCommand — curl install_agent.sh from GitHub Latest; backend URL is only agent config.
 func vpsInstallCommand(backendURL string) string {
 	return fmt.Sprintf("curl -fsSL %s | sudo bash -s %s", shared.AgentGitHubInstallURL(), backendURL)
 }
@@ -22,8 +22,8 @@ INNER
 }
 
 func installScriptBody(backendURL string) string {
-	amd := shared.AgentGitHubBinaryURL("amd64")
-	arm := shared.AgentGitHubBinaryURL("arm64")
+	amd := shared.AgentGitHubLatestBinaryURL("amd64")
+	arm := shared.AgentGitHubLatestBinaryURL("arm64")
 	return fmt.Sprintf(`BACKEND_URL=%q
 AMD_URL=%q
 ARM_URL=%q

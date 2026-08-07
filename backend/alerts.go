@@ -107,6 +107,20 @@ func (e *AlertEngine) clear(vpsID string, t shared.AlertType, key string) {
 	}
 }
 
+// clearReachability resolves agent_offline / agent_down for a VPS that has a
+// live socket again. Unlike clear(), this always asks the store — the status
+// may already have been flipped to online by a snapshot before WatchOffline
+// ran, which used to skip clear() and leave the row hanging forever.
+func (e *AlertEngine) clearReachability(vpsID string) {
+	for _, t := range []shared.AlertType{shared.AlertAgentOffline, shared.AlertAgentDown} {
+		delete(e.active, vpsID+"|"+string(t)+"|")
+		for _, a := range e.store.ResolveAlertsFor(vpsID, t, "") {
+			e.hub.Broadcast(shared.WSAlert, a)
+		}
+	}
+	delete(e.reach, vpsID)
+}
+
 // sustained reports whether `over` has held continuously for SustainedSeconds.
 // The first sample over the threshold only starts the clock, so a momentary
 // spike — a build, a backup, a container starting — never raises an alert.
@@ -223,18 +237,20 @@ func (e *AlertEngine) WatchOffline() {
 			}
 			live := e.agentHub != nil && e.agentHub.Connected(v.ID)
 			if live {
+				// A snapshot/heartbeat often flips Status to online the moment
+				// the socket returns — before this tick runs. Clearing used to
+				// gate on "still Offline/AgentDown", so the alert stayed open
+				// forever while the panel already showed a healthy agent.
 				if v.Status == shared.VPSOffline || v.Status == shared.VPSAgentDown {
 					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
 						en.VPS.Status = shared.VPSOnline
 						en.VPS.LastSeen = time.Now().UTC()
 					})
-					e.mu.Lock()
-					e.clear(v.ID, shared.AlertAgentOffline, "")
-					e.clear(v.ID, shared.AlertAgentDown, "")
-					delete(e.reach, v.ID)
-					e.mu.Unlock()
 					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 				}
+				e.mu.Lock()
+				e.clearReachability(v.ID)
+				e.mu.Unlock()
 				continue
 			}
 			if v.Status != shared.VPSOffline && v.Status != shared.VPSAgentDown {

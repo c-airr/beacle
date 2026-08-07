@@ -44,6 +44,31 @@ class Tray {
   /// Quits for real, ignoring the close-to-tray setting.
   static Future<void> quit() => _invoke('quit');
 
+  /// Plays a WAV file by absolute path (Beacle's own alert tones).
+  static Future<void> playFile(String path) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('playFile', path);
+    } on PlatformException {
+      // Older runner — fall back to a system alias so something still chirps.
+      await playAlert('warning');
+    } on MissingPluginException {
+      // Runner without tray support.
+    }
+  }
+
+  /// Legacy: system alias (SystemExclamation / SystemHand). Prefer [playFile].
+  static Future<void> playAlert(String severity) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('playAlert', severity);
+    } on PlatformException {
+      // Older runner without playAlert — stay silent rather than crash.
+    } on MissingPluginException {
+      // Runner without tray support.
+    }
+  }
+
   static Future<void> _invoke(String method) async {
     if (!supported) return;
     try {

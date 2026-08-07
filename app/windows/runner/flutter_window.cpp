@@ -1,8 +1,12 @@
 #include "flutter_window.h"
 
+#include <mmsystem.h>
 #include <optional>
+#include <string>
 
 #include "flutter/generated_plugin_registrant.h"
+
+#pragma comment(lib, "winmm.lib")
 
 namespace {
 
@@ -87,6 +91,45 @@ void FlutterWindow::SetUpTrayChannel() {
         }
         if (method == "quit") {
           QuitForReal();
+          result->Success();
+          return;
+        }
+        // Bundled Beacle alert WAV (extracted under %AppData%\Beacle\cache\sounds).
+        // Preferred over system aliases — those sound like every other Windows app.
+        if (method == "playFile") {
+          const auto* path = std::get_if<std::string>(call.arguments());
+          if (path == nullptr || path->empty()) {
+            result->Error("bad_args", "playFile needs a path");
+            return;
+          }
+          int needed = MultiByteToWideChar(CP_UTF8, 0, path->c_str(), -1, nullptr, 0);
+          if (needed <= 0) {
+            result->Error("bad_path", "utf-8 conversion failed");
+            return;
+          }
+          std::wstring wpath(static_cast<size_t>(needed), L'\0');
+          MultiByteToWideChar(CP_UTF8, 0, path->c_str(), -1, wpath.data(), needed);
+          // Strip the extra null MultiByteToWideChar wrote into size.
+          if (!wpath.empty() && wpath.back() == L'\0') {
+            wpath.pop_back();
+          }
+          if (!PlaySoundW(wpath.c_str(), nullptr,
+                          SND_FILENAME | SND_ASYNC | SND_NODEFAULT)) {
+            MessageBeep(MB_ICONEXCLAMATION);
+          }
+          result->Success();
+          return;
+        }
+        // Fallback for older Dart that still asks for a system alias.
+        if (method == "playAlert") {
+          const auto* severity = std::get_if<std::string>(call.arguments());
+          const wchar_t* alias = L"SystemExclamation";
+          if (severity != nullptr && *severity == "critical") {
+            alias = L"SystemHand";
+          }
+          if (!PlaySoundW(alias, nullptr, SND_ALIAS | SND_ASYNC | SND_NODEFAULT)) {
+            MessageBeep(MB_ICONEXCLAMATION);
+          }
           result->Success();
           return;
         }
