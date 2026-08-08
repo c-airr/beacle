@@ -8,7 +8,7 @@ import (
 
 // vpsInstallCommand — curl install_agent.sh from GitHub Latest; backend URL is only agent config.
 func vpsInstallCommand(backendURL string) string {
-	return fmt.Sprintf("curl -fsSL %s | sudo bash -s %s", shared.AgentGitHubInstallURL(), backendURL)
+	return fmt.Sprintf("curl -fsSL %s | sudo bash -s -- %s", shared.AgentGitHubInstallURL(), backendURL)
 }
 
 // installScript keeps GET /install as a fallback mirror of the GitHub script.

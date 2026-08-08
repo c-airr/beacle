@@ -14,7 +14,7 @@ Model działania (LOCAL-FIRST + Tailscale):
   3. beacle.exe uruchamia backend.exe w tle; przy zamknięciu POST /api/shutdown
   4. Pierwsze uruchomienie → kreator (onboarding_screen.dart)
   5. VPS dodawane z listy urządzeń Tailscale (POST /api/vps)
-  6. Na VPS: curl -fsSL https://github.com/c-airr/beacle/releases/download/BETA/install.sh | sudo bash -s http://<desktop-tailscale-ip>:8930
+  6. Na VPS: curl -fsSL https://github.com/c-airr/beacle/releases/latest/download/install_agent.sh | sudo bash -s -- http://<desktop-tailscale-ip>:9930
   7. Agent łączy się po adresach Tailscale (100.x.x.x)
   Wymagane: Tailscale na PC i każdym VPS. Beacle NIE zarządza VPN.
 
@@ -87,7 +87,7 @@ backend/  — serwer Go
   Endpointy UI (najważniejsze):
     GET  /api/vps              lista VPS
     GET  /api/vps/{id}         snapshot (GET) / edycja metadanych (PATCH) / delete
-    GET  /api/install-command  → backend_url + install.sh from GitHub (Flutter builds curl)
+    GET  /api/install-command  → backend_url + install_agent.sh from GitHub Latest (Flutter builds curl)
     GET  /api/overview         vps + snapshots + alerts + actions + links
     GET  /ws                   live updates (vps_update, vps_list, alert…)
     GET  /install              bash installer

@@ -17,9 +17,6 @@ if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 Copy-Item "$winRel\*" $staging -Recurse -Force
 Remove-Item "$staging\*.exe~","$staging\install.sh","$staging\beacle.config.json.example" -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path "$staging\data\bin" | Out-Null
-Copy-Item "$root\dist\agent\beacle-agent-amd64","$root\dist\agent\beacle-agent-arm64" "$staging\data\bin\" -Force -ErrorAction SilentlyContinue
-Copy-Item "$root\backend\data\bin\*" "$staging\data\bin\" -Force -ErrorAction SilentlyContinue
 $zip = "$rel\windows\beacle-windows-x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path "$staging\*" -DestinationPath $zip -Force

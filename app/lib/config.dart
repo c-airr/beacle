@@ -44,4 +44,4 @@ bool get hasBackendUrl => true;
 
 /// One-liner shown in Add VPS: install_agent.sh from GitHub Latest.
 String vpsInstallCommand(String backendPublicUrl) =>
-    'curl -fsSL $installScriptUrl | sudo bash -s $backendPublicUrl';
+    'curl -fsSL $installScriptUrl | sudo bash -s -- $backendPublicUrl';

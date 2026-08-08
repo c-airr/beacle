@@ -5,27 +5,32 @@ Rebuild with: `powershell -File scripts/assemble-release.ps1`
 
 ## Upload checklist
 
-### Desktop release (tag `v0.5.0` or similar)
+### Desktop release (tag `0.9.1`)
 
 | File | Upload as |
 |---|---|
 | `windows/beacle-windows-x64.zip` | `beacle-windows-x64.zip` |
-| `windows/beacle-setup-0.5.0.exe` | `beacle-setup-0.5.0.exe` |
+| `windows/beacle-setup-0.9.1.exe` | `beacle-setup-0.9.1.exe` |
 | `linux/install.sh` | `install.sh` (desktop) |
 | `linux/uninstall.sh` | `uninstall.sh` |
 | `linux/beacle-linux-x64.tar.gz` | **not built on Windows** — needs Linux or CI |
 
 The Windows `.exe` installer downloads `beacle-windows-x64.zip` from
-`releases/latest`. The zip already contains frontend + backend + Flutter
-runtime + agent binaries under `data/bin/`.
+`releases/latest`. The zip contains frontend + backend + Flutter runtime.
+VPS agents stay as separate release assets.
 
-### Agent release (tag `agentbeta`, separate)
+### VPS agent assets (on the same Latest release)
 
 | File | Upload as |
 |---|---|
 | `agent/beacle-agent-amd64` | `beacle-agent-amd64` |
 | `agent/beacle-agent-arm64` | `beacle-agent-arm64` |
-| `agent/install.sh` | `install.sh` (VPS) |
+| `agent/install_agent.sh` | `install_agent.sh` (VPS) |
+| `agent/VERSION` | `VERSION` |
+
+The Add VPS command always downloads `install_agent.sh` from
+`releases/latest`; omitting it from the release breaks installation even when
+both architecture binaries are present.
 
 ## Linux desktop status
 

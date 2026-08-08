@@ -25,7 +25,7 @@ foreach ($pair in @{ amd64 = 'linux-amd64'; arm64 = 'linux-arm64' }.GetEnumerato
     Copy-Item $outFolder $outGh -Force
     Copy-Item $outFolder "$distAgent\$($pair.Value)\$ghName" -Force
     Copy-Item $outFolder $outBackend -Force
-    Write-Host "  built $($pair.Value) -> dist/agent/$ghName (upload to GitHub agentbeta)"
+    Write-Host "  built $($pair.Value) -> dist/agent/$ghName (upload to GitHub Latest)"
 }
 Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
 $ver = & go run . -version 2>$null
@@ -88,6 +88,6 @@ if ($iscc) {
 
 Write-Host 'Done.' -ForegroundColor Green
 Write-Host "  Run: $releaseDir\beacle.exe"
-Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/latest/download/install_agent.sh | sudo bash -s http://<tailscale-ip>:9930'
-Write-Host '  Upload to GitHub Latest: dist/agent/install_agent.sh, beacle-agent-amd64, beacle-agent-arm64 (+ install.sh compat alias)'
-Write-Host '  Upload to GitHub Latest (desktop): dist/installer/*.exe, installer/linux/install_app.sh, installer/linux/uninstall.sh'
+Write-Host '  VPS install: curl -fsSL https://github.com/c-airr/beacle/releases/latest/download/install_agent.sh | sudo bash -s -- http://<tailscale-ip>:9930'
+Write-Host '  Upload to GitHub Latest: dist/agent/install_agent.sh, beacle-agent-amd64, beacle-agent-arm64, VERSION'
+Write-Host '  Upload to GitHub Latest (desktop): dist/installer/*.exe, installer/linux/install.sh, installer/linux/uninstall.sh'

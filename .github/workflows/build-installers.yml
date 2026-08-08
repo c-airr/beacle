@@ -40,6 +40,9 @@ jobs:
           go build -o ../dist/agent/beacle-agent-amd64 .
           $env:GOARCH='arm64'
           go build -o ../dist/agent/beacle-agent-arm64 .
+          Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
+          $version = go run . -version
+          Set-Content ../dist/agent/VERSION $version
 
       - name: Build app
         working-directory: app
@@ -50,8 +53,6 @@ jobs:
         run: |
           $rel = "app/build/windows/x64/runner/Release"
           Copy-Item backend/beacle-backend.exe "$rel/" -Force
-          New-Item -ItemType Directory -Force -Path "$rel/data/bin" | Out-Null
-          Copy-Item dist/agent/beacle-agent-* "$rel/data/bin/" -Force
           # A stale example config and the ~ backup file the editor leaves
           # behind have no business shipping to users.
           Remove-Item "$rel/*.exe~","$rel/install.sh" -ErrorAction SilentlyContinue
@@ -72,6 +73,10 @@ jobs:
           path: |
             beacle-windows-x64.zip
             dist/installer/*.exe
+            dist/agent/beacle-agent-amd64
+            dist/agent/beacle-agent-arm64
+            dist/agent/install_agent.sh
+            dist/agent/VERSION
 
   linux:
     runs-on: ubuntu-latest
@@ -135,6 +140,10 @@ jobs:
           files: |
             artifacts/windows/beacle-windows-x64.zip
             artifacts/windows/dist/installer/*.exe
+            artifacts/windows/dist/agent/beacle-agent-amd64
+            artifacts/windows/dist/agent/beacle-agent-arm64
+            artifacts/windows/dist/agent/install_agent.sh
+            artifacts/windows/dist/agent/VERSION
             artifacts/linux/beacle-linux-x64.tar.gz
             artifacts/linux/install.sh
             artifacts/linux/uninstall.sh
