@@ -5,6 +5,11 @@ Rebuild with: `powershell -File scripts/assemble-release.ps1`
 
 ## Upload checklist
 
+Prefer the **Release** GitHub Action (`.github/workflows/release.yml`) over
+hand-uploaded binaries. It builds on GitHub runners, writes `SHA256SUMS.txt`,
+and attaches build-provenance attestations so downloads can be verified with
+`gh attestation verify`.
+
 ### Desktop release (tag `0.9.1`)
 
 | File | Upload as |
@@ -50,5 +55,5 @@ Missing / unfinished:
 - `APPLICATION_ID` still `com.example.beacle`
 
 You **cannot** build `beacle-linux-x64.tar.gz` on this Windows machine.
-Use GitHub Actions (`.github/workflows/build-installers.yml`) or a Linux box
+Use GitHub Actions (`.github/workflows/release.yml`) or a Linux box
 with Flutter + `ninja` + `libgtk-3-dev`.

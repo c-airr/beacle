@@ -1,7 +1,7 @@
 ; Beacle installer for Windows — Inno Setup 6.1+
 ;
 ; Wired into the build: scripts/build.ps1 runs this when Inno Setup is
-; installed, and .github/workflows/build-installers.yml builds it in CI. To
+; installed, and .github/workflows/release.yml builds it in CI. To
 ; try it by hand: install Inno Setup and run
 ;     iscc installer\windows\beacle.iss
 ;

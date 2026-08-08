@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Beacle desktop installer for Linux.
 #
-# Wired into the release: .github/workflows/build-installers.yml uploads this
+# Wired into the release: .github/workflows/release.yml uploads this
 # alongside the payload, and the release's "latest" link points at it.
 #
 # Usage:

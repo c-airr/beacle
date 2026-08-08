@@ -11,6 +11,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/c-airr/beacle/actions/workflows/release.yml"><img src="https://github.com/c-airr/beacle/actions/workflows/release.yml/badge.svg" alt="Release workflow"></a>
+  <img src="https://img.shields.io/badge/builds-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white" alt="Builds: GitHub Actions">
+  <img src="https://img.shields.io/badge/provenance-attested-2ea44f?logo=github&logoColor=white" alt="Provenance: attested">
+  <img src="https://img.shields.io/github/v/release/c-airr/beacle?include_prereleases" alt="Latest release">
+  <img src="https://img.shields.io/github/downloads/c-airr/beacle/total" alt="Total downloads">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/github/stars/c-airr/beacle?style=social" alt="GitHub stars">
   <img src="https://img.shields.io/github/forks/c-airr/beacle?style=social" alt="GitHub forks">
   <img src="https://img.shields.io/github/issues/c-airr/beacle" alt="Open issues">
@@ -22,8 +30,6 @@
 <p align="center">
   <img src="https://img.shields.io/github/repo-size/c-airr/beacle" alt="Repo size">
   <img src="https://img.shields.io/github/languages/top/c-airr/beacle" alt="Top language">
-  <img src="https://img.shields.io/github/v/release/c-airr/beacle?include_prereleases" alt="Latest release">
-  <img src="https://img.shields.io/github/downloads/c-airr/beacle/total" alt="Total downloads">
 </p>
 
 A desktop panel for managing your VPS fleet, so you don't have to juggle SSH sessions across ten terminals anymore. Monitoring, Docker, systemd, reverse proxy, and a map of your infrastructure — all in one app.
@@ -60,12 +66,32 @@ All traffic goes over Tailscale, outbound-only, so you don't need to open any po
 
 You'll need Tailscale installed on your PC and on every VPS you want to connect. Beacle doesn't manage the VPN itself, it just rides on top of it.
 
-1. Download and run `beacle.exe` on Windows — the backend starts alongside the app in the background
+1. Download and run the Windows installer from the [latest GitHub Release](https://github.com/c-airr/beacle/releases/latest) — every binary there is **built by GitHub Actions from this repo** (check the green Actions badge and `gh attestation verify`)
 2. On first launch you'll go through a short setup wizard
 3. Add your VPS instances from the Tailscale device list
 4. On each VPS, run the one-liner the panel gives you
 
 That's it — the agent registers itself and the panel starts getting data.
+
+### Verify a download (optional)
+
+```bash
+# Checksums shipped with every release
+sha256sum -c SHA256SUMS.txt
+
+# Prove the file was built by this repository's Release workflow
+gh attestation verify ./beacle-setup-0.9.1.exe --repo c-airr/beacle
+```
+
+### Cut a release (maintainers)
+
+```bash
+git tag 0.9.1
+git push origin 0.9.1
+# or: Actions → Release → Run workflow → tag 0.9.1
+```
+
+Do **not** upload `.exe` / agent binaries by hand. The workflow builds them on `windows-latest` / `ubuntu-latest`, attaches SLSA provenance attestations, and publishes the GitHub Release.
 
 ---
 

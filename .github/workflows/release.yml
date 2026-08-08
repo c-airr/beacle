@@ -1,0 +1,270 @@
+# Builds every Beacle release asset on GitHub-hosted runners and attaches
+# build provenance attestations. Users can verify a downloaded file was
+# produced by this workflow from this repository — not uploaded by hand.
+#
+# Trigger (do not fire from a random push):
+#   git tag 0.9.1 && git push origin 0.9.1
+#   or Actions → Release → Run workflow
+#
+# Verify after download:
+#   gh attestation verify beacle-setup-0.9.1.exe --repo c-airr/beacle
+#   sha256sum -c SHA256SUMS.txt
+
+name: Release
+
+on:
+  push:
+    tags:
+      # Matches 0.9.1 / 1.0-rc1 — not the rolling agentbeta channel.
+      - "0.*"
+      - "1.*"
+      - "v0.*"
+      - "v1.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. 0.9.1)"
+        required: true
+
+# Least privilege per job. Publish needs write; attestations need id-token.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.44.7"
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - id: tag
+        run: |
+          raw="${{ github.event.inputs.tag || github.ref_name }}"
+          version="${raw#v}"
+          echo "tag=$raw" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *beta* || "$version" == *rc* || "$version" == *alpha* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    needs: meta
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Build backend
+        working-directory: backend
+        run: go build -ldflags "-H windowsgui" -o beacle-backend.exe .
+
+      - name: Build agent binaries (Linux amd64 + arm64)
+        working-directory: agent
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ../dist/agent | Out-Null
+          $env:GOOS = 'linux'
+          $env:GOARCH = 'amd64'
+          go build -o ../dist/agent/beacle-agent-amd64 .
+          $env:GOARCH = 'arm64'
+          go build -o ../dist/agent/beacle-agent-arm64 .
+          Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
+          # AgentVersion is a Go const (not overridable via -ldflags); the
+          # release asset VERSION is the source of truth for "what shipped".
+          Set-Content ../dist/agent/VERSION "${{ needs.meta.outputs.version }}"
+
+      - name: Build Flutter Windows app
+        working-directory: app
+        run: flutter build windows --release
+
+      - name: Assemble Windows zip
+        shell: pwsh
+        run: |
+          $rel = "app/build/windows/x64/runner/Release"
+          Copy-Item backend/beacle-backend.exe "$rel/" -Force
+          # Desktop zip is app + backend only. VPS agents are separate assets.
+          Remove-Item "$rel/*.exe~","$rel/install.sh","$rel/beacle.config.json.example" -ErrorAction SilentlyContinue
+          if (Test-Path "$rel/data/bin") { Remove-Item "$rel/data/bin" -Recurse -Force }
+          Compress-Archive -Path "$rel/*" -DestinationPath beacle-windows-x64.zip -Force
+
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=${{ needs.meta.outputs.version }}" `
+            installer\windows\beacle.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            beacle-windows-x64.zip
+            dist/installer/*.exe
+            dist/agent/beacle-agent-amd64
+            dist/agent/beacle-agent-arm64
+            dist/agent/install_agent.sh
+            dist/agent/VERSION
+
+  linux:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Install Flutter Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - name: Build backend
+        working-directory: backend
+        run: go build -o beacle-backend .
+
+      - name: Build Flutter Linux app
+        working-directory: app
+        run: flutter build linux --release
+
+      - name: Assemble Linux tarball
+        run: |
+          bundle="app/build/linux/x64/release/bundle"
+          cp backend/beacle-backend "$bundle/"
+          # No VPS agents inside the desktop payload.
+          rm -rf "$bundle/data/bin"
+          tar -czf beacle-linux-x64.tar.gz \
+            --transform 's,^bundle,beacle,' \
+            -C "$(dirname "$bundle")" bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          if-no-files-found: error
+          path: |
+            beacle-linux-x64.tar.gz
+            installer/linux/install.sh
+            installer/linux/uninstall.sh
+
+  publish:
+    needs: [meta, windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage release files
+        id: stage
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          # Flatten artifact folders into one directory of release assets.
+          find artifacts -type f -print0 | while IFS= read -r -d '' f; do
+            base="$(basename "$f")"
+            # Prefer the Inno Setup output; ignore accidental duplicates.
+            cp -f "$f" "out/$base"
+          done
+          ls -la out
+          echo "count=$(find out -type f | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate SHA256SUMS.txt
+        working-directory: out
+        run: |
+          set -euo pipefail
+          # Portable checksums file — verify with: sha256sum -c SHA256SUMS.txt
+          find . -type f ! -name SHA256SUMS.txt -printf '%P\n' | sort | while read -r f; do
+            sha256sum "$f"
+          done | tee SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            out/beacle-windows-x64.zip
+            out/beacle-setup-*.exe
+            out/beacle-linux-x64.tar.gz
+            out/beacle-agent-amd64
+            out/beacle-agent-arm64
+            out/install_agent.sh
+            out/install.sh
+            out/uninstall.sh
+            out/VERSION
+            out/SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: Beacle ${{ needs.meta.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ needs.meta.outputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ## Beacle ${{ needs.meta.outputs.version }}
+
+            **Built by GitHub Actions** from commit `${{ github.sha }}` on runners owned by GitHub — not uploaded manually.
+
+            ### Verify the download
+
+            ```bash
+            # 1) Checksums
+            sha256sum -c SHA256SUMS.txt
+
+            # 2) Provenance attestation (proves the file came from this repo's Release workflow)
+            gh attestation verify ./beacle-setup-${{ needs.meta.outputs.version }}.exe --repo c-airr/beacle
+            gh attestation verify ./beacle-agent-amd64 --repo c-airr/beacle
+            ```
+
+            ### Assets
+
+            | File | What |
+            |---|---|
+            | `beacle-setup-*.exe` | Windows installer (downloads/updates from Latest) |
+            | `beacle-windows-x64.zip` | Portable Windows app + embedded backend |
+            | `beacle-linux-x64.tar.gz` | Linux desktop bundle |
+            | `install_agent.sh` | VPS agent installer (amd64/arm64 autodetection) |
+            | `beacle-agent-amd64` / `beacle-agent-arm64` | Agent binaries |
+            | `SHA256SUMS.txt` | Digests for every asset above |
+
+            VPS one-liner:
+
+            ```bash
+            curl -fsSL https://github.com/c-airr/beacle/releases/latest/download/install_agent.sh \
+              | sudo bash -s -- http://<desktop-tailscale-ip>:9930
+            ```
+          files: |
+            out/*
