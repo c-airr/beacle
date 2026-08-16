@@ -237,7 +237,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               tailscaleRequirementBanner(),
               const SizedBox(height: 12),
-              ListView(
+              SmoothListView(
                 shrinkWrap: true,
                 children: [
                   for (final d in available)

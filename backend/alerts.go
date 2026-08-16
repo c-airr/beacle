@@ -47,6 +47,10 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 	// clears — it would not know they exist — nor recognise the condition as
 	// already reported, and would raise a second alert beside the first.
 	for _, a := range store.ListAlerts() {
+		if a.Type == shared.AlertServiceDown && !a.Resolved {
+			store.ResolveAlert(a.ID)
+			continue
+		}
 		if !a.Resolved {
 			e.active[a.VPSID+"|"+string(a.Type)+"|"+a.Key] = true
 		}
@@ -193,22 +197,10 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 	}
 	e.prevContainers[vps.ID] = cur
 
-	// systemd: unit transitioned active -> failed
-	prevSvc := e.prevServices[vps.ID]
-	curSvc := map[string]string{}
-	for _, u := range snap.Services.Systemd {
-		curSvc[u.Name] = u.ActiveState
-		if prevSvc != nil {
-			if was, ok := prevSvc[u.Name]; ok && was == "active" && u.ActiveState == "failed" {
-				e.fire(vps, shared.AlertServiceDown, shared.SeverityCritical, u.Name,
-					fmt.Sprintf("Service %s failed", u.Name))
-			}
-			if u.ActiveState == "active" {
-				e.clear(vps.ID, shared.AlertServiceDown, u.Name)
-			}
-		}
+	// systemd: services do not trigger alerts / notifications. Clear any legacy alerts.
+	for _, a := range e.store.ResolveAlertsFor(vps.ID, shared.AlertServiceDown, "") {
+		e.hub.Broadcast(shared.WSAlert, a)
 	}
-	e.prevServices[vps.ID] = curSvc
 
 	// Proxy errors
 	if snap.Proxy.Provider != shared.ProxyProviderNone {

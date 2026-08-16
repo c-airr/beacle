@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Widget _generalTab(AppState state) {
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.all(20),
       children: [
         PanelCard(
@@ -305,7 +305,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   Widget _updatesTab(AppState state) {
     final hasPrev = AppUpdater.hasPrevious;
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.all(20),
       children: [
         PanelCard(
@@ -601,7 +601,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         content: SizedBox(
           width: 420,
           height: 320,
-          child: ListView(
+          child: SmoothListView(
             children: [
               for (final r in releases)
                 ListTile(
@@ -666,7 +666,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         content: SizedBox(
           width: 420,
           height: 320,
-          child: ListView(
+          child: SmoothListView(
             children: [
               for (final r in releases)
                 ListTile(
@@ -882,7 +882,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     final peers = tsDevices.where((d) => !d.self).toList();
     final selfIp = self?.ips.firstOrNull ?? '';
 
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.all(20),
       children: [
         PanelCard(

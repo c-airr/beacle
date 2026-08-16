@@ -198,7 +198,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
             const SizedBox(height: 16),
 
             Flexible(
-              child: SingleChildScrollView(
+              child: SmoothSingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

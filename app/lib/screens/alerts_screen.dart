@@ -39,7 +39,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
         ? active
         : active.where((a) => a.severity == severityFilter).toList();
 
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       children: [
         Row(

@@ -41,7 +41,7 @@ class OverviewScreen extends StatelessWidget {
     final avgDisk = diskN == 0 ? 0.0 : diskSum / diskN;
     final attention = _attentionItems(state);
 
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       children: [
         const Text(
@@ -338,12 +338,6 @@ List<_AttentionItem> _attentionItems(AppState state) {
       if (c.state == 'restarting') {
         add(_AttentionItem(severity: 'warning', title: v.name, message: 'Docker ${c.name} restarting', vpsId: v.id),
             'docker:${v.id}:${c.id}');
-      }
-    }
-    for (final u in snap.services.systemd) {
-      if (u.activeState == 'failed') {
-        add(_AttentionItem(severity: 'critical', title: v.name, message: 'Service ${u.name} failed', vpsId: v.id),
-            'svc:${v.id}:${u.name}');
       }
     }
   }

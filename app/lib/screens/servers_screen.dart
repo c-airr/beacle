@@ -55,7 +55,7 @@ class ServersScreenState extends State<ServersScreen> {
         Container(
           width: 230,
           color: BeacleColors.surface,
-          child: ListView(
+          child: SmoothListView(
             padding: const EdgeInsets.all(8),
             children: [
               for (final v in state.vpsList)
@@ -175,7 +175,7 @@ class _ServerStats extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
     final m = snap.metrics;
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.all(16),
       children: [
         Row(

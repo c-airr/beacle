@@ -27,6 +27,92 @@ class _Marker {
   final String continent;
 }
 
+class _ClusterItem {
+  final _Marker marker;
+  final Offset position;
+  const _ClusterItem(this.marker, this.position);
+}
+
+class _Cluster {
+  final Offset center;
+  final List<_ClusterItem> items;
+  final double radius;
+
+  const _Cluster({
+    required this.center,
+    required this.items,
+    required this.radius,
+  });
+}
+
+List<_Cluster> _buildClusters(List<_Marker> markers, _Camera camera, {double clusterDistance = 22.0}) {
+  if (markers.isEmpty) return const [];
+
+  final groups = <List<_Marker>>[];
+  final groupPositions = <Offset>[];
+
+  for (final m in markers) {
+    final screenPos = m.world * camera.scale + camera.origin;
+    int targetGroup = -1;
+
+    for (var i = 0; i < groups.length; i++) {
+      final gPos = groupPositions[i];
+      final isSameCoord = (m.world - groups[i].first.world).distanceSquared < 0.001;
+      final isNearOnScreen = (screenPos - gPos).distance <= clusterDistance;
+      if (isSameCoord || isNearOnScreen) {
+        targetGroup = i;
+        break;
+      }
+    }
+
+    if (targetGroup >= 0) {
+      groups[targetGroup].add(m);
+    } else {
+      groups.add([m]);
+      groupPositions.add(screenPos);
+    }
+  }
+
+  final clusters = <_Cluster>[];
+
+  for (var i = 0; i < groups.length; i++) {
+    final list = groups[i];
+    final center = groupPositions[i];
+
+    if (list.length == 1) {
+      clusters.add(_Cluster(
+        center: center,
+        radius: 0,
+        items: [_ClusterItem(list.first, center)],
+      ));
+    } else {
+      final count = list.length;
+      final radius = count == 2
+          ? 14.0
+          : count == 3
+              ? 16.0
+              : count == 4
+                  ? 18.0
+                  : (12.0 + count * 2.0).clamp(14.0, 36.0);
+
+      final items = <_ClusterItem>[];
+      for (var j = 0; j < count; j++) {
+        final angle = -math.pi / 2 + (j * 2 * math.pi / count);
+        final pos = center + Offset(radius * math.cos(angle), radius * math.sin(angle));
+        items.add(_ClusterItem(list[j], pos));
+      }
+
+      clusters.add(_Cluster(
+        center: center,
+        radius: radius,
+        items: items,
+      ));
+    }
+  }
+
+  return clusters;
+}
+
 class _ContinentDef {
   const _ContinentDef(this.name, this.minLat, this.maxLat, this.minLon, this.maxLon);
   final String name;
@@ -103,6 +189,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   WorldGeometry? geo;
   Vps? panelVps;
   String? selectedContinent;
+  _Marker? hoveredMarker;
+  Offset? hoveredPos;
 
   late final AnimationController _camCtrl;
   late final CurvedAnimation _camCurve;
@@ -199,8 +287,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         .toList();
   }
 
-  Offset _screen(_Marker m, _Camera cam) => m.world * cam.scale + cam.origin;
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -233,6 +319,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         animation: _camCtrl,
         builder: (context, _) {
           final cam = _camera;
+          final clusters = _buildClusters(markers, cam);
+
           return Stack(
             children: [
               // Map sits to the right of the continent rail and is hard-clipped.
@@ -244,28 +332,77 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                 child: ClipRect(
                   child: Stack(
                     children: [
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTapUp: (d) {
-                          for (final m in markers.reversed) {
-                            if ((_screen(m, cam) - d.localPosition).distance < 14) {
-                              context.read<AppState>().bumpActivity();
-                              setState(() => panelVps = m.vps);
-                              return;
+                      MouseRegion(
+                        cursor: hoveredMarker != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                        onHover: (e) {
+                          final pos = e.localPosition;
+                          _Marker? foundMarker;
+                          Offset? foundPos;
+
+                          for (final c in clusters.reversed) {
+                            for (final item in c.items.reversed) {
+                              if ((item.position - pos).distance < 13) {
+                                foundMarker = item.marker;
+                                foundPos = item.position;
+                                break;
+                              }
                             }
+                            if (foundMarker != null) break;
                           }
-                          context.read<AppState>().bumpActivity();
-                          setState(() => panelVps = null);
-                          _resetToWorld(mapSize);
+
+                          if (foundMarker?.vps.id != hoveredMarker?.vps.id || foundPos != hoveredPos) {
+                            setState(() {
+                              hoveredMarker = foundMarker;
+                              hoveredPos = foundPos;
+                            });
+                          }
                         },
-                        child: CustomPaint(
-                          size: mapSize,
-                          painter: _MapPainter(
-                            geo: geo!,
-                            camera: cam,
-                            markers: markers,
-                            selectedId: panelVps?.id,
-                            focusContinent: selectedContinent,
+                        onExit: (_) {
+                          if (hoveredMarker != null) {
+                            setState(() {
+                              hoveredMarker = null;
+                              hoveredPos = null;
+                            });
+                          }
+                        },
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapUp: (d) {
+                            // 1. Check direct hit on marker dots
+                            for (final c in clusters.reversed) {
+                              for (final item in c.items.reversed) {
+                                if ((item.position - d.localPosition).distance < 13) {
+                                  context.read<AppState>().bumpActivity();
+                                  setState(() => panelVps = item.marker.vps);
+                                  return;
+                                }
+                              }
+                            }
+                            // 2. Check hit on cluster ring
+                            for (final c in clusters.reversed) {
+                              if (c.items.length > 1 && (c.center - d.localPosition).distance <= c.radius + 8) {
+                                context.read<AppState>().bumpActivity();
+                                setState(() => panelVps = c.items.first.marker.vps);
+                                return;
+                              }
+                            }
+                            // 3. Clicked empty space
+                            context.read<AppState>().bumpActivity();
+                            setState(() => panelVps = null);
+                            _resetToWorld(mapSize);
+                          },
+                          child: CustomPaint(
+                            size: mapSize,
+                            painter: _MapPainter(
+                              geo: geo!,
+                              camera: cam,
+                              clusters: clusters,
+                              selectedId: panelVps?.id,
+                              hoveredId: hoveredMarker?.vps.id,
+                              hoveredMarker: hoveredMarker,
+                              hoveredPos: hoveredPos,
+                              focusContinent: selectedContinent,
+                            ),
                           ),
                         ),
                       ),
@@ -274,7 +411,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                           right: 16,
                           top: 14,
                           child: _VpsMapCard(
-                            vps: panelVps!,
+                            vps: state.vpsList.firstWhere((v) => v.id == panelVps!.id, orElse: () => panelVps!),
                             snap: state.snapshots[panelVps!.id],
                             onClose: () => setState(() => panelVps = null),
                             onStats: () => AppShell.of(context).goToServer(panelVps!.id),
@@ -515,15 +652,21 @@ class _VpsMapCard extends StatelessWidget {
 class _MapPainter extends CustomPainter {
   final WorldGeometry geo;
   final _Camera camera;
-  final List<_Marker> markers;
+  final List<_Cluster> clusters;
   final String? selectedId;
+  final String? hoveredId;
+  final _Marker? hoveredMarker;
+  final Offset? hoveredPos;
   final String? focusContinent;
 
   _MapPainter({
     required this.geo,
     required this.camera,
-    required this.markers,
+    required this.clusters,
     required this.selectedId,
+    required this.hoveredId,
+    required this.hoveredMarker,
+    required this.hoveredPos,
     required this.focusContinent,
   });
 
@@ -584,23 +727,133 @@ class _MapPainter extends CustomPainter {
     );
     canvas.restore();
 
-    for (final m in markers) {
-      final pos = m.world * camera.scale + camera.origin;
-      final color = BeacleColors.statusColor(m.vps.status);
-      final hot = m.vps.id == selectedId;
-      canvas.drawCircle(pos, hot ? 11 : 8, Paint()..color = color.withValues(alpha: 0.18));
-      canvas.drawCircle(pos, hot ? 7 : 5, Paint()..color = color);
-      if (hot) {
+    // Draw clusters
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        // Enclosing circular backdrop
         canvas.drawCircle(
-          pos,
-          7,
+          cluster.center,
+          cluster.radius + 8,
+          Paint()..color = const Color(0x73141414),
+        );
+
+        // Orbit ring
+        canvas.drawCircle(
+          cluster.center,
+          cluster.radius,
           Paint()
-            ..color = BeacleColors.text
+            ..color = const Color(0x38FFFFFF)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2,
+            ..strokeWidth = 1.0,
+        );
+
+        // Connecting spoke lines
+        final spokePaint = Paint()
+          ..color = const Color(0x28FFFFFF)
+          ..strokeWidth = 0.8;
+        for (final item in cluster.items) {
+          canvas.drawLine(cluster.center, item.position, spokePaint);
+        }
+
+        // Center hub dot
+        canvas.drawCircle(
+          cluster.center,
+          2.5,
+          Paint()..color = BeacleColors.textDim.withValues(alpha: 0.6),
         );
       }
+
+      // Draw VPS dots
+      for (final item in cluster.items) {
+        final pos = item.position;
+        final color = BeacleColors.statusColor(item.marker.vps.status);
+        final hot = item.marker.vps.id == selectedId;
+        final hovered = item.marker.vps.id == hoveredId;
+
+        // Outer glow
+        canvas.drawCircle(
+          pos,
+          hot ? 11 : (hovered ? 9 : 8),
+          Paint()..color = color.withValues(alpha: hot ? 0.35 : (hovered ? 0.28 : 0.18)),
+        );
+
+        // Dot body
+        canvas.drawCircle(
+          pos,
+          hot ? 7 : (hovered ? 6 : 5),
+          Paint()..color = color,
+        );
+
+        // Selection / hover stroke
+        if (hot) {
+          canvas.drawCircle(
+            pos,
+            7,
+            Paint()
+              ..color = BeacleColors.text
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.2,
+          );
+        } else if (hovered) {
+          canvas.drawCircle(
+            pos,
+            6,
+            Paint()
+              ..color = BeacleColors.text.withValues(alpha: 0.75)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.0,
+          );
+        }
+      }
     }
+
+    // Hover tooltip
+    if (hoveredMarker != null && hoveredPos != null && selectedId != hoveredMarker!.vps.id) {
+      final name = hoveredMarker!.vps.name;
+      final loc = hoveredMarker!.vps.location.isNotEmpty ? ' · ${hoveredMarker!.vps.location}' : '';
+      final text = '$name$loc';
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: const TextStyle(
+            color: BeacleColors.text,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      const padX = 8.0;
+      const padY = 4.0;
+      final boxW = textPainter.width + padX * 2;
+      final boxH = textPainter.height + padY * 2;
+
+      var tipX = hoveredPos!.dx - boxW / 2;
+      var tipY = hoveredPos!.dy - boxH - 12;
+      if (tipX < 8) tipX = 8;
+      if (tipX + boxW > canvasSize.width - 8) tipX = canvasSize.width - 8 - boxW;
+      if (tipY < 8) tipY = hoveredPos!.dy + 14;
+
+      final tipRect = Rect.fromLTWH(tipX, tipY, boxW, boxH);
+      final tipRRect = RRect.fromRectAndRadius(tipRect, const Radius.circular(6));
+
+      canvas.drawRRect(
+        tipRRect,
+        Paint()..color = const Color(0xEB1E1E1E),
+      );
+      canvas.drawRRect(
+        tipRRect,
+        Paint()
+          ..color = BeacleColors.border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+
+      textPainter.paint(canvas, Offset(tipX + padX, tipY + padY));
+    }
+
     canvas.restore();
   }
 
@@ -608,7 +861,9 @@ class _MapPainter extends CustomPainter {
   bool shouldRepaint(_MapPainter old) =>
       old.camera.scale != camera.scale ||
       old.camera.origin != camera.origin ||
-      old.markers.length != markers.length ||
+      old.clusters.length != clusters.length ||
       old.selectedId != selectedId ||
+      old.hoveredId != hoveredId ||
+      old.hoveredPos != hoveredPos ||
       old.focusContinent != focusContinent;
 }

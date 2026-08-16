@@ -180,7 +180,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                       )
                     : loading
                         ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-                        : ListView(
+                        : SmoothListView(
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             children: [
                               if (l != null && l.parent.isNotEmpty)

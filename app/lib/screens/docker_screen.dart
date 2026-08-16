@@ -66,7 +66,7 @@ class _DockerScreenState extends State<DockerScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: SingleChildScrollView(
+          child: SmoothSingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
@@ -84,7 +84,7 @@ class _DockerScreenState extends State<DockerScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView(
+          child: SmoothListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
             children: [
               for (var i = 0; i < hosts.length; i++) ...[

@@ -148,7 +148,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
     if (proxy.sites.isEmpty) {
       return const Center(child: Text('No sites configured yet', style: TextStyle(color: BeacleColors.textDim)));
     }
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.all(16),
       children: [
         if (proxy.lastError.isNotEmpty)

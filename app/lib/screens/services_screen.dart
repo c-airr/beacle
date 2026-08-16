@@ -417,7 +417,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       }
     }
 
-    return ListView.builder(
+    return SmoothListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: units.length,
       itemBuilder: (ctx, i) {
@@ -544,7 +544,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView.builder(
+          child: SmoothListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
             itemCount: rows.length,
             itemBuilder: (ctx, i) {
@@ -690,7 +690,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView.builder(
+          child: SmoothListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
             itemCount: rows.length,
             itemBuilder: (ctx, i) {
@@ -959,7 +959,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     final shown = _hostsWithMatches(hosts, (v) => sessionsOf(v).length);
 
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: [
         const Padding(
@@ -1110,7 +1110,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     final shown = _hostsWithMatches(hosts, (v) => jobsOf(v).length);
 
-    return ListView(
+    return SmoothListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: [
         Padding(

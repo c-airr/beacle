@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 
+export 'smooth_scroll.dart';
+
 class PanelCard extends StatelessWidget {
   final Widget child;
   final String? title;

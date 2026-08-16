@@ -63,7 +63,7 @@ Future<void> showAddVpsDialog(BuildContext context) async {
                 style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
               )
             else
-              ListView(
+              SmoothListView(
                 shrinkWrap: true,
                 children: [
                     for (final d in devices.where((x) => !x.self))

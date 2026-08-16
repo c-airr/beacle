@@ -72,7 +72,7 @@ class AlertsPanel extends StatelessWidget {
                     padding: EdgeInsets.all(32),
                     child: Text('No alerts', style: TextStyle(color: BeacleColors.textDim)),
                   )
-                : ListView(
+                : SmoothListView(
                     shrinkWrap: true,
                     padding: const EdgeInsets.all(8),
                     children: [
