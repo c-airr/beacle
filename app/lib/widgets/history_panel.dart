@@ -39,10 +39,11 @@ class _HistoryPanelState extends State<HistoryPanel> {
   bool _loading = true;
   String? _error;
 
-  /// True while the window is pinned to somewhere in the past. Live refreshes
-  /// stop then: nothing is more irritating than a chart that scrolls itself
-  /// back to now while you are reading last night.
-  bool _pinned = false;
+  /// Whether the window follows the present. On by default; scrolling or
+  /// zooming the chart turns it off, exactly the way scrolling up in a log
+  /// viewer stops it auto-scrolling. Nothing is more irritating than a chart
+  /// that yanks itself back to now while you are reading last night.
+  bool _sync = true;
 
   Timer? _refresh;
   Timer? _debounce;
@@ -53,8 +54,8 @@ class _HistoryPanelState extends State<HistoryPanel> {
     _to = DateTime.now();
     _from = _to.subtract(_ranges[_range]!);
     _load();
-    _refresh = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (!_pinned) _slideToNow();
+    _refresh = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_sync) _slideToNow();
     });
   }
 
@@ -62,7 +63,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
   void didUpdateWidget(HistoryPanel old) {
     super.didUpdateWidget(old);
     if (old.vps.id != widget.vps.id) {
-      _pinned = false;
+      _sync = true;
       _to = DateTime.now();
       _from = _to.subtract(_ranges[_range] ?? const Duration(hours: 24));
       _load();
@@ -116,8 +117,11 @@ class _HistoryPanelState extends State<HistoryPanel> {
     setState(() {
       _from = from;
       _to = to;
-      // Anything more than a minute behind the present is deliberate browsing.
-      _pinned = DateTime.now().difference(to).inSeconds > 60;
+      // Touching the chart at all is a statement of intent: the reader is
+      // driving now, so following stops until they ask for it back. Zooming
+      // while parked at the present counts too — otherwise the window would
+      // resize under them on the next tick.
+      _sync = false;
     });
     // Panning fires continuously; refetch once the hand stops rather than on
     // every frame.
@@ -132,7 +136,9 @@ class _HistoryPanelState extends State<HistoryPanel> {
       _range = key;
       _to = DateTime.now();
       _from = _to.subtract(span);
-      _pinned = false;
+      // Picking a range means "show me the last N hours", which is a request
+      // to be at the present — so it turns following back on.
+      _sync = true;
     });
     _load();
   }
@@ -146,16 +152,33 @@ class _HistoryPanelState extends State<HistoryPanel> {
       title: 'HISTORY',
       trailing: Row(
         children: [
-          if (_pinned) ...[
-            SmallButton('Back to now', icon: Icons.history_toggle_off, onPressed: _slideToNow),
-            const SizedBox(width: 10),
-          ],
+          // Same control as the log viewer's Follow/Paused, for the same
+          // reason and with the same wording, so it reads as one idea.
+          Tooltip(
+            message: _sync
+                ? 'Following live data'
+                : 'Scrolled back — click to return to now',
+            child: SmallButton(
+              _sync ? 'Sync' : 'Paused',
+              icon: _sync ? Icons.sync : Icons.pause,
+              color: _sync ? BeacleColors.ok : BeacleColors.textDim,
+              onPressed: () {
+                if (_sync) {
+                  setState(() => _sync = false);
+                } else {
+                  setState(() => _sync = true);
+                  _slideToNow();
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
           for (final key in _ranges.keys) ...[
             _RangeChip(
               label: key,
               // A preset stops being "the" range the moment you scroll away
               // from now, so it stops looking selected too.
-              selected: _range == key && !_pinned,
+              selected: _range == key && _sync,
               onTap: () => _selectRange(key),
             ),
             const SizedBox(width: 6),
@@ -166,9 +189,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _pinned
-                ? 'Showing ${_fmtRange(_from, _to)} — drag to scroll, scroll to zoom.'
-                : 'Drag to scroll back in time, scroll to zoom, hover for exact values.',
+            _sync
+                ? 'Following live data — drag to scroll back in time, scroll to zoom, '
+                    'hover for exact values.'
+                : 'Showing ${_fmtRange(_from, _to)} — press Paused to return to live.',
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(height: 14),

@@ -237,10 +237,7 @@ class _ServerStats extends StatelessWidget {
           const SizedBox(height: 12),
           _CoresPanel(cores: m.cpuPerCore),
         ],
-        const SizedBox(height: 12),
-        // Everything above this line is "right now". This is the part that
-        // answers what happened while nobody was watching.
-        HistoryPanel(vps: vps),
+
         const SizedBox(height: 12),
         IntrinsicHeight(
           child: Row(
@@ -314,6 +311,11 @@ class _ServerStats extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        // Last on the page on purpose. Everything above is "right now", which
+        // is what you came for; this answers what happened while nobody was
+        // watching, and that is a question you scroll down to ask.
+        HistoryPanel(vps: vps),
       ],
     );
   }
