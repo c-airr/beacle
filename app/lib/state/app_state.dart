@@ -200,6 +200,20 @@ class AppState extends ChangeNotifier {
   /// active mode blanked every server for one tick.
   DateTime _powerModeChangedAt = DateTime.now();
 
+  /// Fleet order, matching sortVPS in the backend's store.
+  ///
+  /// The registry there is a map and Go randomises map iteration, so the list
+  /// arrived in a different order on every refresh and the servers — and every
+  /// dropdown built from them — reshuffled under the pointer. The backend sorts
+  /// now; this keeps a list rebuilt from a single update in step with a list
+  /// that came from a full refresh.
+  void _sortVpsList() {
+    vpsList.sort((a, b) {
+      final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      return byName != 0 ? byName : a.id.compareTo(b.id);
+    });
+  }
+
   bool isReportStale(Vps v) {
     if (!v.online) return true;
     final age = DateTime.now().difference(v.lastSeen.toLocal()).inSeconds;
@@ -262,6 +276,7 @@ class AppState extends ChangeNotifier {
     try {
       final o = await api.overview();
       vpsList = ((o['vps'] as List?) ?? []).map((e) => Vps.fromJson(e)).toList();
+      _sortVpsList();
       for (final s in (o['snapshots'] as List?) ?? []) {
         final snap = VpsSnapshot.fromJson(s as Map<String, dynamic>);
         snapshots[snap.vps.id] = snap;
@@ -351,11 +366,15 @@ class AppState extends ChangeNotifier {
         if (i >= 0) {
           vpsList[i] = snap.vps;
         } else {
+          // A server appearing between full refreshes would otherwise sit at
+          // the end until the next list arrived and then jump into place.
           vpsList.add(snap.vps);
+          _sortVpsList();
         }
         break;
       case 'vps_list':
         vpsList = ((payload as List?) ?? []).map((e) => Vps.fromJson(e)).toList();
+        _sortVpsList();
         _pruneSnapshots();
         break;
       case 'alert':

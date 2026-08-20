@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -331,6 +333,14 @@ func (s *Store) FindByToken(token string) *VPSEntry {
 	return nil
 }
 
+// ListVPS returns every registered server in a stable order.
+//
+// The registry is a map, and Go randomises map iteration on purpose, so this
+// used to hand back a different order on every call — the server list, and the
+// dropdowns built from it, reshuffled themselves on every refresh.
+//
+// Sorted by name so a server can be found where it was last time, with the id
+// as a tiebreak so identically named hosts still land in a fixed order.
 func (s *Store) ListVPS() []shared.VPS {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -338,7 +348,20 @@ func (s *Store) ListVPS() []shared.VPS {
 	for _, e := range s.state.VPS {
 		out = append(out, e.VPS)
 	}
+	sortVPS(out)
 	return out
+}
+
+// sortVPS is the one place the fleet order is decided; the panel mirrors it so
+// a list rebuilt from a single update lands the same way as a full refresh.
+func sortVPS(list []shared.VPS) {
+	sort.Slice(list, func(i, j int) bool {
+		a, b := strings.ToLower(list[i].Name), strings.ToLower(list[j].Name)
+		if a != b {
+			return a < b
+		}
+		return list[i].ID < list[j].ID
+	})
 }
 
 // --- Snapshots (live, in-memory) -------------------------------------------
@@ -361,6 +384,8 @@ func (s *Store) GetSnapshot(id string) *shared.VPSSnapshot {
 	return s.snapshots[id]
 }
 
+// ListSnapshots returns live snapshots in the same order as ListVPS, for the
+// same reason: this is a map too, and the overview is built from it.
 func (s *Store) ListSnapshots() []*shared.VPSSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -368,6 +393,13 @@ func (s *Store) ListSnapshots() []*shared.VPSSnapshot {
 	for _, v := range s.snapshots {
 		out = append(out, v)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := strings.ToLower(out[i].VPS.Name), strings.ToLower(out[j].VPS.Name)
+		if a != b {
+			return a < b
+		}
+		return out[i].VPS.ID < out[j].VPS.ID
+	})
 	return out
 }
 
