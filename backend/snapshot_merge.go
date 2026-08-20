@@ -6,7 +6,7 @@ import (
 	"beacle/shared"
 )
 
-func mergeSnapshot(store *Store, hub *Hub, alerts *AlertEngine, entry *VPSEntry, agentVer string, merge func(*shared.VPSSnapshot)) {
+func mergeSnapshot(store *Store, hub *Hub, alerts *AlertEngine, history *History, entry *VPSEntry, agentVer string, merge func(*shared.VPSSnapshot)) {
 	snap := store.GetSnapshot(entry.VPS.ID)
 	copy := shared.VPSSnapshot{}
 	if snap != nil {
@@ -40,5 +40,12 @@ func mergeSnapshot(store *Store, hub *Hub, alerts *AlertEngine, entry *VPSEntry,
 	store.SetSnapshot(&copy)
 
 	alerts.EvaluateSnapshot(updated.VPS, &copy)
+
+	// Only metrics frames carry the numbers worth charting; a docker or ports
+	// frame would record a row of zeroes and put a false trough in the graph.
+	if history != nil && copy.Metrics.CollectedAt.After(time.Time{}) {
+		history.Record(updated.VPS.ID, SampleFrom(&copy))
+	}
+
 	hub.Broadcast(shared.WSVPSUpdate, &copy)
 }

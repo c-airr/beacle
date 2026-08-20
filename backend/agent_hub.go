@@ -33,9 +33,10 @@ type AgentHub struct {
 	agents  map[string]*agentSession // vpsID -> session
 	pending map[string]chan shared.AgentCommandResult
 
-	store  *Store
-	hub    *Hub
-	alerts *AlertEngine
+	store   *Store
+	hub     *Hub
+	alerts  *AlertEngine
+	history *History
 }
 
 type agentSession struct {
@@ -52,13 +53,14 @@ type agentSession struct {
 	tokenEntry *VPSEntry
 }
 
-func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine) *AgentHub {
+func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine, history *History) *AgentHub {
 	return &AgentHub{
 		agents:  make(map[string]*agentSession),
 		pending: make(map[string]chan shared.AgentCommandResult),
 		store:   store,
 		hub:     hub,
 		alerts:  alerts,
+		history: history,
 	}
 }
 
@@ -233,7 +235,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if !sess.registered.Load() || sess.entry == nil || msg.Metrics == nil {
 			return
 		}
-		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
+		mergeSnapshot(h.store, h.hub, h.alerts, h.history, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
 			snap.Metrics = *msg.Metrics
 		})
 
@@ -241,7 +243,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if !sess.registered.Load() || sess.entry == nil || msg.Docker == nil {
 			return
 		}
-		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
+		mergeSnapshot(h.store, h.hub, h.alerts, h.history, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
 			snap.Docker = *msg.Docker
 		})
 
@@ -249,7 +251,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if !sess.registered.Load() || sess.entry == nil || msg.Services == nil {
 			return
 		}
-		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
+		mergeSnapshot(h.store, h.hub, h.alerts, h.history, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
 			snap.Services = *msg.Services
 		})
 
@@ -257,7 +259,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if !sess.registered.Load() || sess.entry == nil {
 			return
 		}
-		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
+		mergeSnapshot(h.store, h.hub, h.alerts, h.history, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
 			snap.Ports = msg.Ports
 		})
 
@@ -265,7 +267,7 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if !sess.registered.Load() || sess.entry == nil || msg.Proxy == nil {
 			return
 		}
-		mergeSnapshot(h.store, h.hub, h.alerts, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
+		mergeSnapshot(h.store, h.hub, h.alerts, h.history, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
 			snap.Proxy = *msg.Proxy
 		})
 

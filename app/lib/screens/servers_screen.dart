@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/history_panel.dart';
 
 /// Per-VPS host statistics: CPU (incl. cores), RAM, disk, network, system info.
 /// Processes and ports live in the Processes tab.
@@ -236,6 +237,10 @@ class _ServerStats extends StatelessWidget {
           const SizedBox(height: 12),
           _CoresPanel(cores: m.cpuPerCore),
         ],
+        const SizedBox(height: 12),
+        // Everything above this line is "right now". This is the part that
+        // answers what happened while nobody was watching.
+        HistoryPanel(vps: vps),
         const SizedBox(height: 12),
         IntrinsicHeight(
           child: Row(

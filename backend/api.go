@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ type Server struct {
 	hub       *Hub
 	agentHub  *AgentHub
 	alerts    *AlertEngine
+	history   *History
 	baseURL   string // public URL of this backend, used in install commands
 	dataDir   string
 	startedAt time.Time
@@ -96,6 +98,9 @@ func (s *Server) handleVPSByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, snap)
 	case http.MethodDelete:
 		s.store.DeleteVPS(id)
+		if s.history != nil {
+			s.history.Forget(id)
+		}
 		s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
 		s.logAction(entry.VPS, "vps_delete", "VPS removed", true)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -279,6 +284,50 @@ func (s *Server) LinkMonitor() {
 }
 
 // ---------------------------------------------------------------------------
+// handleVPSHistory serves recorded metric samples for one server.
+//
+// The window is given in hours back from now, or as an explicit from/to pair in
+// RFC3339 so the panel can scroll to a specific night. The response also
+// carries the span actually held, which lets the UI bound its scrolling to real
+// data instead of offering two empty weeks.
+func (s *Server) handleVPSHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if s.store.GetVPS(id) == nil {
+		writeErr(w, http.StatusNotFound, "vps not found")
+		return
+	}
+	if s.history == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"samples": []shared.MetricSample{}})
+		return
+	}
+
+	var from, to time.Time
+	q := r.URL.Query()
+	if v := q.Get("from"); v != "" {
+		from, _ = time.Parse(time.RFC3339, v)
+	}
+	if v := q.Get("to"); v != "" {
+		to, _ = time.Parse(time.RFC3339, v)
+	}
+	if from.IsZero() {
+		hours := 24
+		if v := q.Get("hours"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 24*30 {
+				hours = n
+			}
+		}
+		from = time.Now().Add(-time.Duration(hours) * time.Hour)
+	}
+
+	samples := s.history.Query(id, from, to)
+	first, last := s.history.Span(id)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"samples": samples,
+		"first":   first,
+		"last":    last,
+	})
+}
+
 // Agent proxy: /api/vps/{id}/agent/* -> command over agent WebSocket tunnel
 // ---------------------------------------------------------------------------
 
@@ -366,6 +415,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/vps", s.handleListVPS)
 	mux.HandleFunc("/api/vps/{id}", s.handleVPSByID)
 	mux.HandleFunc("GET /api/install-command", s.handleInstallCommand)
+	mux.HandleFunc("GET /api/vps/{id}/history", s.handleVPSHistory)
 	mux.HandleFunc("/api/vps/{id}/agent/{rest...}", s.handleAgentProxy)
 	mux.HandleFunc("POST /api/ui/power-mode", s.handleUIPowerMode)
 	mux.HandleFunc("GET /api/overview", s.handleOverview)

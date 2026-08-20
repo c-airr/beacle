@@ -31,6 +31,24 @@ type NetworkStats struct {
 	TxPerSec  uint64 `json:"tx_per_sec"`
 }
 
+// MetricSample is one point in a VPS's recorded history. Deliberately small:
+// this is written once a minute per server and kept for weeks, so it holds the
+// handful of numbers a chart needs rather than a whole snapshot.
+type MetricSample struct {
+	At      time.Time `json:"at"`
+	CPU     float64   `json:"cpu"`
+	Mem     float64   `json:"mem"`
+	Disk    float64   `json:"disk"`
+	RxPerS  uint64    `json:"rx"`
+	TxPerS  uint64    `json:"tx"`
+	Load1   float64   `json:"load1"`
+}
+
+// A stretch with no samples is how an outage is recorded: the agent stops
+// reporting, so nothing is written. The panel reads a gap wider than a couple
+// of intervals as downtime rather than as missing data, which means no flag
+// has to be kept in step with reality.
+
 type SystemMetrics struct {
 	Hostname      string         `json:"hostname"`
 	OS            string         `json:"os"`

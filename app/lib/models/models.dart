@@ -239,6 +239,50 @@ class ScreenSession {
         running = _b(j['running']);
 }
 
+/// One recorded point in a server's history. Written once a minute by the
+/// backend and kept for a fortnight, so the panel can answer questions asked
+/// after the fact — what was this box doing at 4am.
+class MetricSample {
+  final DateTime at;
+  final double cpu, mem, disk, load1;
+  final int rxPerS, txPerS;
+  MetricSample.fromJson(Map<String, dynamic> j)
+      : at = _dt(j['at']),
+        cpu = _d(j['cpu']),
+        mem = _d(j['mem']),
+        disk = _d(j['disk']),
+        load1 = _d(j['load1']),
+        rxPerS = _i(j['rx']),
+        txPerS = _i(j['tx']);
+}
+
+/// A server's history plus the span actually on disk, so the chart can bound
+/// scrolling to real data instead of offering two empty weeks.
+class MetricHistory {
+  final List<MetricSample> samples;
+  final DateTime? first, last;
+
+  MetricHistory({required this.samples, this.first, this.last});
+
+  factory MetricHistory.fromJson(Map<String, dynamic> j) {
+    DateTime? bound(dynamic v) {
+      final t = _dt(v);
+      // The backend sends a zero time when it holds nothing for this server.
+      return t.millisecondsSinceEpoch == 0 || t.year < 2000 ? null : t;
+    }
+
+    return MetricHistory(
+      samples: ((j['samples'] as List?) ?? const [])
+          .map((e) => MetricSample.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      first: bound(j['first']),
+      last: bound(j['last']),
+    );
+  }
+
+  bool get isEmpty => samples.isEmpty;
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

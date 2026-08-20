@@ -180,6 +180,27 @@ class ApiClient {
   Future<String> screenLogs(String vpsId, String name) async =>
       ((await get(_a(vpsId, 'services/screen/$name/logs'))) as Map)['logs'] as String? ?? '';
 
+  /// Recorded metric history for one server. [hours] looks back from now;
+  /// [from]/[to] pin an explicit window for scrolling to a particular night.
+  Future<MetricHistory> vpsHistory(
+    String vpsId, {
+    int hours = 24,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final q = <String>[];
+    if (from != null) {
+      q.add('from=${Uri.encodeQueryComponent(from.toUtc().toIso8601String())}');
+      if (to != null) {
+        q.add('to=${Uri.encodeQueryComponent(to.toUtc().toIso8601String())}');
+      }
+    } else {
+      q.add('hours=$hours');
+    }
+    return MetricHistory.fromJson(
+        await get('/api/vps/$vpsId/history?${q.join('&')}') as Map<String, dynamic>);
+  }
+
   Future<List<NohupJob>> nohupJobs(String vpsId) async =>
       ((await get(_a(vpsId, 'services/nohup'))) as List? ?? [])
           .map((e) => NohupJob.fromJson(e as Map<String, dynamic>))

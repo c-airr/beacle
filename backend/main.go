@@ -21,8 +21,9 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 	hub := NewHub()
+	history := NewHistory(*dataDir)
 	alerts := NewAlertEngine(store, hub)
-	agentHub := NewAgentHub(store, hub, alerts)
+	agentHub := NewAgentHub(store, hub, alerts, history)
 	alerts.SetAgentHub(agentHub)
 
 	base := *baseURL
@@ -40,12 +41,14 @@ func main() {
 		hub:       hub,
 		agentHub:  agentHub,
 		alerts:    alerts,
+		history:   history,
 		baseURL:   base,
 		dataDir:   *dataDir,
 		startedAt: time.Now(),
 	}
 
 	go store.FlushLoop()
+	go history.RunTrim()
 	go alerts.WatchOffline()
 	go srv.LinkMonitor()
 
