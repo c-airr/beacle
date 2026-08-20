@@ -360,11 +360,15 @@ class AppState extends ChangeNotifier {
         break;
       case 'alert':
         final a = Alert.fromJson(payload as Map<String, dynamic>);
-        // The same alert arrives again when its condition clears, carrying the
-        // same id and resolved: true. Replacing it is what makes the row leave
-        // the active list instead of appearing twice.
+        // The same alert comes back when its condition clears, same id and
+        // resolved: true. That is a removal, not an update — a problem that is
+        // over should leave the list rather than sit in it greyed out, which is
+        // how the panel ended up showing a server as troubled long after it
+        // recovered. The backend has already dropped its copy.
         final existing = alerts.indexWhere((x) => x.id == a.id);
-        if (existing >= 0) {
+        if (a.resolved) {
+          if (existing >= 0) alerts.removeAt(existing);
+        } else if (existing >= 0) {
           alerts[existing] = a;
         } else {
           alerts.insert(0, a);

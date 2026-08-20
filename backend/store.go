@@ -438,37 +438,67 @@ func (s *Store) AddAlert(a shared.Alert) shared.Alert {
 	return a
 }
 
-// ResolveAlertsFor marks every open alert for one condition as resolved and
-// returns them, so the caller can tell the UI. A condition that has stopped
-// being true should stop being listed — an alert about five seconds of lost
-// connectivity half an hour ago is noise that trains people to ignore the list.
+// ResolveAlertsFor deletes every open alert for one condition and returns them
+// so the caller can tell the UI to drop those rows.
+//
+// Deleted rather than flagged. A resolved alert is a problem that is over, and
+// keeping it turns the list into a log: this store had 159 alerts in it, every
+// one of them resolved, mostly a host parked at 90% RAM opening a fresh row
+// each time a sample crossed the line. Nobody reads a list like that, which
+// makes the real alert underneath it invisible.
+//
+// The returned rows still carry Resolved so the panel can tell a removal from
+// an update — see the alert case in app_state.dart.
 func (s *Store) ResolveAlertsFor(vpsID string, t shared.AlertType, key string) []shared.Alert {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var changed []shared.Alert
-	for i := range s.state.Alerts {
-		a := &s.state.Alerts[i]
+	kept := s.state.Alerts[:0]
+	for _, a := range s.state.Alerts {
 		if a.Resolved || a.VPSID != vpsID || a.Type != t || a.Key != key {
+			kept = append(kept, a)
 			continue
 		}
 		a.Resolved = true
-		changed = append(changed, *a)
+		changed = append(changed, a)
 	}
 	if len(changed) > 0 {
+		s.state.Alerts = kept
 		s.persistLocked()
 	}
 	return changed
 }
 
+// PurgeResolvedAlerts drops rows left behind by older builds, which flagged
+// resolved alerts instead of removing them. Returns how many went.
+func (s *Store) PurgeResolvedAlerts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := s.state.Alerts[:0]
+	for _, a := range s.state.Alerts {
+		if !a.Resolved {
+			kept = append(kept, a)
+		}
+	}
+	removed := len(s.state.Alerts) - len(kept)
+	if removed > 0 {
+		s.state.Alerts = kept
+		s.persistLocked()
+	}
+	return removed
+}
+
+// ResolveAlert removes a single alert by id, for the same reason as above.
 func (s *Store) ResolveAlert(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.state.Alerts {
-		if s.state.Alerts[i].ID == id {
-			s.state.Alerts[i].Resolved = true
-			s.persistLocked()
-			return true
+		if s.state.Alerts[i].ID != id {
+			continue
 		}
+		s.state.Alerts = append(s.state.Alerts[:i], s.state.Alerts[i+1:]...)
+		s.persistLocked()
+		return true
 	}
 	return false
 }

@@ -14,6 +14,15 @@ const (
 	// still fires on the first reading.
 	SustainedSeconds = 10
 
+	// Clear thresholds sit below the firing ones so an alert does not flap.
+	// A host parked at exactly 90% RAM crosses back and forth on every sample,
+	// and since each crossing opens a brand new alert, that alone produced
+	// dozens of rows reading "RAM above 90% (now 90%)". Recovery has to mean
+	// the pressure actually eased, not that one reading rounded down.
+	CPUClearPercent  = 75.0
+	MemClearPercent  = 82.0
+	DiskClearPercent = 85.0
+
 	// OfflineAfterSec: how long the agent WebSocket may stay down before an
 	// offline alert fires and the last snapshot is dropped. The VPS status
 	// itself flips as soon as the socket goes away — this is only the grace

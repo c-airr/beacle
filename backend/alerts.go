@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -46,6 +47,11 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 	// ones, a restarted backend would neither resolve them when the condition
 	// clears — it would not know they exist — nor recognise the condition as
 	// already reported, and would raise a second alert beside the first.
+	// Anything already resolved is a problem that is over, and older builds
+	// kept those rows forever. They are cleared out once, on the way past.
+	if n := store.PurgeResolvedAlerts(); n > 0 {
+		log.Printf("alerts: removed %d resolved rows left by an earlier build", n)
+	}
 	for _, a := range store.ListAlerts() {
 		if a.Type == shared.AlertServiceDown && !a.Resolved {
 			store.ResolveAlert(a.ID)
@@ -154,21 +160,21 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 		e.fire(vps, shared.AlertCPUHigh, shared.SeverityWarning, "",
 			fmt.Sprintf("CPU above %.0f%% for %ds (now %.0f%%)",
 				shared.CPUHighPercent, shared.SustainedSeconds, m.CPUPercent))
-	} else if m.CPUPercent < shared.CPUHighPercent {
+	} else if m.CPUPercent < shared.CPUClearPercent {
 		e.clear(vps.ID, shared.AlertCPUHigh, "")
 	}
 	if e.sustained(vps.ID, "mem", m.MemPercent >= shared.MemHighPercent) {
 		e.fire(vps, shared.AlertMemHigh, shared.SeverityWarning, "",
 			fmt.Sprintf("RAM above %.0f%% for %ds (now %.0f%%)",
 				shared.MemHighPercent, shared.SustainedSeconds, m.MemPercent))
-	} else if m.MemPercent < shared.MemHighPercent {
+	} else if m.MemPercent < shared.MemClearPercent {
 		e.clear(vps.ID, shared.AlertMemHigh, "")
 	}
 	for _, d := range m.Disks {
 		if d.UsedPercent >= shared.DiskHighPercent {
 			e.fire(vps, shared.AlertDiskHigh, shared.SeverityWarning, d.Mount,
 				fmt.Sprintf("Disk %s at %.0f%%", d.Mount, d.UsedPercent))
-		} else {
+		} else if d.UsedPercent < shared.DiskClearPercent {
 			e.clear(vps.ID, shared.AlertDiskHigh, d.Mount)
 		}
 	}
