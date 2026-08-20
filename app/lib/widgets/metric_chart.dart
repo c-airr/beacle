@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -43,7 +44,9 @@ class ChartColors {
 ///
 /// Built for the question "what was this server doing while I was asleep", so
 /// it is navigable rather than a static picture: drag to scroll back through
-/// time, scroll to zoom, and hover for exact values at a moment.
+/// time, Ctrl+scroll to zoom, and hover for exact values at a moment. A bare
+/// wheel is left to the page, which is scrolling past this chart rather than
+/// through it.
 ///
 /// A stretch with no samples is drawn as an outage band rather than joined up.
 /// The agent stops reporting when it dies or the host goes away, so the missing
@@ -173,7 +176,18 @@ class _MetricChartState extends State<MetricChart> {
           child: LayoutBuilder(builder: (context, box) {
             return Listener(
               onPointerSignal: (e) {
-                if (e is PointerScrollEvent) _zoom(e.scrollDelta.dy);
+                if (e is! PointerScrollEvent) return;
+                // Zoom only with Ctrl held. A bare wheel over the chart used to
+                // zoom it *and* scroll the page underneath, because the event
+                // reaches both — so the reader got a moving chart on a moving
+                // page. Plain scrolling now belongs to the page, which is what
+                // the hand expects while reading down a server.
+                if (!HardwareKeyboard.instance.isControlPressed) return;
+                // Registering with the resolver is what actually claims the
+                // event: the scrollable would otherwise still act on it.
+                GestureBinding.instance.pointerSignalResolver.register(e, (ev) {
+                  _zoom((ev as PointerScrollEvent).scrollDelta.dy);
+                });
               },
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,

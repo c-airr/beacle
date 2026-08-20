@@ -190,9 +190,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
         children: [
           Text(
             _sync
-                ? 'Following live data — drag to scroll back in time, scroll to zoom, '
+                ? 'Following live data — drag to scroll back in time, Ctrl+scroll to zoom, '
                     'hover for exact values.'
-                : 'Showing ${_fmtRange(_from, _to)} — press Paused to return to live.',
+                : 'Showing ${_fmtRange(_from, _to)} — drag to scroll, Ctrl+scroll to zoom, '
+                    'press Paused to return to live.',
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(height: 14),
