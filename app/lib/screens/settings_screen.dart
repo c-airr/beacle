@@ -513,10 +513,23 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   /// deliberately downgraded away from.
   bool _agentUpdateAvailable(Vps v) {
     if (!v.online || agentLatest == null) return false;
+
+    // Digests first, because they answer the question being asked: are the
+    // bytes on GitHub different from the bytes this agent is running. Version
+    // numbers cannot — a rebuild republished under the same tag keeps its
+    // number, which is how a fleet sat two months stale while the panel
+    // reported it current.
+    final remote = agentLatest!.digest;
+    if (remote != null && v.agentDigest.isNotEmpty) {
+      return remote != v.agentDigest;
+    }
+
+    // No digest on one side or the other: an agent too old to report one, or a
+    // release predating GitHub's digests. Fall back to comparing versions.
     final latest = agentLatest!.version;
     if (latest == null) {
-      // Rolling release without a VERSION asset — no ordering possible, so
-      // the user decides; the build date in the chip says how fresh it is.
+      // Nothing orderable either — the user decides; the build date in the
+      // chip says how fresh the release is.
       return true;
     }
     if (v.agentVersion.isEmpty) return true;
@@ -554,6 +567,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           agentUpdateStatus = 'All agents are up to date (v${info.version}).';
         } else {
           agentUpdateStatus = 'Agent v${info.version} is available for $outdated VPS.';
+        }
+        // Worth saying out loud which question was answered: a digest match is
+        // certainty about the bytes, a version match is a claim about a label.
+        if (info.digest == null) {
+          agentUpdateStatus = '${agentUpdateStatus!} Compared by version — the '
+              'release carries no asset digest.';
         }
       });
     } catch (e) {

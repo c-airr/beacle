@@ -35,13 +35,13 @@ type NetworkStats struct {
 // this is written once a minute per server and kept for weeks, so it holds the
 // handful of numbers a chart needs rather than a whole snapshot.
 type MetricSample struct {
-	At      time.Time `json:"at"`
-	CPU     float64   `json:"cpu"`
-	Mem     float64   `json:"mem"`
-	Disk    float64   `json:"disk"`
-	RxPerS  uint64    `json:"rx"`
-	TxPerS  uint64    `json:"tx"`
-	Load1   float64   `json:"load1"`
+	At     time.Time `json:"at"`
+	CPU    float64   `json:"cpu"`
+	Mem    float64   `json:"mem"`
+	Disk   float64   `json:"disk"`
+	RxPerS uint64    `json:"rx"`
+	TxPerS uint64    `json:"tx"`
+	Load1  float64   `json:"load1"`
 }
 
 // A stretch with no samples is how an outage is recorded: the agent stops
@@ -50,13 +50,13 @@ type MetricSample struct {
 // has to be kept in step with reality.
 
 type SystemMetrics struct {
-	Hostname      string         `json:"hostname"`
-	OS            string         `json:"os"`
-	Kernel        string         `json:"kernel"`
-	Arch          string         `json:"arch"`
-	CPUPercent    float64        `json:"cpu_percent"`
-	CPUCores      int            `json:"cpu_cores"`
-	CPUModel      string         `json:"cpu_model"`
+	Hostname   string  `json:"hostname"`
+	OS         string  `json:"os"`
+	Kernel     string  `json:"kernel"`
+	Arch       string  `json:"arch"`
+	CPUPercent float64 `json:"cpu_percent"`
+	CPUCores   int     `json:"cpu_cores"`
+	CPUModel   string  `json:"cpu_model"`
 	// CPUPerCore is per-logical-CPU usage (0–100), same order as /proc/stat cpuN.
 	CPUPerCore []float64 `json:"cpu_per_core,omitempty"`
 	// MemUsedBytes / MemPercent: app usage (MemTotal − MemAvailable). Cache is reclaimable.
@@ -66,10 +66,10 @@ type SystemMetrics struct {
 	// MemCachedBytes: Buffers + Cached from /proc/meminfo.
 	MemCachedBytes uint64 `json:"mem_cached_bytes"`
 	// MemUsedCachedBytes / MemPercentCached: MemTotal − MemFree (includes buffers/cache).
-	MemUsedCachedBytes uint64  `json:"mem_used_cached_bytes"`
-	MemPercentCached   float64 `json:"mem_percent_cached"`
-	SwapTotal          uint64  `json:"swap_total_bytes"`
-	SwapUsed           uint64  `json:"swap_used_bytes"`
+	MemUsedCachedBytes uint64         `json:"mem_used_cached_bytes"`
+	MemPercentCached   float64        `json:"mem_percent_cached"`
+	SwapTotal          uint64         `json:"swap_total_bytes"`
+	SwapUsed           uint64         `json:"swap_used_bytes"`
 	Disks              []DiskUsage    `json:"disks"`
 	UptimeSeconds      uint64         `json:"uptime_seconds"`
 	Load1              float64        `json:"load1"`
@@ -290,11 +290,11 @@ const (
 )
 
 type ProxySite struct {
-	ID       string    `json:"id"`
-	Domain   string    `json:"domain"`
-	Upstream string    `json:"upstream"` // e.g. localhost:3000
-	SSL      SSLStatus `json:"ssl"`
-	Enabled  bool      `json:"enabled"`
+	ID       string            `json:"id"`
+	Domain   string            `json:"domain"`
+	Upstream string            `json:"upstream"` // e.g. localhost:3000
+	SSL      SSLStatus         `json:"ssl"`
+	Enabled  bool              `json:"enabled"`
 	Provider ProxyProviderKind `json:"provider"`
 
 	// --- optional per-site behaviour, all rendered into the Caddy site file ---
@@ -411,8 +411,15 @@ type RegisterRequest struct {
 	// PublicIP is the VPS egress address (e.g. from ipify) used for map geolocation.
 	PublicIP     string `json:"public_ip,omitempty"`
 	AgentVersion string `json:"agent_version"`
-	AgentPort    int    `json:"agent_port"`
-	OS           string `json:"os"`
+	// AgentDigest is the sha256 of the running binary, in GitHub's
+	// "sha256:<hex>" form so it compares directly with a release asset's
+	// digest. Version numbers cannot answer "are these the same bytes" — a
+	// rebuild published under the same tag keeps its version and changes its
+	// contents, which is how agents sat two months stale while the panel
+	// reported them current.
+	AgentDigest string `json:"agent_digest,omitempty"`
+	AgentPort   int    `json:"agent_port"`
+	OS          string `json:"os"`
 }
 
 type RegisterResponse struct {
@@ -477,11 +484,11 @@ type AgentWSMessage struct {
 	Command     *AgentCommand       `json:"command,omitempty"`
 	Result      *AgentCommandResult `json:"result,omitempty"`
 
-	Metrics  *SystemMetrics  `json:"metrics,omitempty"`
-	Docker   *DockerState    `json:"docker,omitempty"`
-	Services *ServicesState  `json:"services,omitempty"`
-	Ports    []PortInfo      `json:"ports,omitempty"`
-	Proxy    *ProxyState     `json:"proxy,omitempty"`
+	Metrics  *SystemMetrics `json:"metrics,omitempty"`
+	Docker   *DockerState   `json:"docker,omitempty"`
+	Services *ServicesState `json:"services,omitempty"`
+	Ports    []PortInfo     `json:"ports,omitempty"`
+	Proxy    *ProxyState    `json:"proxy,omitempty"`
 
 	Error string `json:"error,omitempty"`
 }
@@ -531,8 +538,11 @@ type VPS struct {
 	Status        VPSStatus `json:"status"`
 	AgentPort     int       `json:"agent_port"`
 	AgentVer      string    `json:"agent_version"`
-	CreatedAt     time.Time `json:"created_at"`
-	LastSeen      time.Time `json:"last_seen"`
+	// AgentDigest identifies the exact binary a server is running; see
+	// RegisterRequest.
+	AgentDigest string    `json:"agent_digest,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastSeen    time.Time `json:"last_seen"`
 }
 
 // CreateVPSRequest adds a server from the Tailscale device list (onboarding).
@@ -628,11 +638,11 @@ type ActionLog struct {
 type WSMessageType string
 
 const (
-	WSVPSUpdate   WSMessageType = "vps_update"   // payload: VPSSnapshot
-	WSVPSList     WSMessageType = "vps_list"     // payload: []VPS
-	WSAlert       WSMessageType = "alert"        // payload: Alert
-	WSLinkUpdate  WSMessageType = "link_update"  // payload: VPSLink
-	WSActionLog   WSMessageType = "action"       // payload: ActionLog
+	WSVPSUpdate  WSMessageType = "vps_update"  // payload: VPSSnapshot
+	WSVPSList    WSMessageType = "vps_list"    // payload: []VPS
+	WSAlert      WSMessageType = "alert"       // payload: Alert
+	WSLinkUpdate WSMessageType = "link_update" // payload: VPSLink
+	WSActionLog  WSMessageType = "action"      // payload: ActionLog
 )
 
 type WSMessage struct {

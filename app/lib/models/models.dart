@@ -408,6 +408,12 @@ class PingResult {
 
 class Vps {
   final String id, name, host, tailscaleName, publicIp, location, status, agentVersion;
+
+  /// sha256 of the binary this agent is running, as `sha256:<hex>`. Empty for
+  /// agents too old to report it. Compared against the release asset's digest
+  /// to answer whether an update would actually change anything — a version
+  /// number cannot, since a rebuild under the same tag keeps its number.
+  final String agentDigest;
   final double latitude, longitude;
   final int weight, agentPort;
   final DateTime createdAt, lastSeen;
@@ -420,6 +426,7 @@ class Vps {
         location = _s(j['location']),
         status = _s(j['status']),
         agentVersion = _s(j['agent_version']),
+        agentDigest = _s(j['agent_digest']),
         latitude = _d(j['latitude']),
         longitude = _d(j['longitude']),
         weight = _i(j['weight']),

@@ -21,7 +21,7 @@ func AgentGitHubAssetName(goarch string) string {
 
 // AgentGitHubBinaryURL is the direct download URL for the agent binary.
 func AgentGitHubBinaryURL(goarch string) string {
-	return AgentGitHubBinaryURLTag(AgentReleaseTag, goarch)
+	return AgentGitHubLatestBinaryURL(goarch)
 }
 
 // AgentGitHubBinaryURLTag points at the binary inside a specific release tag,
@@ -53,10 +53,25 @@ func AgentGitHubInstallURL() string {
 	)
 }
 
-// AgentGitHubReleaseAPI is the GitHub API endpoint for the agentbeta release metadata.
+// AgentGitHubReleaseAPI is the metadata for the release agents update to.
+//
+// GitHub's Latest, not a pinned tag. It used to point at tags/agentbeta, which
+// meant a freshly installed VPS pulled its agent from Latest while the Update
+// button pulled from a two-month-old pre-release — pressing Update downgraded
+// the agent that had just been installed. One release is the source of truth
+// for both paths now.
 func AgentGitHubReleaseAPI() string {
 	return fmt.Sprintf(
+		"https://api.github.com/repos/%s/%s/releases/latest",
+		AgentGitHubOwner, AgentGitHubRepo,
+	)
+}
+
+// AgentGitHubReleaseAPITag is the metadata for one specific release, for the
+// version picker in Settings.
+func AgentGitHubReleaseAPITag(tag string) string {
+	return fmt.Sprintf(
 		"https://api.github.com/repos/%s/%s/releases/tags/%s",
-		AgentGitHubOwner, AgentGitHubRepo, AgentReleaseTag,
+		AgentGitHubOwner, AgentGitHubRepo, tag,
 	)
 }

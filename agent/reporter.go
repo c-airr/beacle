@@ -67,6 +67,7 @@ func (r *Reporter) RegisterRequest() shared.RegisterRequest {
 		TailscaleIP:   tailscaleIPv4(),
 		PublicIP:      fetchPublicIP(),
 		AgentVersion:  AgentVersion,
+		AgentDigest:   selfDigest(),
 		AgentPort:     0,
 		OS:            runtime.GOOS + "/" + runtime.GOARCH,
 	}

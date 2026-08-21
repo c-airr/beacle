@@ -29,6 +29,10 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 		e.VPS.Status = shared.VPSOnline
 		e.VPS.LastSeen = time.Now().UTC()
 		e.VPS.AgentVer = req.AgentVersion
+		// Blank on an agent too old to send one; leaving the stored value
+		// alone would be worse, since a stale digest reads as a definite
+		// answer about bytes that are no longer running.
+		e.VPS.AgentDigest = req.AgentDigest
 		if req.AgentPort > 0 {
 			e.VPS.AgentPort = req.AgentPort
 		}

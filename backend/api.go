@@ -163,7 +163,10 @@ func (s *Server) handleInstallCommand(w http.ResponseWriter, r *http.Request) {
 		"install_command": vpsInstallCommand(base),
 		"backend_url":     base,
 		"agent_url":       shared.AgentGitHubBinaryURL("amd64"),
-		"agent_tag":       shared.AgentReleaseTag,
+		// The real release name from GitHub, not a compiled-in guess: the
+		// install one-liner pulls from Latest, so this has to say which one
+		// that currently is.
+		"agent_tag": githubAgentRelease("amd64").tag,
 	})
 }
 

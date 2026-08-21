@@ -15,35 +15,74 @@ class AgentReleaseInfo {
   final String? version;
   final DateTime? publishedAt;
   final bool prerelease;
-  AgentReleaseInfo({required this.tag, this.version, this.publishedAt, this.prerelease = false});
+
+  /// sha256 of the amd64 agent asset, as GitHub reports it. This is what makes
+  /// "would updating change anything" answerable: version numbers say nothing
+  /// about a rebuild republished under the same tag.
+  final String? digest;
+
+  AgentReleaseInfo({
+    required this.tag,
+    this.version,
+    this.publishedAt,
+    this.prerelease = false,
+    this.digest,
+  });
 }
 
-/// Agent release lookups against GitHub. Unlike the desktop app (versioned
-/// tags), agents ship on the rolling `agentbeta` tag, so "is there a newer
-/// agent" is answered from the VERSION asset next to the binaries.
+/// Agent release lookups against GitHub.
+///
+/// Agents follow the same Latest release the desktop app does. They used to
+/// follow a pinned `agentbeta` tag, which drifted two months behind: a VPS
+/// installed from Latest would be *downgraded* by pressing Update.
 class AgentUpdater {
   static const _api = 'https://api.github.com/repos/$githubRepo/releases';
   static const _headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'beacle-app'};
 
-  /// The current rolling agent release (agentbeta), with the VERSION asset
-  /// resolved to a semver when the release carries one.
+  /// The agent release on GitHub's Latest, which is what a fresh install and
+  /// the Update button both pull from.
   static Future<AgentReleaseInfo?> latestAgentRelease() async {
     final resp = await http
-        .get(Uri.parse('$_api/tags/$agentReleaseTag'), headers: _headers)
+        .get(Uri.parse('$_api/latest'), headers: _headers)
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) return null;
     final rel = jsonDecode(resp.body) as Map<String, dynamic>;
+    final tag = rel['tag_name'] as String? ?? '';
     return AgentReleaseInfo(
-      tag: agentReleaseTag,
-      version: await _versionFromAssets(rel),
+      tag: tag,
+      // A tag like 0.9 is already the version; the VERSION asset is only
+      // consulted when the tag carries no ordering of its own.
+      version: await _versionFromAssets(rel) ?? _versionFromTag(tag),
       publishedAt: DateTime.tryParse(rel['published_at'] as String? ?? ''),
       prerelease: rel['prerelease'] == true,
+      digest: _digestFromAssets(rel),
     );
   }
 
+  /// The amd64 asset's digest. Only amd64 is read: every VPS in a fleet is
+  /// almost always the same architecture, and a wrong-architecture comparison
+  /// would report a permanent false "update available" on the odd arm box —
+  /// so a missing match returns null and the check falls back to versions.
+  static String? _digestFromAssets(Map<String, dynamic> rel) {
+    for (final a in ((rel['assets'] as List?) ?? []).cast<Map<String, dynamic>>()) {
+      if ((a['name'] as String? ?? '') != 'beacle-agent-amd64') continue;
+      final d = (a['digest'] as String? ?? '').trim();
+      return d.isEmpty ? null : d;
+    }
+    return null;
+  }
+
+  /// Strips a leading v so "v0.9" and "0.9" compare as the same version.
+  /// Returns null for a tag that is a channel name rather than a version.
+  static String? _versionFromTag(String tag) {
+    final t = tag.replaceFirst(RegExp(r'^[vV]'), '');
+    return RegExp(r'^\d').hasMatch(t) ? t : null;
+  }
+
   /// Releases that carry agent binaries, newest first — the source for the
-  /// version picker. Unlike desktop releases, prereleases are kept: the
-  /// rolling agentbeta tag is a prerelease-shaped channel by design.
+  /// version picker. Prereleases are kept: pinning an agent to an older or
+  /// pre-release build is exactly what the picker is for, even though Update
+  /// on its own always means Latest.
   static Future<List<AgentReleaseInfo>> agentReleases() async {
     final resp = await http
         .get(Uri.parse('$_api?per_page=30'), headers: _headers)
@@ -60,7 +99,7 @@ class AgentUpdater {
       if (tag.isEmpty) continue;
       out.add(AgentReleaseInfo(
         tag: tag,
-        version: tag == agentReleaseTag ? null : tag.replaceFirst(RegExp(r'^[vV]'), ''),
+        version: _versionFromTag(tag),
         publishedAt: DateTime.tryParse(r['published_at'] as String? ?? ''),
         prerelease: r['prerelease'] == true,
       ));

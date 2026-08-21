@@ -28,47 +28,61 @@ func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+// handleAgentVersion describes the agent build on GitHub's Latest release.
+//
+// "version" is the asset's sha256 digest rather than a release name, because
+// what an agent needs to know is whether the bytes on GitHub differ from the
+// bytes it is running. A rebuilt binary published under the same version number
+// has the same name and a different digest, and it is the digest that decides
+// whether an update is worth doing.
 func (s *Server) handleAgentVersion(w http.ResponseWriter, r *http.Request) {
+	rel := githubAgentRelease("amd64")
 	writeJSON(w, http.StatusOK, map[string]string{
-		"version": githubAgentStamp("amd64"),
+		"version": rel.stamp,
 		"source":  shared.AgentGitHubBinaryURL("amd64"),
-		"tag":     shared.AgentReleaseTag,
+		"tag":     rel.tag,
 	})
 }
 
+// agentRelease is what the panel knows about the agent build on Latest.
+type agentRelease struct {
+	tag   string // release name, for display
+	stamp string // asset digest, for deciding whether to update
+	at    time.Time
+}
+
 var (
-	ghStampMu   sync.Mutex
-	ghStampCache = map[string]struct {
-		stamp string
-		at    time.Time
-	}{}
+	ghStampMu    sync.Mutex
+	ghStampCache = map[string]agentRelease{}
 )
 
-func githubAgentStamp(goarch string) string {
+// githubAgentRelease is cached briefly: every agent asks on every version
+// check, and GitHub rate-limits unauthenticated callers.
+func githubAgentRelease(goarch string) agentRelease {
 	ghStampMu.Lock()
 	if c, ok := ghStampCache[goarch]; ok && time.Since(c.at) < 2*time.Minute {
 		ghStampMu.Unlock()
-		return c.stamp
+		return c
 	}
 	ghStampMu.Unlock()
 
-	stamp := fetchGitHubStamp(goarch)
-	if stamp == "" {
-		stamp = shared.AgentReleaseTag
-	}
+	rel := fetchGitHubRelease(goarch)
+	rel.at = time.Now()
+	// An empty stamp means GitHub could not be reached. Cached anyway, so a
+	// rate-limited backend does not hammer the API once per agent per check;
+	// the agent treats an empty stamp as "cannot tell" and does not update.
 	ghStampMu.Lock()
-	ghStampCache[goarch] = struct {
-		stamp string
-		at    time.Time
-	}{stamp: stamp, at: time.Now()}
+	ghStampCache[goarch] = rel
 	ghStampMu.Unlock()
-	return stamp
+	return rel
 }
 
-func fetchGitHubStamp(goarch string) string {
+func githubAgentStamp(goarch string) string { return githubAgentRelease(goarch).stamp }
+
+func fetchGitHubRelease(goarch string) agentRelease {
 	req, err := http.NewRequest(http.MethodGet, shared.AgentGitHubReleaseAPI(), nil)
 	if err != nil {
-		return ""
+		return agentRelease{}
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "beacle-backend")
@@ -77,15 +91,16 @@ func fetchGitHubStamp(goarch string) string {
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("github release meta: %v", err)
-		return ""
+		return agentRelease{}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		log.Printf("github release meta HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
-		return ""
+		return agentRelease{}
 	}
 	var rel struct {
+		TagName     string `json:"tag_name"`
 		PublishedAt string `json:"published_at"`
 		Assets      []struct {
 			Name      string `json:"name"`
@@ -94,21 +109,32 @@ func fetchGitHubStamp(goarch string) string {
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return ""
+		return agentRelease{}
 	}
+
+	out := agentRelease{tag: rel.TagName}
 	want := shared.AgentGitHubAssetName(goarch)
 	for _, a := range rel.Assets {
 		if a.Name != want {
 			continue
 		}
-		if a.Digest != "" {
-			return a.Digest
+		// Digest first: it changes whenever the bytes change, which is the
+		// only question being asked. The timestamps are fallbacks for older
+		// releases uploaded before GitHub exposed digests.
+		switch {
+		case a.Digest != "":
+			out.stamp = a.Digest
+		case a.UpdatedAt != "":
+			out.stamp = a.UpdatedAt
+		default:
+			out.stamp = rel.PublishedAt
 		}
-		if a.UpdatedAt != "" {
-			return a.UpdatedAt
-		}
+		return out
 	}
-	return rel.PublishedAt
+	// The release exists but carries no agent for this architecture. Leaving
+	// the stamp empty is deliberate: "no build for you" must not read as "you
+	// are up to date".
+	return out
 }
 
 // unused import guard if fmt only used elsewhere — keep fmt for errors in install
