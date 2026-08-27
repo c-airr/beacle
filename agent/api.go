@@ -152,6 +152,41 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, map[string]any{"ok": true, "state": out})
 	}))
+	// Unit creation. Preview and create take the same spec so what the panel
+	// showed is exactly what gets written.
+	mux.HandleFunc("POST /api/services/systemd/preview", a(func(w http.ResponseWriter, r *http.Request) {
+		var spec shared.SystemdUnitSpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		preview, err := s.col.PreviewSystemdUnit(spec)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, preview)
+	}))
+	mux.HandleFunc("POST /api/services/systemd", a(func(w http.ResponseWriter, r *http.Request) {
+		var spec shared.SystemdUnitSpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		created, err := s.col.CreateSystemdUnit(spec)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, created)
+	}))
+	mux.HandleFunc("DELETE /api/services/systemd/{unit}", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.DeleteSystemdUnit(r.PathValue("unit")); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
 	mux.HandleFunc("GET /api/services/systemd/{unit}/logs", a(func(w http.ResponseWriter, r *http.Request) {
 		lines, _ := strconv.Atoi(r.URL.Query().Get("lines"))
 		logs, err := s.col.SystemdLogs(r.PathValue("unit"), lines)

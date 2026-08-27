@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/screen_launcher.dart';
+import '../widgets/service_wizard.dart';
 
 /// Everything running on a host: systemd units, screen sessions and raw
 /// processes. Processes used to be their own tab, but "what is running here"
@@ -403,9 +404,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return r != 0 ? r : a.name.compareTo(b.name);
     });
 
-    if (units.isEmpty) {
-      return const Center(child: Text('No services', style: TextStyle(color: BeacleColors.textDim)));
-    }
+    final live = vps.online && !state.isReportStale(vps);
 
     Future<void> act(SystemdUnit u, String action) async {
       try {
@@ -417,6 +416,49 @@ class _ServicesScreenState extends State<ServicesScreen> {
       }
     }
 
+    Future<void> newService() async {
+      final created = await showServiceWizard(context, state: state, vps: vps);
+      if (!created) return;
+      // The unit list rides the snapshot stream, so ask for a fresh one rather
+      // than waiting out the interval — a service you just created should be
+      // in the list when the dialog closes.
+      state.onUserAction();
+      await state.refreshAll();
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+          child: Row(children: [
+            const Expanded(
+              child: Text(
+                'Services that start on boot and come back if they die. Unlike a screen '
+                'session or a nohup job, these survive a reboot.',
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+              ),
+            ),
+            SmallButton('New service', icon: Icons.add, onPressed: live ? newService : null),
+          ]),
+        ),
+        if (units.isEmpty)
+          const Expanded(
+            child: Center(
+              child: Text('No services', style: TextStyle(color: BeacleColors.textDim)),
+            ),
+          )
+        else
+          Expanded(child: _systemdRows(state, vps, units, act)),
+      ],
+    );
+  }
+
+  Widget _systemdRows(
+    AppState state,
+    Vps vps,
+    List<SystemdUnit> units,
+    Future<void> Function(SystemdUnit, String) act,
+  ) {
     return SmoothListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: units.length,

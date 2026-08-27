@@ -29,9 +29,9 @@ func newCollector(cfg *Config) Collector {
 	mk := func(name, image, state string, restart int, pub int) shared.ContainerInfo {
 		return shared.ContainerInfo{
 			ID: randomID() + randomID(), Name: name, Image: image, State: state,
-			Status: map[string]string{"running": "Up 2 hours", "exited": "Exited (0) 1 hour ago"}[state],
+			Status:    map[string]string{"running": "Up 2 hours", "exited": "Exited (0) 1 hour ago"}[state],
 			CreatedAt: time.Now().Add(-24 * time.Hour), RestartCount: restart,
-			Ports: []shared.ContainerPort{{PrivatePort: 80, PublicPort: pub, Protocol: "tcp", IP: "0.0.0.0"}},
+			Ports:          []shared.ContainerPort{{PrivatePort: 80, PublicPort: pub, Protocol: "tcp", IP: "0.0.0.0"}},
 			ComposeProject: "demo-stack", ComposeService: name,
 		}
 	}
@@ -69,13 +69,13 @@ func (c *devCollector) Metrics() (shared.SystemMetrics, error) {
 		MemTotalBytes: total, MemUsedBytes: used, MemPercent: mem,
 		MemCachedBytes: cached, MemUsedCachedBytes: used + cached,
 		MemPercentCached: float64(used+cached) / float64(total) * 100,
-		SwapTotal: 2 << 30, SwapUsed: 256 << 20,
+		SwapTotal:        2 << 30, SwapUsed: 256 << 20,
 		Disks: []shared.DiskUsage{
 			{Mount: "/", Filesystem: "ext4", TotalBytes: 80 << 30, UsedBytes: 34 << 30, UsedPercent: 42.5},
 			{Mount: "/data", Filesystem: "ext4", TotalBytes: 200 << 30, UsedBytes: 150 << 30, UsedPercent: 75},
 		},
 		UptimeSeconds: uint64(time.Since(c.start).Seconds()) + 86400*12,
-		Load1: cpu / 25, Load5: cpu / 30, Load15: cpu / 40,
+		Load1:         cpu / 25, Load5: cpu / 30, Load15: cpu / 40,
 		Network: []shared.NetworkStats{{
 			Interface: "eth0", RxBytes: 123 << 30, TxBytes: 45 << 30,
 			RxPerSec: uint64(c.rng.Intn(2 << 20)), TxPerSec: uint64(c.rng.Intn(1 << 20)),
@@ -324,6 +324,20 @@ func (c *devCollector) NohupLogs(name string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("job %q not found", name)
+}
+
+// The dev collector runs on Windows, where there is no systemd to write to.
+// Refusing loudly beats pretending a unit was created.
+func (c *devCollector) PreviewSystemdUnit(shared.SystemdUnitSpec) (shared.SystemdUnitPreview, error) {
+	return shared.SystemdUnitPreview{}, fmt.Errorf("systemd is only available on Linux hosts")
+}
+
+func (c *devCollector) CreateSystemdUnit(shared.SystemdUnitSpec) (shared.SystemdUnitPreview, error) {
+	return shared.SystemdUnitPreview{}, fmt.Errorf("systemd is only available on Linux hosts")
+}
+
+func (c *devCollector) DeleteSystemdUnit(string) error {
+	return fmt.Errorf("systemd is only available on Linux hosts")
 }
 
 func (c *devCollector) ScreenKill(name string) error {

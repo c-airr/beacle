@@ -283,6 +283,59 @@ class MetricHistory {
   bool get isEmpty => samples.isEmpty;
 }
 
+/// What the panel sends to create a service. The agent renders this into the
+/// unit file — the panel never composes unit text itself, so there is one
+/// place that decides what a Beacle-made unit looks like.
+class SystemdUnitSpec {
+  final String name, description, execStart, workingDir, user, restart, after;
+  final int restartSec;
+  final Map<String, String> env;
+  final bool enableAtBoot, startNow, overwrite;
+
+  const SystemdUnitSpec({
+    required this.name,
+    required this.execStart,
+    this.description = '',
+    this.workingDir = '',
+    this.user = '',
+    this.restart = 'always',
+    this.restartSec = 3,
+    this.after = '',
+    this.env = const {},
+    this.enableAtBoot = true,
+    this.startNow = true,
+    this.overwrite = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'description': description,
+        'exec_start': execStart,
+        'working_dir': workingDir,
+        'user': user,
+        'restart': restart,
+        'restart_sec': restartSec,
+        'after': after,
+        'env': env,
+        'enable_at_boot': enableAtBoot,
+        'start_now': startNow,
+        'overwrite': overwrite,
+      };
+}
+
+/// The rendered unit plus systemd's verdict on it, so the panel can show
+/// exactly what would be written before anything is.
+class SystemdUnitPreview {
+  final String path, unit, output;
+  final bool valid, exists;
+  SystemdUnitPreview.fromJson(Map<String, dynamic> j)
+      : path = _s(j['path']),
+        unit = _s(j['unit']),
+        output = _s(j['output']),
+        valid = _b(j['valid']),
+        exists = _b(j['exists']);
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

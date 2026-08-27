@@ -161,6 +161,23 @@ class ApiClient {
           as String? ??
       '';
 
+  /// Renders and verifies a unit without writing anything, so the form can
+  /// show the file and systemd's opinion of it before it exists.
+  Future<SystemdUnitPreview> systemdPreview(String vpsId, SystemdUnitSpec spec) async =>
+      SystemdUnitPreview.fromJson(
+          await post(_a(vpsId, 'services/systemd/preview'), body: spec.toJson())
+              as Map<String, dynamic>);
+
+  Future<SystemdUnitPreview> systemdCreate(String vpsId, SystemdUnitSpec spec) async =>
+      SystemdUnitPreview.fromJson(
+          await post(_a(vpsId, 'services/systemd'), body: spec.toJson())
+              as Map<String, dynamic>);
+
+  /// Stops, disables and removes a unit. Only units under /etc/systemd/system
+  /// — the agent refuses anything shipped by the distribution.
+  Future<void> systemdDelete(String vpsId, String unit) =>
+      delete(_a(vpsId, 'services/systemd/$unit'));
+
   Future<List<ScreenSession>> screenSessions(String vpsId) async =>
       ((await get(_a(vpsId, 'services/screen'))) as List? ?? [])
           .map((e) => ScreenSession.fromJson(e as Map<String, dynamic>))

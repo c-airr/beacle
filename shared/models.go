@@ -263,6 +263,46 @@ type NohupStartRequest struct {
 	Command string `json:"command"`
 }
 
+// SystemdUnitSpec describes a service to create. The agent renders it into a
+// unit file — the panel never sends unit text, so there is exactly one place
+// that decides what a Beacle-made unit looks like.
+type SystemdUnitSpec struct {
+	// Name without the .service suffix.
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// ExecStart is the command line, as typed.
+	ExecStart  string            `json:"exec_start"`
+	WorkingDir string            `json:"working_dir,omitempty"`
+	User       string            `json:"user,omitempty"`
+	Restart    string            `json:"restart,omitempty"` // always | on-failure | no
+	RestartSec int               `json:"restart_sec,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	After      string            `json:"after,omitempty"`
+
+	// EnableAtBoot writes the wants symlink; StartNow starts it immediately.
+	// Separate because "survives a reboot" and "running right now" are
+	// different promises and people want them independently.
+	EnableAtBoot bool `json:"enable_at_boot"`
+	StartNow     bool `json:"start_now"`
+
+	// Overwrite allows replacing a unit that already exists. Refused by
+	// default: silently rewriting a unit somebody else installed is how a
+	// server stops booting.
+	Overwrite bool `json:"overwrite,omitempty"`
+}
+
+// SystemdUnitPreview is the rendered file plus whatever systemd said about it,
+// so the panel can show exactly what would be written before anything is.
+type SystemdUnitPreview struct {
+	Path  string `json:"path"`
+	Unit  string `json:"unit"`
+	Valid bool   `json:"valid"`
+	// Output is systemd-analyze's verdict, shown verbatim rather than
+	// summarised — its wording is the useful part.
+	Output string `json:"output,omitempty"`
+	Exists bool   `json:"exists"`
+}
+
 type ServicesState struct {
 	Systemd []SystemdUnit   `json:"systemd"`
 	Screen  []ScreenSession `json:"screen"`

@@ -22,8 +22,14 @@ type Collector interface {
 
 	ScreenSessions() ([]shared.ScreenSession, error)
 	ScreenStart(req shared.ScreenStartRequest) error
-	ScreenStop(name string) error   // sends Ctrl+C to the running payload
-	ScreenKill(name string) error   // removes the session itself
+	ScreenStop(name string) error // sends Ctrl+C to the running payload
+	// Creating and removing units. Preview renders and verifies without
+	// writing anything, so the panel can show the file before it exists.
+	PreviewSystemdUnit(spec shared.SystemdUnitSpec) (shared.SystemdUnitPreview, error)
+	CreateSystemdUnit(spec shared.SystemdUnitSpec) (shared.SystemdUnitPreview, error)
+	DeleteSystemdUnit(name string) error
+
+	ScreenKill(name string) error // removes the session itself
 	ScreenLogs(name string) (string, error)
 
 	// Detached jobs with no terminal attached, for things that just need to
