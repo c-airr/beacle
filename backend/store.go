@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -356,12 +355,25 @@ func (s *Store) ListVPS() []shared.VPS {
 // a list rebuilt from a single update lands the same way as a full refresh.
 func sortVPS(list []shared.VPS) {
 	sort.Slice(list, func(i, j int) bool {
-		a, b := strings.ToLower(list[i].Name), strings.ToLower(list[j].Name)
-		if a != b {
-			return a < b
-		}
-		return list[i].ID < list[j].ID
+		return lessVPS(list[i].CreatedAt, list[i].ID, list[j].CreatedAt, list[j].ID)
 	})
+}
+
+// lessVPS orders servers by when they were added, oldest first.
+//
+// Insertion order rather than name: a rename would otherwise move a server
+// across the list, so the position a reader has learned keeps changing for a
+// second reason on top of the map-iteration randomness this replaced. Where a
+// server sits should depend on nothing that can be edited.
+//
+// The id breaks ties — two servers registered in the same instant, and entries
+// old enough to predate CreatedAt being recorded, both land in a fixed order
+// instead of a random one.
+func lessVPS(aAt time.Time, aID string, bAt time.Time, bID string) bool {
+	if !aAt.Equal(bAt) {
+		return aAt.Before(bAt)
+	}
+	return aID < bID
 }
 
 // --- Snapshots (live, in-memory) -------------------------------------------
@@ -394,11 +406,7 @@ func (s *Store) ListSnapshots() []*shared.VPSSnapshot {
 		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		a, b := strings.ToLower(out[i].VPS.Name), strings.ToLower(out[j].VPS.Name)
-		if a != b {
-			return a < b
-		}
-		return out[i].VPS.ID < out[j].VPS.ID
+		return lessVPS(out[i].VPS.CreatedAt, out[i].VPS.ID, out[j].VPS.CreatedAt, out[j].VPS.ID)
 	})
 	return out
 }

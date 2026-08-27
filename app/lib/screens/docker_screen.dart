@@ -91,17 +91,30 @@ class _DockerScreenState extends State<DockerScreen> {
                 if (i > 0) const SizedBox(height: 22),
                 _VpsSectionHeader(vps: hosts[i], docker: state.snapshots[hosts[i].id]!.docker),
                 const SizedBox(height: 10),
-                switch (tab) {
-                  0 => _ContainersBlock(
-                      vps: hosts[i],
-                      docker: state.snapshots[hosts[i].id]!.docker,
-                      filter: filter,
-                    ),
-                  1 => _ImagesBlock(docker: state.snapshots[hosts[i].id]!.docker),
-                  2 => _VolumesBlock(docker: state.snapshots[hosts[i].id]!.docker),
-                  3 => _NetworksBlock(docker: state.snapshots[hosts[i].id]!.docker),
-                  _ => _ComposeBlock(docker: state.snapshots[hosts[i].id]!.docker),
-                },
+                // Container cards are spread into the list rather than wrapped
+                // in a Column. A Column has to lay out every child it holds, so
+                // one per host meant every card on every server was measured on
+                // every rebuild — and this screen rebuilds on each agent frame,
+                // several times a second. As direct children the list only lays
+                // out what is on screen, which is why the stutter scaled with
+                // how much was in the tab.
+                //
+                // The other tabs stay as blocks: they are single bordered
+                // tables, and splitting their rows apart would break the frame
+                // drawn around them. They also hold far fewer rows.
+                if (tab == 0)
+                  ..._containerRows(
+                    vps: hosts[i],
+                    docker: state.snapshots[hosts[i].id]!.docker,
+                    filter: filter,
+                  )
+                else
+                  switch (tab) {
+                    1 => _ImagesBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                    2 => _VolumesBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                    3 => _NetworksBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                    _ => _ComposeBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                  },
               ],
             ],
           ),
@@ -185,36 +198,51 @@ class _VpsSectionHeader extends StatelessWidget {
   }
 }
 
-class _ContainersBlock extends StatelessWidget {
-  final Vps vps;
-  final DockerState docker;
-  final String filter;
-  const _ContainersBlock({required this.vps, required this.docker, required this.filter});
-
-  ContainerStats? _stats(String id) => docker.stats.where((s) => s.id == id || s.id.startsWith(id) || id.startsWith(s.id)).firstOrNull;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!docker.available) return const _EmptyNote('Docker not available on this VPS');
-    final list = docker.containers.where((c) {
-      if (filter.isEmpty) return true;
-      return c.name.toLowerCase().contains(filter) ||
-          c.image.toLowerCase().contains(filter) ||
-          c.state.toLowerCase().contains(filter);
-    }).toList();
-    if (docker.containers.isEmpty) return const _EmptyNote('No containers');
-    if (list.isEmpty) return const _EmptyNote('No containers match filter');
-
-    return Column(
-      children: [
-        for (final c in list)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _ContainerCard(vps: vps, container: c, stats: _stats(c.id)),
-          ),
-      ],
-    );
+/// One host's container cards, as list items rather than a Column — see the
+/// note at the call site.
+List<Widget> _containerRows({
+  required Vps vps,
+  required DockerState docker,
+  required String filter,
+}) {
+  if (!docker.available) {
+    return const [_EmptyNote('Docker not available on this VPS')];
   }
+  if (docker.containers.isEmpty) return const [_EmptyNote('No containers')];
+
+  final list = docker.containers.where((c) {
+    if (filter.isEmpty) return true;
+    return c.name.toLowerCase().contains(filter) ||
+        c.image.toLowerCase().contains(filter) ||
+        c.state.toLowerCase().contains(filter);
+  }).toList();
+  if (list.isEmpty) return const [_EmptyNote('No containers match filter')];
+
+  // Stats were looked up by scanning the whole stats list per container, so a
+  // host with fifty containers did twenty-five hundred comparisons on every
+  // rebuild. Indexed once instead.
+  final byID = <String, ContainerStats>{};
+  for (final st in docker.stats) {
+    byID[st.id] = st;
+  }
+  ContainerStats? statsFor(String id) {
+    final exact = byID[id];
+    if (exact != null) return exact;
+    // Docker truncates ids in some outputs, so one side may be a prefix of the
+    // other; that case is rare enough to pay for only when the map misses.
+    for (final st in docker.stats) {
+      if (st.id.startsWith(id) || id.startsWith(st.id)) return st;
+    }
+    return null;
+  }
+
+  return [
+    for (final c in list)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: _ContainerCard(vps: vps, container: c, stats: statsFor(c.id)),
+      ),
+  ];
 }
 
 class _ContainerCard extends StatelessWidget {

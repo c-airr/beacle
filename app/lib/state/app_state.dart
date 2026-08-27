@@ -200,17 +200,21 @@ class AppState extends ChangeNotifier {
   /// active mode blanked every server for one tick.
   DateTime _powerModeChangedAt = DateTime.now();
 
-  /// Fleet order, matching sortVPS in the backend's store.
+  /// Fleet order, matching lessVPS in the backend's store: oldest first, id as
+  /// the tiebreak.
   ///
-  /// The registry there is a map and Go randomises map iteration, so the list
-  /// arrived in a different order on every refresh and the servers — and every
-  /// dropdown built from them — reshuffled under the pointer. The backend sorts
-  /// now; this keeps a list rebuilt from a single update in step with a list
-  /// that came from a full refresh.
+  /// Insertion order, not name. The registry in the backend is a map and Go
+  /// randomises map iteration, so the list used to arrive differently on every
+  /// refresh; sorting by name fixed that but left a second way for a server to
+  /// move, since renaming one reorders the list. Position now depends on
+  /// nothing anybody can edit.
+  ///
+  /// This keeps a list rebuilt from a single update in step with one that came
+  /// from a full refresh.
   void _sortVpsList() {
     vpsList.sort((a, b) {
-      final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      return byName != 0 ? byName : a.id.compareTo(b.id);
+      final byAge = a.createdAt.compareTo(b.createdAt);
+      return byAge != 0 ? byAge : a.id.compareTo(b.id);
     });
   }
 
