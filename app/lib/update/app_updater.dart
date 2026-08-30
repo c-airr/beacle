@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../user_config.dart';
 
-const appVersion = '0.9.1';
+const appVersion = '1.0.0-rc.1';
 // Same repo as config.dart's agent release — kept here too so the updater
 // does not need a cross-file import just to read a constant.
 const githubRepo = 'c-airr/beacle';
@@ -144,14 +144,53 @@ start "" "$_installDir\\beacle.exe"
   static bool isNewer(String a, String b) => compareVersions(a, b) > 0;
 
   /// Semver compare: negative = a older, 0 = equal, positive = a newer.
+  ///
+  /// Pre-release suffixes are ranked below the release they lead up to, as
+  /// semver requires: 1.0.0-rc.1 < 1.0.0. This used to split on `-` as if it
+  /// were a dot and parse "rc1" as 0, which made 1.0.0-rc.1 and 1.0.0 compare
+  /// equal — so nobody running a release candidate would ever be offered the
+  /// final build. Build metadata after `+` is ignored, also per semver.
   static int compareVersions(String a, String b) {
-    List<int> parts(String v) =>
-        v.split(RegExp(r'[.\-+]')).map((p) => int.tryParse(p) ?? 0).toList();
-    final x = parts(a), y = parts(b);
+    (List<int>, String) split(String v) {
+      var s = v.trim();
+      if (s.startsWith('v') || s.startsWith('V')) s = s.substring(1);
+      s = s.split('+').first; // build metadata never affects precedence
+      final dash = s.indexOf('-');
+      final core = dash < 0 ? s : s.substring(0, dash);
+      final pre = dash < 0 ? '' : s.substring(dash + 1);
+      return (core.split('.').map((p) => int.tryParse(p) ?? 0).toList(), pre);
+    }
+
+    final (x, xPre) = split(a);
+    final (y, yPre) = split(b);
+
     for (var i = 0; i < (x.length > y.length ? x.length : y.length); i++) {
       final xi = i < x.length ? x[i] : 0;
       final yi = i < y.length ? y[i] : 0;
       if (xi != yi) return xi - yi;
+    }
+
+    // Same numbers: a version carrying a pre-release tag is the older one.
+    if (xPre.isEmpty && yPre.isEmpty) return 0;
+    if (xPre.isEmpty) return 1;
+    if (yPre.isEmpty) return -1;
+    return _comparePre(xPre, yPre);
+  }
+
+  /// Compares dot-separated pre-release identifiers. Numeric ones compare as
+  /// numbers so rc.10 lands above rc.9 rather than between rc.1 and rc.2.
+  static int _comparePre(String a, String b) {
+    final x = a.split('.'), y = b.split('.');
+    for (var i = 0; i < (x.length > y.length ? x.length : y.length); i++) {
+      if (i >= x.length) return -1; // fewer identifiers = lower precedence
+      if (i >= y.length) return 1;
+      final xi = int.tryParse(x[i]), yi = int.tryParse(y[i]);
+      if (xi != null && yi != null) {
+        if (xi != yi) return xi - yi;
+      } else {
+        final c = x[i].compareTo(y[i]); // numeric ranks below alphanumeric
+        if (c != 0) return xi != null ? -1 : (yi != null ? 1 : c);
+      }
     }
     return 0;
   }
