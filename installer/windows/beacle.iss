@@ -100,6 +100,22 @@ Filename: "{sys}\taskkill.exe"; Parameters: "/IM beacle.exe /F"; Flags: runhidde
 Filename: "{sys}\taskkill.exe"; Parameters: "/IM beacle-backend.exe /F"; Flags: runhidden skipifdoesntexist; RunOnceId: "KillBackend"
 
 [UninstallDelete]
+; The payload has to be listed by hand. Nothing here came through [Files] —
+; tar unpacks it in ssPostInstall — so Inno has no record of these and would
+; otherwise leave the whole application behind on uninstall, dirifempty below
+; quietly doing nothing because the directory is not empty. Verified: without
+; these lines the uninstaller exits 0 and beacle.exe, the backend and a 20 MB
+; flutter_windows.dll all stay on disk.
+;
+; Named individually rather than wiping {app}: the user picks that directory,
+; and someone who installed into a folder holding anything else should not
+; lose it to our uninstaller.
+Type: files; Name: "{app}\{#AppExeName}"
+Type: files; Name: "{app}\beacle-backend.exe"
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\beacle.config.json"
+Type: files; Name: "{app}\native_assets.json"
+
 ; Everything the app writes next to itself during updates.
 Type: filesandordirs; Name: "{app}\versions"
 Type: files; Name: "{app}\apply-update.bat"
