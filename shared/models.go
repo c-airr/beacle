@@ -44,10 +44,17 @@ type MetricSample struct {
 	Load1  float64   `json:"load1"`
 }
 
-// A stretch with no samples is how an outage is recorded: the agent stops
-// reporting, so nothing is written. The panel reads a gap wider than a couple
-// of intervals as downtime rather than as missing data, which means no flag
-// has to be kept in step with reality.
+// A stretch with no samples is how an outage is recorded: nothing was written
+// because nothing was running. The panel reads a gap wider than a couple of
+// intervals as downtime rather than as missing data, which means no flag has to
+// be kept in step with reality.
+//
+// For that reading to be true, a gap must only ever mean the *server* was gone.
+// It used to also mean the panel was closed — samples are recorded by the
+// backend on the desktop, so shutting the laptop drew an outage across every
+// server that was in fact running fine. Agents now keep their own samples while
+// they cannot reach the panel and hand them over on reconnect (AgentWSBackfill),
+// so the gap once again means what the chart claims it means.
 
 type SystemMetrics struct {
 	Hostname   string  `json:"hostname"`
@@ -500,6 +507,7 @@ const (
 	AgentWSSystemdSnapshot AgentWSMessageType = "systemd_snapshot"
 	AgentWSPortsSnapshot   AgentWSMessageType = "ports_snapshot"
 	AgentWSProxySnapshot   AgentWSMessageType = "proxy_snapshot"
+	AgentWSBackfill        AgentWSMessageType = "backfill"
 	AgentWSAlert           AgentWSMessageType = "alert"
 	AgentWSCommand         AgentWSMessageType = "command"
 	AgentWSCommandResult   AgentWSMessageType = "command_result"
@@ -523,6 +531,11 @@ type AgentWSMessage struct {
 	RegisterAck *RegisterResponse   `json:"register_ack,omitempty"`
 	Command     *AgentCommand       `json:"command,omitempty"`
 	Result      *AgentCommandResult `json:"result,omitempty"`
+
+	// Backfill carries samples the agent recorded while the panel was away.
+	// Oldest first, and always a closed set: the agent keeps them on disk until
+	// this message is acknowledged.
+	Backfill []MetricSample `json:"backfill,omitempty"`
 
 	Metrics  *SystemMetrics `json:"metrics,omitempty"`
 	Docker   *DockerState   `json:"docker,omitempty"`

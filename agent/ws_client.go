@@ -54,10 +54,95 @@ type WSClient struct {
 	cfg      *Config
 	api      *APIServer
 	reporter *Reporter
+
+	// offline holds samples taken while the panel was unreachable. It belongs
+	// to the client rather than a session because its whole purpose is to
+	// outlive sessions.
+	offline *OfflineBuffer
+
+	// connected is true only between register_ack and the end of that session.
+	// The sampler reads it to decide whether the backend is already recording
+	// this minute or whether it has to be kept here.
+	connectedMu sync.RWMutex
+	connected   bool
 }
 
 func NewWSClient(cfg *Config, api *APIServer, reporter *Reporter) *WSClient {
-	return &WSClient{cfg: cfg, api: api, reporter: reporter}
+	return &WSClient{
+		cfg:      cfg,
+		api:      api,
+		reporter: reporter,
+		offline:  NewOfflineBuffer(cfg.StateDir()),
+	}
+}
+
+func (c *WSClient) setConnected(v bool) {
+	c.connectedMu.Lock()
+	c.connected = v
+	c.connectedMu.Unlock()
+}
+
+func (c *WSClient) isConnected() bool {
+	c.connectedMu.RLock()
+	defer c.connectedMu.RUnlock()
+	return c.connected
+}
+
+// sampleOffline records one sample per interval whenever the panel is not
+// listening. Deliberately outside the session: sessions end every time the
+// laptop sleeps, and that is exactly when this has to keep running.
+//
+// Sampling is skipped while connected — the backend is already recording from
+// the live snapshots, and writing here too would only produce duplicates for
+// it to discard.
+func (c *WSClient) sampleOffline(ctx context.Context) {
+	t := time.NewTicker(offlineSampleInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if c.isConnected() {
+				continue
+			}
+			m, err := c.reporter.Metrics()
+			if err != nil {
+				continue
+			}
+			if err := c.offline.Append(shared.SampleFrom(m)); err != nil {
+				// A full or read-only disk is worth one line in the log, not a
+				// line a minute for as long as the panel stays shut.
+				log.Printf("offline sample not stored: %v", err)
+			}
+		}
+	}
+}
+
+// flushOffline hands over everything recorded while the panel was away, in
+// chunks, dropping each only once it has gone out. A drop part-way leaves the
+// rest on disk for the next session rather than losing it.
+func (c *WSClient) flushOffline(sync *SyncEngine) {
+	samples, err := c.offline.Load()
+	if err != nil || len(samples) == 0 {
+		return
+	}
+	sent := 0
+	for _, chunk := range chunkSamples(samples, offlineChunkSize) {
+		if err := sync.sendBackfill(chunk); err != nil {
+			break
+		}
+		// Only drop what actually left. The backend keeps one sample a minute
+		// and ignores the rest, so re-sending a chunk after a mid-flush drop is
+		// harmless; losing one is not.
+		if err := c.offline.DropUpTo(chunk[len(chunk)-1].At); err != nil {
+			break
+		}
+		sent += len(chunk)
+	}
+	if sent > 0 {
+		log.Printf("handed over %d samples recorded while the panel was away", sent)
+	}
 }
 
 func agentWSURL(backend string) (string, error) {
@@ -82,6 +167,12 @@ func (c *WSClient) Run() {
 	backoff := reconnectMin
 	var lastErr string
 	var repeats int
+
+	// Runs for the life of the agent, not the life of a session: the samples it
+	// takes are precisely the ones no session was there to send.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.sampleOffline(ctx)
 
 	for {
 		registered, err := c.session()
@@ -191,6 +282,11 @@ func (c *WSClient) session() (registered bool, err error) {
 	registered = true
 	log.Printf("agent ws connected to %s (vps %s, mode %s)", wsURL, c.cfg.VPSID, powerMode)
 
+	// From here the backend is recording again, so the sampler stands down
+	// until this session ends.
+	c.setConnected(true)
+	defer c.setConnected(false)
+
 	writeCh := make(chan []byte, 64)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -211,6 +307,11 @@ func (c *WSClient) session() (registered bool, err error) {
 	go c.writePump(ctx, writeCh, writeText, writeControl, errCh)
 	go func() { errCh <- c.readLoop(ctx, conn, writeCh, sync) }()
 	go sync.Run(ctx)
+
+	// Hand over the gap before anything else fills the pipe, so a panel opened
+	// after a night away draws the whole night rather than filling in from the
+	// moment it happened to start.
+	go c.flushOffline(sync)
 
 	err = <-errCh
 	cancel()

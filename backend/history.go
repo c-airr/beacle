@@ -130,6 +130,70 @@ func (h *History) Record(vpsID string, s shared.MetricSample) bool {
 	return true
 }
 
+// Backfill inserts samples an agent recorded while this backend was not
+// running. Returns how many were actually new.
+//
+// Different from Record in two ways that matter. These arrive out of order
+// relative to what is already held, so the series is re-sorted rather than
+// appended to; and they are filtered against what is already there, because an
+// agent re-sends a chunk it could not confirm was delivered — losing samples is
+// worse than sending them twice, so the duplicates land here and are dropped.
+func (h *History) Backfill(vpsID string, samples []shared.MetricSample) int {
+	if len(samples) == 0 {
+		return 0
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	cutoff := time.Now().Add(-historyRetain)
+	existing := h.samples[vpsID]
+
+	// One sample per minute, matching Record. Minute keys are what make a
+	// re-sent chunk cheap to reject.
+	occupied := make(map[int64]struct{}, len(existing))
+	for _, s := range existing {
+		occupied[s.At.Unix()/60] = struct{}{}
+	}
+
+	added := 0
+	for _, s := range samples {
+		if s.At.IsZero() || s.At.Before(cutoff) {
+			continue
+		}
+		// A clock that is wrong forward would otherwise park samples in the
+		// future, where they sit above every real one and stretch the chart.
+		if s.At.After(time.Now().Add(time.Hour)) {
+			continue
+		}
+		key := s.At.Unix() / 60
+		if _, taken := occupied[key]; taken {
+			continue
+		}
+		occupied[key] = struct{}{}
+		existing = append(existing, s)
+		added++
+	}
+	if added == 0 {
+		return 0
+	}
+
+	sort.Slice(existing, func(i, j int) bool { return existing[i].At.Before(existing[j].At) })
+	if len(existing) > maxSamplesPerVPS {
+		existing = existing[len(existing)-maxSamplesPerVPS:]
+	}
+	h.samples[vpsID] = existing
+	if last := existing[len(existing)-1].At; last.After(h.lastAt[vpsID]) {
+		h.lastAt[vpsID] = last
+	}
+
+	// The file is rewritten rather than appended to: these samples belong in
+	// the middle of it, and load() sorts on read but the file should still
+	// read in order for anyone looking at it directly.
+	h.rewriteLocked(vpsID, existing)
+	return added
+}
+
 // Query returns the samples inside a window, oldest first. A zero from or to
 // means "no bound on that side".
 func (h *History) Query(vpsID string, from, to time.Time) []shared.MetricSample {
@@ -223,39 +287,9 @@ func (h *History) RunTrim() {
 	}
 }
 
-// SampleFrom turns a live snapshot into the handful of numbers worth keeping.
+// SampleFrom turns a live snapshot into a history sample. Thin wrapper kept so
+// existing callers read the same; the logic is shared with the agent, which
+// records the same samples while the panel is away.
 func SampleFrom(snap *shared.VPSSnapshot) shared.MetricSample {
-	m := snap.Metrics
-
-	// The busiest disk is the one worth charting: a full root partition is a
-	// problem whatever the others are doing.
-	worstDisk := 0.0
-	for _, d := range m.Disks {
-		if d.UsedPercent > worstDisk {
-			worstDisk = d.UsedPercent
-		}
-	}
-
-	// Interfaces are summed rather than picked from, because which one carries
-	// the traffic differs per host and a chart of the wrong one is worse than
-	// no chart.
-	var rx, tx uint64
-	for _, n := range m.Network {
-		rx += n.RxPerSec
-		tx += n.TxPerSec
-	}
-
-	at := m.CollectedAt
-	if at.IsZero() {
-		at = time.Now()
-	}
-	return shared.MetricSample{
-		At:     at.UTC(),
-		CPU:    m.CPUPercent,
-		Mem:    m.MemPercent,
-		Disk:   worstDisk,
-		RxPerS: rx,
-		TxPerS: tx,
-		Load1:  m.Load1,
-	}
+	return shared.SampleFrom(snap.Metrics)
 }

@@ -26,6 +26,9 @@ type AlertEngine struct {
 	prevServices   map[string]map[string]string               // vps -> unit -> active_state
 	// reach caches the Tailscale probe per VPS; see hostReachable.
 	reach map[string]reachProbe
+
+	// startedAt gates the first sweep. See WatchOffline.
+	startedAt time.Time
 }
 
 type reachProbe struct {
@@ -42,6 +45,7 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		prevContainers: map[string]map[string]shared.ContainerInfo{},
 		prevServices:   map[string]map[string]string{},
 		reach:          map[string]reachProbe{},
+		startedAt:      time.Now(),
 	}
 	// Alerts outlive the process that raised them. Without adopting the open
 	// ones, a restarted backend would neither resolve them when the condition
@@ -223,12 +227,29 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 	}
 }
 
+// agentReconnectGrace is how long after startup the offline sweep stays quiet,
+// giving agents time to reconnect before their staleness is believed. Agents
+// retry every second or two (reconnectMin..reconnectMax in the agent), so this
+// is several times what a healthy reconnect needs while still being far shorter
+// than the window before a genuine outage would be reported.
+const agentReconnectGrace = 20 * time.Second
+
 // WatchOffline keeps the VPS status tied to the agent WebSocket: a live socket
 // means online even if a metrics tick was delayed (eco/sleep mode, slow docker
 // collect), and a missing socket means offline. Only the *alert* waits out the
 // grace window, so a reconnect after a network blip never raises one.
 func (e *AlertEngine) WatchOffline() {
 	for range time.Tick(3 * time.Second) {
+		// Every LastSeen is stale at startup — it was last written whenever the
+		// panel was last open, which for an overnight shutdown is hours ago.
+		// Without this the first sweep reads the entire fleet as long dead and
+		// fires a critical alert per server, seconds before their agents finish
+		// reconnecting: the wall of red you come back to in the morning, for an
+		// outage that never happened. Agents reconnect within a second or two;
+		// this waits long enough to let them.
+		if time.Since(e.startedAt) < agentReconnectGrace {
+			continue
+		}
 		for _, v := range e.store.ListVPS() {
 			if v.Status == shared.VPSPending {
 				continue

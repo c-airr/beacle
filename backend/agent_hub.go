@@ -239,6 +239,22 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 			snap.Metrics = *msg.Metrics
 		})
 
+	case shared.AgentWSBackfill:
+		if !sess.registered.Load() || sess.entry == nil || len(msg.Backfill) == 0 {
+			return
+		}
+		// History only. Deliberately not routed through mergeSnapshot: these
+		// samples are from last night, and writing them into the live snapshot
+		// would show a server's four-in-the-morning CPU as its current state
+		// and fire alerts for a load that finished hours ago.
+		n := h.history.Backfill(sess.entry.VPS.ID, msg.Backfill)
+		if n > 0 {
+			log.Printf("recorded %d backfilled samples from %s", n, sess.entry.VPS.Name)
+			// The chart reads its data over HTTP, but the panel only refetches
+			// when something tells it to.
+			h.hub.Broadcast(shared.WSVPSUpdate, h.store.GetSnapshot(sess.entry.VPS.ID))
+		}
+
 	case shared.AgentWSDockerSnapshot:
 		if !sess.registered.Load() || sess.entry == nil || msg.Docker == nil {
 			return

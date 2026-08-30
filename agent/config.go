@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
-const AgentVersion = "0.1.6"
+const AgentVersion = "0.1.7"
 
 // Config is written by the installer with just the backend URL. VPSID and
 // Token start empty - the agent auto-registers on first start and persists
@@ -46,6 +47,16 @@ func LoadConfig(path string) (*Config, error) {
 		c.CaddyDir = "/etc/caddy/beacle.d"
 	}
 	return &c, nil
+}
+
+// StateDir is where the agent keeps files of its own — currently the offline
+// sample buffer. Alongside the config, which is somewhere the agent already
+// has permission to write and which the installer leaves alone on update.
+func (c *Config) StateDir() string {
+	if c.path == "" {
+		return "."
+	}
+	return filepath.Dir(c.path)
 }
 
 // Save persists the config (used once, to store credentials received during

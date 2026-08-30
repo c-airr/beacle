@@ -321,6 +321,19 @@ func (e *SyncEngine) pushProxy() error {
 	})
 }
 
+// sendBackfill hands the backend samples recorded while it was away. Separate
+// from pushMetrics because it carries history, not the current state: it must
+// not disturb the change-detection fingerprints that decide whether a live
+// snapshot is worth sending.
+func (e *SyncEngine) sendBackfill(samples []shared.MetricSample) error {
+	if len(samples) == 0 {
+		return nil
+	}
+	return e.send(shared.AgentWSBackfill, func(m *shared.AgentWSMessage) {
+		m.Backfill = samples
+	})
+}
+
 func (e *SyncEngine) send(typ shared.AgentWSMessageType, fill func(*shared.AgentWSMessage)) error {
 	msg := shared.AgentWSMessage{
 		Type:     typ,
