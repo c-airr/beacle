@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"beacle/shared"
@@ -113,13 +112,8 @@ func fetchGitHubAsset(goarch string) (stamp, downloadURL string, err error) {
 // 	return stamp, nil
 // }
 
-// Update downloads the binary and restarts. Config is never touched.
-//
-// Prefer the panel backend's /download/agent redirect: that URL is owned by
-// whatever backend the agent is talking to, so a build that was wrongly
-// compiled against a missing release tag (the 0.5-beta 404) can still recover
-// as long as the backend points at agentbeta. Direct GitHub is the fallback
-// when the backend is unreachable.
+// Update downloads the binary from GitHub and restarts. Config is never
+// touched.
 func (u *Updater) Update(tag string) (string, error) {
 	url := u.downloadURL(tag)
 	bin, err := u.binPath()
@@ -129,8 +123,8 @@ func (u *Updater) Update(tag string) (string, error) {
 
 	client := &http.Client{
 		Timeout: 3 * time.Minute,
-		// Follow the backend's 302 to GitHub; without this we would save the
-		// HTML redirect body as the "binary".
+		// GitHub serves the asset from a redirect; without following it we
+		// would save the redirect body as the "binary".
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
@@ -144,24 +138,7 @@ func (u *Updater) Update(tag string) (string, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		// Last resort: baked-in GitHub URL (agentbeta), for builds whose
-		// compiled tag pointed at a release that never existed.
-		fallback := shared.AgentGitHubBinaryURL(runtime.GOARCH)
-		if tag != "" {
-			fallback = shared.AgentGitHubBinaryURLTag(tag, runtime.GOARCH)
-		}
-		if fallback == url {
-			return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
-		}
-		resp, err = client.Get(fallback)
-		if err != nil {
-			return "", fmt.Errorf("download: %w", err)
-		}
-		url = fallback
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
-		}
+		return "", fmt.Errorf("download failed: HTTP %d from %s", resp.StatusCode, url)
 	}
 	defer resp.Body.Close()
 
@@ -193,18 +170,18 @@ func (u *Updater) Update(tag string) (string, error) {
 		float64(n)/(1024*1024), url), nil
 }
 
-// downloadURL is where Update pulls the next binary from. Backend first so the
-// release tag lives in one place (shared.AgentReleaseTag on the panel), not
-// frozen inside every agent build. A non-empty tag pins a specific release
-// chosen in the Settings version picker.
+// downloadURL is where Update pulls the next binary from: GitHub, always.
+//
+// It used to go through the panel backend's /download/agent redirect, on the
+// reasoning that the release tag then lived in one place instead of being
+// frozen into every agent build. In practice that made every update depend on
+// the desktop being reachable over the tailnet at the moment the button was
+// pressed, and a panel that had moved, slept or changed address turned a
+// working GitHub release into an update that simply would not run. GitHub is
+// reachable from the VPS whether or not the laptop is, so it is the only
+// source now. A non-empty tag pins a specific release chosen in the Settings
+// version picker.
 func (u *Updater) downloadURL(tag string) string {
-	if u.cfg != nil && u.cfg.BackendURL != "" {
-		url := strings.TrimRight(u.cfg.BackendURL, "/") + "/download/agent?arch=" + runtime.GOARCH
-		if tag != "" {
-			url += "&tag=" + tag
-		}
-		return url
-	}
 	if tag != "" {
 		return shared.AgentGitHubBinaryURLTag(tag, runtime.GOARCH)
 	}
