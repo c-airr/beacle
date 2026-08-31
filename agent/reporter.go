@@ -68,6 +68,7 @@ func (r *Reporter) RegisterRequest() shared.RegisterRequest {
 		PublicIP:      fetchPublicIP(),
 		AgentVersion:  AgentVersion,
 		AgentDigest:   selfDigest(),
+		Arch:          runtime.GOARCH,
 		AgentPort:     0,
 		OS:            runtime.GOOS + "/" + runtime.GOARCH,
 	}

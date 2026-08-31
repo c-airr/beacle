@@ -33,6 +33,9 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 		// alone would be worse, since a stale digest reads as a definite
 		// answer about bytes that are no longer running.
 		e.VPS.AgentDigest = req.AgentDigest
+		if req.Arch != "" {
+			e.VPS.Arch = req.Arch
+		}
 		if req.AgentPort > 0 {
 			e.VPS.AgentPort = req.AgentPort
 		}

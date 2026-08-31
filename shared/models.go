@@ -465,8 +465,13 @@ type RegisterRequest struct {
 	// contents, which is how agents sat two months stale while the panel
 	// reported them current.
 	AgentDigest string `json:"agent_digest,omitempty"`
-	AgentPort   int    `json:"agent_port"`
-	OS          string `json:"os"`
+	// Arch is the agent's GOARCH. The panel needs it to compare a server
+	// against the right release asset: an arm64 box measured against the
+	// amd64 asset's digest differs forever and asks to update after every
+	// update.
+	Arch      string `json:"arch,omitempty"`
+	AgentPort int    `json:"agent_port"`
+	OS        string `json:"os"`
 }
 
 type RegisterResponse struct {
@@ -593,9 +598,12 @@ type VPS struct {
 	AgentVer      string    `json:"agent_version"`
 	// AgentDigest identifies the exact binary a server is running; see
 	// RegisterRequest.
-	AgentDigest string    `json:"agent_digest,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	LastSeen    time.Time `json:"last_seen"`
+	AgentDigest string `json:"agent_digest,omitempty"`
+	// Arch is the agent's GOARCH, so the panel compares against the release
+	// asset built for this machine rather than whichever one it read first.
+	Arch      string    `json:"arch,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	LastSeen  time.Time `json:"last_seen"`
 }
 
 // CreateVPSRequest adds a server from the Tailscale device list (onboarding).

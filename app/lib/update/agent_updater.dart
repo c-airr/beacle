@@ -16,18 +16,30 @@ class AgentReleaseInfo {
   final DateTime? publishedAt;
   final bool prerelease;
 
-  /// sha256 of the amd64 agent asset, as GitHub reports it. This is what makes
-  /// "would updating change anything" answerable: version numbers say nothing
-  /// about a rebuild republished under the same tag.
-  final String? digest;
+  /// sha256 of each agent asset, keyed by architecture ("amd64", "arm64"), as
+  /// GitHub reports it. This is what makes "would updating change anything"
+  /// answerable: version numbers say nothing about a rebuild republished under
+  /// the same tag.
+  ///
+  /// Keyed by architecture because a fleet is not always one: comparing an
+  /// arm64 server against the amd64 asset compares two files that are supposed
+  /// to differ, so that server asked to update again the moment it finished
+  /// updating.
+  final Map<String, String> digests;
 
   AgentReleaseInfo({
     required this.tag,
     this.version,
     this.publishedAt,
     this.prerelease = false,
-    this.digest,
+    this.digests = const {},
   });
+
+  /// The digest to measure a server against. Falls back to amd64 for agents
+  /// too old to report their architecture, which is what the fleet was
+  /// implicitly assumed to be before.
+  String? digestFor(String arch) =>
+      digests[arch.isEmpty ? 'amd64' : arch] ?? digests['amd64'];
 }
 
 /// Agent release lookups against GitHub.
@@ -55,21 +67,28 @@ class AgentUpdater {
       version: await _versionFromAssets(rel) ?? _versionFromTag(tag),
       publishedAt: DateTime.tryParse(rel['published_at'] as String? ?? ''),
       prerelease: rel['prerelease'] == true,
-      digest: _digestFromAssets(rel),
+      digests: _digestsFromAssets(rel),
     );
   }
 
-  /// The amd64 asset's digest. Only amd64 is read: every VPS in a fleet is
-  /// almost always the same architecture, and a wrong-architecture comparison
-  /// would report a permanent false "update available" on the odd arm box —
-  /// so a missing match returns null and the check falls back to versions.
-  static String? _digestFromAssets(Map<String, dynamic> rel) {
+  /// Every agent asset's digest, keyed by the architecture in its name.
+  ///
+  /// This used to read the amd64 asset alone, on the reasoning that a fleet is
+  /// almost always one architecture. It is not: one arm64 box among four amd64
+  /// ones was measured against the wrong file and so differed permanently,
+  /// showing an Update button that stayed after every update it was given.
+  static Map<String, String> _digestsFromAssets(Map<String, dynamic> rel) {
+    const prefix = 'beacle-agent-';
+    final out = <String, String>{};
     for (final a in ((rel['assets'] as List?) ?? []).cast<Map<String, dynamic>>()) {
-      if ((a['name'] as String? ?? '') != 'beacle-agent-amd64') continue;
+      final name = (a['name'] as String? ?? '');
+      if (!name.startsWith(prefix)) continue;
+      final arch = name.substring(prefix.length);
+      if (arch.isEmpty || arch.contains('.')) continue; // not a bare binary
       final d = (a['digest'] as String? ?? '').trim();
-      return d.isEmpty ? null : d;
+      if (d.isNotEmpty) out[arch] = d;
     }
-    return null;
+    return out;
   }
 
   /// Strips a leading v so "v0.9" and "0.9" compare as the same version.

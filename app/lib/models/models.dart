@@ -467,6 +467,10 @@ class Vps {
   /// to answer whether an update would actually change anything — a version
   /// number cannot, since a rebuild under the same tag keeps its number.
   final String agentDigest;
+
+  /// The agent's GOARCH ("amd64", "arm64"). Empty for agents too old to report
+  /// it. Decides which release asset this server is compared against.
+  final String arch;
   final double latitude, longitude;
   final int weight, agentPort;
   final DateTime createdAt, lastSeen;
@@ -480,6 +484,7 @@ class Vps {
         status = _s(j['status']),
         agentVersion = _s(j['agent_version']),
         agentDigest = _s(j['agent_digest']),
+        arch = _s(j['arch']),
         latitude = _d(j['latitude']),
         longitude = _d(j['longitude']),
         weight = _i(j['weight']),

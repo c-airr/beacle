@@ -519,7 +519,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     // numbers cannot — a rebuild republished under the same tag keeps its
     // number, which is how a fleet sat two months stale while the panel
     // reported it current.
-    final remote = agentLatest!.digest;
+    // Measured against the asset built for this machine — an arm64 server
+    // compared with the amd64 binary differs by definition, and asked to
+    // update again every time it had just updated.
+    final remote = agentLatest!.digestFor(v.arch);
     if (remote != null && v.agentDigest.isNotEmpty) {
       return remote != v.agentDigest;
     }
@@ -570,7 +573,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         }
         // Worth saying out loud which question was answered: a digest match is
         // certainty about the bytes, a version match is a claim about a label.
-        if (info.digest == null) {
+        if (info.digests.isEmpty) {
           agentUpdateStatus = '${agentUpdateStatus!} Compared by version — the '
               'release carries no asset digest.';
         }
