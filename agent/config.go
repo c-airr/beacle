@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-const AgentVersion = "0.1.8"
+const AgentVersion = "1.0.0"
 
 // Config is written by the installer with just the backend URL. VPSID and
 // Token start empty - the agent auto-registers on first start and persists

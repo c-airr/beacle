@@ -87,11 +87,13 @@ jobs:
           $env:GOARCH = 'arm64'
           go build -o ../dist/agent/beacle-agent-arm64 .
           Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
-          # VERSION carries the AGENT's own version, not the release tag. The
-          # two are separate lines: the desktop app is 1.0.0 while the agent is
-          # 0.1.x, and the panel compares this file against what each agent
-          # reports. Writing the release tag here made every agent look
-          # permanently out of date against a "v1.0.0 agent" that never existed.
+          # VERSION carries what the agent binary actually reports, read from
+          # its source rather than assumed from the tag. Agent and app share a
+          # version number now, so the two normally agree — but the panel
+          # compares this file against what each agent reports over the wire,
+          # and a mismatch there is invisible until every agent looks
+          # permanently out of date. Reading the built-in constant keeps the
+          # file honest even if the two lines ever diverge again.
           $agentVer = (Select-String -Path config.go -Pattern 'AgentVersion = "([^"]+)"').Matches[0].Groups[1].Value
           if (-not $agentVer) { throw "could not read AgentVersion from agent/config.go" }
           Write-Host "agent version: $agentVer"
