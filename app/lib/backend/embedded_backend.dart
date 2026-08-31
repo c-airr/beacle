@@ -278,7 +278,15 @@ class EmbeddedBackend {
         final name = f.uri.pathSegments.last;
         if (!name.contains('beacle-agent') && name != 'VERSION') continue;
         final out = File('$dest${Platform.pathSeparator}$name');
-        if (!out.existsSync()) f.copySync(out.path);
+        // Copy when the source is newer, not merely when the destination is
+        // missing. Skipping every file that already existed meant a machine
+        // kept serving whatever agent it first saw: an install from August was
+        // still handing out that build weeks later, and the only way to get a
+        // newer agent onto a VPS was to delete these by hand.
+        if (!out.existsSync() ||
+            f.lastModifiedSync().isAfter(out.lastModifiedSync())) {
+          f.copySync(out.path);
+        }
       }
     }
   }
