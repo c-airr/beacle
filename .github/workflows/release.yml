@@ -87,9 +87,15 @@ jobs:
           $env:GOARCH = 'arm64'
           go build -o ../dist/agent/beacle-agent-arm64 .
           Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
-          # AgentVersion is a Go const (not overridable via -ldflags); the
-          # release asset VERSION is the source of truth for "what shipped".
-          Set-Content ../dist/agent/VERSION "${{ needs.meta.outputs.version }}"
+          # VERSION carries the AGENT's own version, not the release tag. The
+          # two are separate lines: the desktop app is 1.0.0 while the agent is
+          # 0.1.x, and the panel compares this file against what each agent
+          # reports. Writing the release tag here made every agent look
+          # permanently out of date against a "v1.0.0 agent" that never existed.
+          $agentVer = (Select-String -Path config.go -Pattern 'AgentVersion = "([^"]+)"').Matches[0].Groups[1].Value
+          if (-not $agentVer) { throw "could not read AgentVersion from agent/config.go" }
+          Write-Host "agent version: $agentVer"
+          Set-Content ../dist/agent/VERSION $agentVer
 
       - name: Build Flutter Windows app
         working-directory: app
