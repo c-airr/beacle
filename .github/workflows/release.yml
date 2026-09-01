@@ -180,8 +180,51 @@ jobs:
             installer/linux/install.sh
             installer/linux/uninstall.sh
 
+  # macOS can only be built on macOS — Apple's SDK and toolchain do not exist
+  # elsewhere — so this job is the only way the target gets compiled at all.
+  # Unsigned and unnotarised: Gatekeeper will need a right-click → Open on
+  # first launch, which beats not shipping a build.
+  macos:
+    needs: meta
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Build backend
+        working-directory: backend
+        run: go build -o beacle-backend .
+
+      - name: Build Flutter macOS app
+        working-directory: app
+        run: flutter build macos --release
+
+      - name: Assemble macOS archive
+        run: |
+          set -euo pipefail
+          appdir="app/build/macos/Build/Products/Release/Beacle.app"
+          # The backend rides inside the bundle, next to the executable, the
+          # same way it sits beside beacle.exe on Windows.
+          cp backend/beacle-backend "$appdir/Contents/MacOS/"
+          rm -rf "$appdir/Contents/Resources/data/bin"
+          ditto -c -k --sequesterRsrc --keepParent "$appdir" beacle-macos.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          if-no-files-found: error
+          path: beacle-macos.zip
+
   publish:
-    needs: [meta, windows, linux]
+    needs: [meta, windows, linux, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -224,6 +267,7 @@ jobs:
             out/beacle-windows-x64.zip
             out/beacle-setup-*.exe
             out/beacle-linux-x64.tar.gz
+            out/beacle-macos.zip
             out/beacle-agent-amd64
             out/beacle-agent-arm64
             out/install_agent.sh
@@ -264,6 +308,7 @@ jobs:
             | `beacle-setup-*.exe` | Windows installer (downloads/updates from Latest) |
             | `beacle-windows-x64.zip` | Portable Windows app + embedded backend |
             | `beacle-linux-x64.tar.gz` | Linux desktop bundle |
+            | `beacle-macos.zip` | macOS app bundle (unsigned — right-click → Open on first launch) |
             | `install_agent.sh` | VPS agent installer (amd64/arm64 autodetection) |
             | `beacle-agent-amd64` / `beacle-agent-arm64` | Agent binaries |
             | `SHA256SUMS.txt` | Digests for every asset above |

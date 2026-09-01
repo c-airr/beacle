@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../user_config.dart';
 
-const appVersion = '1.0.0';
+const appVersion = '1.1.0';
 // Same repo as config.dart's agent release — kept here too so the updater
 // does not need a cross-file import just to read a constant.
 const githubRepo = 'c-airr/beacle';
@@ -22,7 +22,16 @@ class UpdateInfo {
 /// `versions/<ver>`, write a swap script that runs on next start. The current
 /// version is kept in `versions/previous` for rollback. User settings are
 /// stored in APPDATA and are never touched by updates.
+///
+/// Windows only, and honestly so. The swap is a .bat driving robocopy through
+/// cmd, and a macOS app is a signed bundle that cannot be replaced by copying
+/// files over it anyway. [selfUpdateSupported] gates the buttons rather than
+/// letting them fail at the point of no return, with the current install
+/// already half-replaced.
 class AppUpdater {
+  /// Whether this platform can replace its own installation.
+  static bool get selfUpdateSupported => Platform.isWindows;
+
   static String get _installDir => File(Platform.resolvedExecutable).parent.path;
   static Directory get _versionsDir => Directory('$_installDir\\versions');
 
@@ -35,7 +44,13 @@ class AppUpdater {
             headers: {'Accept': 'application/vnd.github+json'})
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) return [];
-    final plat = Platform.isWindows ? 'windows' : 'linux';
+    // Anything not Windows or macOS is treated as Linux, which is what the
+    // desktop builds cover.
+    final plat = Platform.isWindows
+        ? 'windows'
+        : Platform.isMacOS
+            ? 'macos'
+            : 'linux';
     final out = <UpdateInfo>[];
     for (final r in (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>()) {
       if (r['draft'] == true || r['prerelease'] == true) continue;

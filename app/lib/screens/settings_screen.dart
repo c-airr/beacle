@@ -313,9 +313,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Current version: $appVersion', style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 4),
-            const Text(
-              'Updates are fetched from GitHub Releases. Your settings are never overwritten.',
-              style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+            Text(
+              AppUpdater.selfUpdateSupported
+                  ? 'Updates are fetched from GitHub Releases. Your settings are never overwritten.'
+                  : 'Updates are published on GitHub Releases. Installing them in place is '
+                      'Windows-only for now — download the new build and replace this one.',
+              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
             const SizedBox(height: 14),
             // The forward flow is Check → Update → Apply. Check only looks at
@@ -377,7 +380,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       ],
                     ),
                   ),
-                if (available != null)
+                // Offered only where the in-place swap actually works. A
+                // button that stages an update this platform cannot apply
+                // fails at the worst possible moment.
+                if (available != null && AppUpdater.selfUpdateSupported)
                   SmallButton('Update', icon: Icons.system_update, color: BeacleColors.ok, onPressed: downloading ? null : () async {
                     setState(() {
                       downloading = true;
