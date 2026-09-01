@@ -38,6 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   String? agentUpdateStatus;
   final Set<String> agentUpdating = {};
   bool agentPickerBusy = false;
+  bool agentUpdatingAll = false;
 
   late final TabController _tabs = TabController(length: 3, vsync: this);
   bool? autostartOn;
@@ -449,6 +450,20 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 SmallButton('Check for updates', icon: Icons.search,
                     onPressed: agentChecking ? null : () => _checkAgentUpdates(state)),
                 if (agentLatest != null) _latestAgentChip(agentLatest!),
+                // Only once a check has proved there is something to install,
+                // and only while there is more than one server to save the
+                // trouble on — with one, its own button is right there.
+                if (_agentsNeedingUpdate(state).length > 1)
+                  SmallButton(
+                    agentUpdatingAll
+                        ? 'Updating all…'
+                        : 'Update all (${_agentsNeedingUpdate(state).length})',
+                    icon: Icons.system_update_alt,
+                    color: BeacleColors.ok,
+                    onPressed: agentUpdatingAll || agentChecking
+                        ? null
+                        : () => _updateAllAgents(state),
+                  ),
                 if (agentChecking)
                   const SizedBox(
                     width: 14,
@@ -513,6 +528,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       child: Text(label, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
     );
   }
+
+  /// Servers with an update waiting. Drives both the Update all button's
+  /// presence and the list it acts on, so the two cannot disagree about what
+  /// "all" means.
+  List<Vps> _agentsNeedingUpdate(AppState state) =>
+      state.vpsList.where(_agentUpdateAvailable).toList();
 
   /// The Update button exists only after a successful check proved something
   /// newer is out there, and stays hidden for the release the user
@@ -589,6 +610,88 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     } finally {
       if (mounted) setState(() => agentChecking = false);
     }
+  }
+
+  /// Updates every agent the check found something newer for.
+  ///
+  /// One at a time, deliberately. Each agent restarts as it finishes, so
+  /// firing the whole fleet at once means losing sight of every server
+  /// simultaneously — and if the new build is bad, losing all of them rather
+  /// than the first one. Sequential also keeps the running commentary useful:
+  /// the toast names the server it is on.
+  Future<void> _updateAllAgents(AppState state) async {
+    final targets = _agentsNeedingUpdate(state);
+    if (targets.isEmpty) {
+      showToast(context, 'Every agent is already up to date.');
+      return;
+    }
+
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BeacleColors.surface,
+        title: const Text('Update all agents?', style: TextStyle(fontSize: 15)),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${targets.length} agent${targets.length == 1 ? '' : 's'} will be updated one '
+                'after another. Each restarts as it finishes, so servers drop off the panel '
+                'briefly and come back on their own.',
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+              ),
+              const SizedBox(height: 10),
+              for (final v in targets)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text('· ${v.name}  (v${v.agentVersion})',
+                      style: const TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Update all'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+
+    setState(() => agentUpdatingAll = true);
+    var done = 0, failed = 0;
+    try {
+      for (final v in targets) {
+        if (!mounted) return;
+        setState(() => agentUpdating.add(v.id));
+        try {
+          await state.api.agentUpdate(v.id);
+          done++;
+        } catch (_) {
+          // Carry on: one unreachable server should not stop the rest of the
+          // fleet from being updated. The count reports it at the end.
+          failed++;
+        } finally {
+          if (mounted) setState(() => agentUpdating.remove(v.id));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => agentUpdatingAll = false);
+    }
+    if (!mounted) return;
+    showToast(
+      context,
+      failed == 0
+          ? 'Updated $done agent${done == 1 ? '' : 's'} — they are restarting.'
+          : 'Updated $done, failed $failed. Check the servers that failed.',
+      error: failed > 0,
+    );
   }
 
   Future<void> _updateAgent(AppState state, Vps v, String? tag) async {
