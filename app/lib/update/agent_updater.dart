@@ -109,7 +109,11 @@ class AgentUpdater {
     if (resp.statusCode != 200) return [];
     final out = <AgentReleaseInfo>[];
     for (final r in (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>()) {
-      if (r['draft'] == true) continue;
+      // Pre-releases are working builds, not versions anyone should be
+      // installing on a server. They stayed listed here while the app's own
+      // updater already skipped them, so the agent version picker offered
+      // agentbeta and BETA alongside real releases.
+      if (r['draft'] == true || r['prerelease'] == true) continue;
       final assets = (r['assets'] as List?) ?? [];
       final hasAgent = assets.any((a) =>
           ((a as Map<String, dynamic>)['name'] as String? ?? '').startsWith('beacle-agent-'));

@@ -72,6 +72,11 @@ class MetricChart extends StatefulWidget {
   final DateTime? boundsFirst;
   final DateTime? boundsLast;
 
+  /// Stretches when the panel was closed. Drawn differently from an outage
+  /// because they say nothing about the server: nobody was recording, which
+  /// is not the same as nothing to record.
+  final List<PanelDowntime> panelDown;
+
   final double height;
 
   const MetricChart({
@@ -85,6 +90,7 @@ class MetricChart extends StatefulWidget {
     this.onWindowChanged,
     this.boundsFirst,
     this.boundsLast,
+    this.panelDown = const [],
     this.height = 150,
   });
 
@@ -205,6 +211,7 @@ class _MetricChartState extends State<MetricChart> {
                       to: widget.to,
                       maxY: widget.maxY,
                       hover: _hover,
+                      panelDown: widget.panelDown,
                     ),
                   ),
                 ),
@@ -223,6 +230,7 @@ class _ChartPainter extends CustomPainter {
   final DateTime from, to;
   final double? maxY;
   final Offset? hover;
+  final List<PanelDowntime> panelDown;
 
   _ChartPainter({
     required this.samples,
@@ -231,6 +239,7 @@ class _ChartPainter extends CustomPainter {
     required this.to,
     required this.maxY,
     required this.hover,
+    required this.panelDown,
   });
 
   static const _leftPad = 44.0;
@@ -303,18 +312,49 @@ class _ChartPainter extends CustomPainter {
 
   /// Shades stretches where nothing was recorded. This is the feature, not a
   /// rendering detail: a gap here is the server having been unreachable.
+  ///
+  /// Except when it is not. Samples are written by the panel, so a gap also
+  /// appears whenever the panel was closed — and those were drawn in the same
+  /// alarming red, which made every ordinary night look like an incident. A
+  /// stretch the panel was away for is drawn in grey instead: it says nothing
+  /// about the server, and claiming otherwise is worse than saying nothing.
   void _paintOutages(Canvas canvas, Rect plot, double Function(DateTime) xFor) {
-    if (samples.length < 2) return;
-    final fill = Paint()..color = BeacleColors.err.withValues(alpha: 0.07);
+    final outage = Paint()..color = BeacleColors.err.withValues(alpha: 0.07);
+    final unknown = Paint()..color = BeacleColors.textDim.withValues(alpha: 0.10);
 
-    for (var i = 1; i < samples.length; i++) {
-      final gap = samples[i].at.difference(samples[i - 1].at);
-      if (gap <= _gapAfter) continue;
-      final x1 = xFor(samples[i - 1].at).clamp(plot.left, plot.right);
-      final x2 = xFor(samples[i].at).clamp(plot.left, plot.right);
-      if (x2 - x1 < 1) continue;
-      canvas.drawRect(Rect.fromLTRB(x1, plot.top, x2, plot.bottom), fill);
+    void shade(DateTime a, DateTime b, Paint p) {
+      final x1 = xFor(a).clamp(plot.left, plot.right);
+      final x2 = xFor(b).clamp(plot.left, plot.right);
+      if (x2 - x1 < 1) return;
+      canvas.drawRect(Rect.fromLTRB(x1, plot.top, x2, plot.bottom), p);
     }
+
+    // Panel-closed stretches first, so an outage band drawn over one still
+    // reads as the stronger claim.
+    for (final d in panelDown) {
+      shade(d.from, d.to, unknown);
+    }
+
+    if (samples.length < 2) return;
+    for (var i = 1; i < samples.length; i++) {
+      final a = samples[i - 1].at, b = samples[i].at;
+      if (b.difference(a) <= _gapAfter) continue;
+      if (_coveredByPanelDowntime(a, b)) continue;
+      shade(a, b, outage);
+    }
+  }
+
+  /// Whether a gap is explained by the panel having been closed. Mostly it is
+  /// covered outright; a little slack absorbs the minute either side where a
+  /// sample landed just before shutdown or just after start.
+  bool _coveredByPanelDowntime(DateTime a, DateTime b) {
+    const slack = Duration(minutes: 2);
+    for (final d in panelDown) {
+      if (!d.from.subtract(slack).isAfter(a) && !d.to.add(slack).isBefore(b)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void _paintSeries(

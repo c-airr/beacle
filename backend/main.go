@@ -45,8 +45,10 @@ func main() {
 		baseURL:   base,
 		dataDir:   *dataDir,
 		startedAt: time.Now(),
+		uptime:    NewUptimeLog(*dataDir),
 	}
 
+	go srv.uptime.Run()
 	go store.FlushLoop()
 	go history.RunTrim()
 	go alerts.WatchOffline()

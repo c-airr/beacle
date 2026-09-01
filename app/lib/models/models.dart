@@ -258,11 +258,30 @@ class MetricSample {
 
 /// A server's history plus the span actually on disk, so the chart can bound
 /// scrolling to real data instead of offering two empty weeks.
+/// A stretch when the panel itself was not running.
+///
+/// History is recorded by the backend, so nothing is written while the app is
+/// closed. Those gaps look exactly like a server that went away, and were
+/// drawn as outages — a fortnight of ordinary nights read as a fleet that kept
+/// falling over.
+class PanelDowntime {
+  final DateTime from, to;
+  const PanelDowntime(this.from, this.to);
+}
+
 class MetricHistory {
   final List<MetricSample> samples;
   final DateTime? first, last;
 
-  MetricHistory({required this.samples, this.first, this.last});
+  /// Windows the panel was closed for, so a gap can say which it is.
+  final List<PanelDowntime> panelDown;
+
+  MetricHistory({
+    required this.samples,
+    this.first,
+    this.last,
+    this.panelDown = const [],
+  });
 
   factory MetricHistory.fromJson(Map<String, dynamic> j) {
     DateTime? bound(dynamic v) {
@@ -277,6 +296,12 @@ class MetricHistory {
           .toList(),
       first: bound(j['first']),
       last: bound(j['last']),
+      panelDown: ((j['panel_down'] as List?) ?? const [])
+          .map((e) => PanelDowntime(
+                _dt((e as Map<String, dynamic>)['from']),
+                _dt(e['to']),
+              ))
+          .toList(),
     );
   }
 

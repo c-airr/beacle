@@ -196,6 +196,30 @@ class _HistoryPanelState extends State<HistoryPanel> {
                     'press Paused to return to live.',
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
+          // Only worth explaining when there is a grey band on screen to
+          // explain. Saying it unconditionally would be noise on the ordinary
+          // case, which is a chart with no gaps at all.
+          if ((_history?.panelDown ?? const []).isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Row(children: [
+              Container(
+                width: 18,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: BeacleColors.textDim.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Grey means Beacle was closed — nothing was recorded, which says nothing '
+                  'about the server. Red is the server itself having gone away.',
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                ),
+              ),
+            ]),
+          ],
           const SizedBox(height: 14),
 
           if (_loading && samples.isEmpty)
@@ -227,6 +251,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
               maxY: 100,
               boundsFirst: h?.first,
               boundsLast: h?.last,
+              panelDown: h?.panelDown ?? const [],
               onWindowChanged: _onWindowChanged,
               series: [
                 ChartSeries(
@@ -246,6 +271,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
               maxY: 100,
               boundsFirst: h?.first,
               boundsLast: h?.last,
+              panelDown: h?.panelDown ?? const [],
               onWindowChanged: _onWindowChanged,
               series: [
                 ChartSeries(
@@ -264,6 +290,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
               to: _to,
               boundsFirst: h?.first,
               boundsLast: h?.last,
+              panelDown: h?.panelDown ?? const [],
               onWindowChanged: _onWindowChanged,
               series: [
                 ChartSeries(

@@ -301,9 +301,9 @@ class _ContainerCard extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(container.name,
+                          child: _CopyText(container.name,
                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis),
+                              ellipsis: true),
                         ),
                         if (container.composeProject.isNotEmpty) ...[
                           const SizedBox(width: 8),
@@ -584,12 +584,14 @@ class _ImagesBlock extends StatelessWidget {
                 child: Row(children: [
                   Expanded(
                       flex: 3,
-                      child: Text(im.tags.isEmpty ? '<none>' : im.tags.join(', '),
-                          style: const TextStyle(fontSize: 12))),
+                      child: _CopyText(im.tags.isEmpty ? '<none>' : im.tags.join(', '),
+                          style: const TextStyle(fontSize: 12), ellipsis: true)),
                   Expanded(
                       flex: 2,
-                      child: Text(_shortId(im.id),
-                          style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim))),
+                      // Shows the short id but copies the full one — the short
+                      // form is for reading, the long one is what a command
+                      // needs.
+                      child: _CopyId(full: im.id, shown: _shortId(im.id))),
                   SizedBox(
                       width: 100,
                       child: Text(fmtBytes(im.sizeBytes),
@@ -628,13 +630,13 @@ class _VolumesBlock extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Row(children: [
-                Expanded(flex: 2, child: Text(v.name, style: const TextStyle(fontSize: 12))),
+                Expanded(flex: 2, child: _CopyText(v.name, style: const TextStyle(fontSize: 12))),
                 SizedBox(width: 80, child: Text(v.driver, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                 Expanded(
                     flex: 3,
-                    child: Text(v.mountpoint,
+                    child: _CopyText(v.mountpoint,
                         style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
-                        overflow: TextOverflow.ellipsis)),
+                        ellipsis: true)),
               ]),
             ),
         ],
@@ -669,7 +671,7 @@ class _NetworksBlock extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Row(children: [
-                Expanded(flex: 2, child: Text(n.name, style: const TextStyle(fontSize: 12))),
+                Expanded(flex: 2, child: _CopyText(n.name, style: const TextStyle(fontSize: 12))),
                 SizedBox(width: 80, child: Text(n.driver, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                 SizedBox(width: 70, child: Text(n.scope, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                 SizedBox(
@@ -724,6 +726,71 @@ class _ComposeBlock extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// A table cell whose text can be copied.
+///
+/// Docker names are frequently unusable by hand — a compose-created volume is
+/// its project name, a hash and a suffix — and they are exactly what you need
+/// in the terminal command you are about to type. Selecting text inside a
+/// scrolling list fights the scroll, so a click copies the whole value
+/// instead.
+class _CopyText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final bool ellipsis;
+  const _CopyText(this.text, {this.style, this.ellipsis = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return Text(text, style: style);
+    return Tooltip(
+      message: 'Click to copy · $text',
+      waitDuration: const Duration(milliseconds: 600),
+      child: InkWell(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: text));
+          showToast(context, 'Copied $text');
+        },
+        borderRadius: BorderRadius.circular(3),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(
+            text,
+            style: style,
+            overflow: ellipsis ? TextOverflow.ellipsis : null,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows a shortened id, copies the full one.
+class _CopyId extends StatelessWidget {
+  final String full, shown;
+  const _CopyId({required this.full, required this.shown});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Click to copy full id · $full',
+      waitDuration: const Duration(milliseconds: 600),
+      child: InkWell(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: full));
+          showToast(context, 'Copied id');
+        },
+        borderRadius: BorderRadius.circular(3),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(shown,
+              style: const TextStyle(
+                  fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim)),
+        ),
+      ),
     );
   }
 }

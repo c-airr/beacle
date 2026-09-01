@@ -25,6 +25,7 @@ type Server struct {
 	baseURL   string // public URL of this backend, used in install commands
 	dataDir   string
 	startedAt time.Time
+	uptime    *UptimeLog
 
 	uiPowerMu   sync.RWMutex
 	uiPowerMode shared.PowerMode
@@ -324,10 +325,20 @@ func (s *Server) handleVPSHistory(w http.ResponseWriter, r *http.Request) {
 
 	samples := s.history.Query(id, from, to)
 	first, last := s.history.Span(id)
+	// Stretches where the panel itself was not running. Without these the
+	// chart cannot tell "this server was down" from "nobody was recording",
+	// and drew both as an outage.
+	var panelDown []map[string]any
+	if s.uptime != nil {
+		for _, d := range s.uptime.DownFrom(from, to) {
+			panelDown = append(panelDown, map[string]any{"from": d.From, "to": d.To})
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"samples": samples,
-		"first":   first,
-		"last":    last,
+		"samples":    samples,
+		"first":      first,
+		"last":       last,
+		"panel_down": panelDown,
 	})
 }
 
