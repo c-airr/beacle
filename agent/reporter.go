@@ -88,6 +88,15 @@ func (r *Reporter) Metrics() (shared.SystemMetrics, error) {
 	return res.metrics, res.err
 }
 
+// Processes is collected on demand and deliberately ungated: the callers that
+// want it are the process table, which asks because someone is looking, and
+// the spike recorder, which needs the list as it was at that minute. A cached
+// answer from thirty seconds ago would name the wrong process.
+func (r *Reporter) Processes() ([]shared.ProcessInfo, error) {
+	defer track("processes")()
+	return r.col.Processes()
+}
+
 func (r *Reporter) Ports() ([]shared.PortInfo, error) {
 	res := r.portsGate.do(func() portsResult {
 		defer track("ports")()

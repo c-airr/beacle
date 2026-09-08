@@ -269,6 +269,46 @@ class PanelDowntime {
   const PanelDowntime(this.from, this.to);
 }
 
+/// One process as it was during a spike.
+class SpikeProcess {
+  final int pid;
+  final String name, user, command;
+  final double cpu, mem;
+  SpikeProcess.fromJson(Map<String, dynamic> j)
+      : pid = _i(j['pid']),
+        name = _s(j['name']),
+        user = _s(j['user']),
+        command = _s(j['cmd']),
+        cpu = _d(j['cpu']),
+        mem = _d(j['mem']);
+}
+
+/// What a server was running when a metric jumped.
+///
+/// The chart says when something happened; this says what. A process list only
+/// describes the present, so by morning the cause of a four a.m. spike is gone
+/// unless something wrote it down at the time — which is what the agent does.
+class SpikeRecord {
+  final DateTime at;
+
+  /// "cpu" or "mem".
+  final String metric;
+
+  /// The reading, and what this machine normally sits at, so the panel can say
+  /// "30%, usually 8%" rather than a bare number that means nothing without it.
+  final double value, baseline;
+  final List<SpikeProcess> top;
+
+  SpikeRecord.fromJson(Map<String, dynamic> j)
+      : at = _dt(j['at']),
+        metric = _s(j['metric']),
+        value = _d(j['value']),
+        baseline = _d(j['baseline']),
+        top = ((j['top'] as List?) ?? const [])
+            .map((e) => SpikeProcess.fromJson(e as Map<String, dynamic>))
+            .toList();
+}
+
 class MetricHistory {
   final List<MetricSample> samples;
   final DateTime? first, last;
@@ -276,11 +316,16 @@ class MetricHistory {
   /// Windows the panel was closed for, so a gap can say which it is.
   final List<PanelDowntime> panelDown;
 
+  /// Moments a metric departed from this machine's baseline, with what was
+  /// running at the time.
+  final List<SpikeRecord> spikes;
+
   MetricHistory({
     required this.samples,
     this.first,
     this.last,
     this.panelDown = const [],
+    this.spikes = const [],
   });
 
   factory MetricHistory.fromJson(Map<String, dynamic> j) {
@@ -301,6 +346,9 @@ class MetricHistory {
                 _dt((e as Map<String, dynamic>)['from']),
                 _dt(e['to']),
               ))
+          .toList(),
+      spikes: ((j['spikes'] as List?) ?? const [])
+          .map((e) => SpikeRecord.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }

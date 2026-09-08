@@ -44,6 +44,41 @@ type MetricSample struct {
 	Load1  float64   `json:"load1"`
 }
 
+// SpikeRecord is what a machine was running when a metric jumped.
+//
+// The question this answers is asked the morning after: the CPU chart shows a
+// wall at four a.m. and there is no longer any way to find out what caused it,
+// because `ps` only ever tells you about now. So the agent keeps the answer at
+// the moment it can still see it.
+//
+// Recorded on departure from the machine's own baseline rather than a fixed
+// threshold. A box that idles at 5% and jumps to 30% has done something; a
+// build server at a steady 60% has not.
+type SpikeRecord struct {
+	At time.Time `json:"at"`
+	// Metric is "cpu", "mem" or "net".
+	Metric string `json:"metric"`
+	// Value at the moment of the spike, and the baseline it departed from, so
+	// the panel can say "30%, usually 8%" rather than a bare number.
+	Value    float64 `json:"value"`
+	Baseline float64 `json:"baseline"`
+	// Top processes by the metric that spiked, biggest first. A handful: this
+	// is evidence, not an inventory, and the file is kept for a fortnight.
+	Top []SpikeProcess `json:"top"`
+}
+
+// SpikeProcess is one process as it was during a spike. Deliberately smaller
+// than ProcessInfo — a stored record does not need the fields a live table
+// shows, and this one is written to disk on every incident.
+type SpikeProcess struct {
+	PID        int     `json:"pid"`
+	Name       string  `json:"name"`
+	User       string  `json:"user,omitempty"`
+	CPUPercent float64 `json:"cpu"`
+	MemPercent float64 `json:"mem"`
+	Command    string  `json:"cmd,omitempty"`
+}
+
 // A stretch with no samples is how an outage is recorded: nothing was written
 // because nothing was running. The panel reads a gap wider than a couple of
 // intervals as downtime rather than as missing data, which means no flag has to
@@ -513,6 +548,7 @@ const (
 	AgentWSPortsSnapshot   AgentWSMessageType = "ports_snapshot"
 	AgentWSProxySnapshot   AgentWSMessageType = "proxy_snapshot"
 	AgentWSBackfill        AgentWSMessageType = "backfill"
+	AgentWSSpikes          AgentWSMessageType = "spikes"
 	AgentWSAlert           AgentWSMessageType = "alert"
 	AgentWSCommand         AgentWSMessageType = "command"
 	AgentWSCommandResult   AgentWSMessageType = "command_result"
@@ -536,6 +572,11 @@ type AgentWSMessage struct {
 	RegisterAck *RegisterResponse   `json:"register_ack,omitempty"`
 	Command     *AgentCommand       `json:"command,omitempty"`
 	Result      *AgentCommandResult `json:"result,omitempty"`
+
+	// Spikes carries process snapshots taken when a metric departed from what
+	// the machine normally does. Delivered on reconnect and after the fact,
+	// never as live state.
+	Spikes []SpikeRecord `json:"spikes,omitempty"`
 
 	// Backfill carries samples the agent recorded while the panel was away.
 	// Oldest first, and always a closed set: the agent keeps them on disk until

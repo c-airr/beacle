@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import 'common.dart';
 import 'metric_chart.dart';
+import 'spike_dialog.dart';
 
 /// Recorded history for one server: CPU, memory and network over time.
 ///
@@ -129,6 +130,17 @@ class _HistoryPanelState extends State<HistoryPanel> {
     _debounce = Timer(const Duration(milliseconds: 250), _load);
   }
 
+  /// Spikes for one chart. Each chart marks only its own metric — a memory
+  /// spike on the CPU line would point at a moment the CPU was fine.
+  List<SpikeRecord> _spikesFor(String metric) =>
+      (_history?.spikes ?? const <SpikeRecord>[])
+          .where((s) => s.metric == metric)
+          .toList();
+
+  void _showSpike(SpikeRecord spike) {
+    showDialog(context: context, builder: (_) => SpikeDialog(spike: spike));
+  }
+
   void _selectRange(String key) {
     final span = _ranges[key];
     if (span == null) return;
@@ -199,6 +211,21 @@ class _HistoryPanelState extends State<HistoryPanel> {
           // Only worth explaining when there is a grey band on screen to
           // explain. Saying it unconditionally would be noise on the ordinary
           // case, which is a chart with no gaps at all.
+          // Markers are only discoverable if something says they are there.
+          if ((_history?.spikes ?? const []).isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Row(children: [
+              const Icon(Icons.bolt, size: 13, color: BeacleColors.warn),
+              const SizedBox(width: 5),
+              const Expanded(
+                child: Text(
+                  'Marks show where this server did something unusual for itself. '
+                  'Click one to see what was running at that minute.',
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                ),
+              ),
+            ]),
+          ],
           if ((_history?.panelDown ?? const []).isNotEmpty) ...[
             const SizedBox(height: 5),
             Row(children: [
@@ -252,6 +279,8 @@ class _HistoryPanelState extends State<HistoryPanel> {
               boundsFirst: h?.first,
               boundsLast: h?.last,
               panelDown: h?.panelDown ?? const [],
+              spikes: _spikesFor('cpu'),
+              onSpikeTap: _showSpike,
               onWindowChanged: _onWindowChanged,
               series: [
                 ChartSeries(
@@ -272,6 +301,8 @@ class _HistoryPanelState extends State<HistoryPanel> {
               boundsFirst: h?.first,
               boundsLast: h?.last,
               panelDown: h?.panelDown ?? const [],
+              spikes: _spikesFor('mem'),
+              onSpikeTap: _showSpike,
               onWindowChanged: _onWindowChanged,
               series: [
                 ChartSeries(

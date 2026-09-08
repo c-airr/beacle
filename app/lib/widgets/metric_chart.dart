@@ -77,6 +77,14 @@ class MetricChart extends StatefulWidget {
   /// is not the same as nothing to record.
   final List<PanelDowntime> panelDown;
 
+  /// Recorded departures from this machine's baseline, marked on the line.
+  /// Only the ones for this chart's metric are passed in.
+  final List<SpikeRecord> spikes;
+
+  /// Called when the reader clicks a marker. This is the point of marking
+  /// them: the chart says a spike happened, the callback says what caused it.
+  final void Function(SpikeRecord)? onSpikeTap;
+
   final double height;
 
   const MetricChart({
@@ -91,6 +99,8 @@ class MetricChart extends StatefulWidget {
     this.boundsFirst,
     this.boundsLast,
     this.panelDown = const [],
+    this.spikes = const [],
+    this.onSpikeTap,
     this.height = 150,
   });
 
@@ -125,6 +135,42 @@ class _MetricChartState extends State<MetricChart> {
     if (half > maxHalf) half = maxHalf;
 
     _moveWindow(centre.subtract(half), centre.add(half));
+  }
+
+  /// The marker under a position, if any. Hit testing is done in pixels
+  /// rather than time so the target is the same size at every zoom level —
+  /// at a week's zoom a minute is a fraction of a pixel wide.
+  SpikeRecord? _spikeAt(Offset? pos, double width) {
+    if (pos == null || widget.spikes.isEmpty || width <= 0) return null;
+    final span = _span.inMicroseconds;
+    if (span <= 0) return null;
+
+    const plotLeft = _ChartPainter._leftPad;
+    final plotWidth = width - plotLeft;
+    if (plotWidth <= 0) return null;
+
+    SpikeRecord? best;
+    var bestDx = double.infinity;
+    for (final sp in widget.spikes) {
+      final frac = sp.at.difference(widget.from).inMicroseconds / span;
+      if (frac < 0 || frac > 1) continue;
+      final x = plotLeft + frac * plotWidth;
+      final dx = (pos.dx - x).abs();
+      // Generous enough to hit with a mouse, tight enough that two spikes
+      // minutes apart stay separately clickable.
+      if (dx <= 10 && dx < bestDx) {
+        best = sp;
+        bestDx = dx;
+      }
+    }
+    return best;
+  }
+
+  SpikeRecord? _hoveredSpike(double width) => _spikeAt(_hover, width);
+
+  void _tapSpike(Offset pos, double width) {
+    final sp = _spikeAt(pos, width);
+    if (sp != null) widget.onSpikeTap?.call(sp);
   }
 
   void _moveWindow(DateTime from, DateTime to) {
@@ -198,8 +244,13 @@ class _MetricChartState extends State<MetricChart> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onHorizontalDragUpdate: (d) => _pan(d.delta.dx, box.maxWidth),
+                onTapUp: (d) => _tapSpike(d.localPosition, box.maxWidth),
                 child: MouseRegion(
-                  cursor: SystemMouseCursors.precise,
+                  // The cursor changes over a marker, because a chart that can
+                  // be clicked in one place and not another has to say so.
+                  cursor: _hoveredSpike(box.maxWidth) != null
+                      ? SystemMouseCursors.click
+                      : SystemMouseCursors.precise,
                   onHover: (e) => setState(() => _hover = e.localPosition),
                   onExit: (_) => setState(() => _hover = null),
                   child: CustomPaint(
@@ -212,6 +263,7 @@ class _MetricChartState extends State<MetricChart> {
                       maxY: widget.maxY,
                       hover: _hover,
                       panelDown: widget.panelDown,
+                      spikes: widget.spikes,
                     ),
                   ),
                 ),
@@ -231,6 +283,7 @@ class _ChartPainter extends CustomPainter {
   final double? maxY;
   final Offset? hover;
   final List<PanelDowntime> panelDown;
+  final List<SpikeRecord> spikes;
 
   _ChartPainter({
     required this.samples,
@@ -240,6 +293,7 @@ class _ChartPainter extends CustomPainter {
     required this.maxY,
     required this.hover,
     required this.panelDown,
+    required this.spikes,
   });
 
   static const _leftPad = 44.0;
@@ -284,6 +338,7 @@ class _ChartPainter extends CustomPainter {
     }
 
     _paintTimeAxis(canvas, plot, xFor);
+    _paintSpikes(canvas, plot, xFor);
     if (hover != null) _paintHover(canvas, plot, size, xFor, yFor);
   }
 
@@ -341,6 +396,26 @@ class _ChartPainter extends CustomPainter {
       if (b.difference(a) <= _gapAfter) continue;
       if (_coveredByPanelDowntime(a, b)) continue;
       shade(a, b, outage);
+    }
+  }
+
+  /// Marks the moments a metric departed from this machine's baseline.
+  ///
+  /// A tick at the top of the plot rather than a dot on the line: the line is
+  /// already crowded at exactly these points, and a marker that sits above the
+  /// data can be found and clicked without hunting for it.
+  void _paintSpikes(Canvas canvas, Rect plot, double Function(DateTime) xFor) {
+    if (spikes.isEmpty) return;
+    final tick = Paint()
+      ..color = BeacleColors.warn
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    for (final sp in spikes) {
+      final x = xFor(sp.at);
+      if (x < plot.left || x > plot.right) continue;
+      canvas.drawLine(Offset(x, plot.top), Offset(x, plot.top + 7), tick);
+      canvas.drawCircle(Offset(x, plot.top + 10), 2.5, Paint()..color = BeacleColors.warn);
     }
   }
 
@@ -541,5 +616,10 @@ class _ChartPainter extends CustomPainter {
       old.from != from ||
       old.to != to ||
       old.hover != hover ||
-      old.maxY != maxY;
+      old.maxY != maxY ||
+      // Both arrive with the chart data rather than before it, so leaving them
+      // out means markers and shading that never appear until something else
+      // happens to force a repaint.
+      old.spikes != spikes ||
+      old.panelDown != panelDown;
 }

@@ -22,8 +22,9 @@ func main() {
 	}
 	hub := NewHub()
 	history := NewHistory(*dataDir)
+	spikes := NewSpikes(*dataDir)
 	alerts := NewAlertEngine(store, hub)
-	agentHub := NewAgentHub(store, hub, alerts, history)
+	agentHub := NewAgentHub(store, hub, alerts, history, spikes)
 	alerts.SetAgentHub(agentHub)
 
 	base := *baseURL
@@ -42,6 +43,7 @@ func main() {
 		agentHub:  agentHub,
 		alerts:    alerts,
 		history:   history,
+		spikes:    spikes,
 		baseURL:   base,
 		dataDir:   *dataDir,
 		startedAt: time.Now(),
@@ -51,6 +53,7 @@ func main() {
 	go srv.uptime.Run()
 	go store.FlushLoop()
 	go history.RunTrim()
+	go spikes.RunTrim()
 	go alerts.WatchOffline()
 	go srv.LinkMonitor()
 

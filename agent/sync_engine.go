@@ -334,6 +334,18 @@ func (e *SyncEngine) sendBackfill(samples []shared.MetricSample) error {
 	})
 }
 
+// sendSpikes hands over recorded spike snapshots. Like backfill this carries
+// history rather than current state, so it stays clear of the fingerprints
+// that decide whether a live snapshot is worth sending.
+func (e *SyncEngine) sendSpikes(records []shared.SpikeRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	return e.send(shared.AgentWSSpikes, func(m *shared.AgentWSMessage) {
+		m.Spikes = records
+	})
+}
+
 func (e *SyncEngine) send(typ shared.AgentWSMessageType, fill func(*shared.AgentWSMessage)) error {
 	msg := shared.AgentWSMessage{
 		Type:     typ,

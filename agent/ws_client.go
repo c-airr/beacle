@@ -60,6 +60,15 @@ type WSClient struct {
 	// outlive sessions.
 	offline *OfflineBuffer
 
+	// spikes holds process snapshots from moments a metric jumped, and the
+	// trackers that decide when that happened. Also outside the session: the
+	// baseline is worth keeping across reconnects, and relearning it every
+	// time the laptop sleeps would leave the agent blind for half an hour
+	// afterwards.
+	spikes   *SpikeBuffer
+	cpuSpike spikeTracker
+	memSpike spikeTracker
+
 	// connected is true only between register_ack and the end of that session.
 	// The sampler reads it to decide whether the backend is already recording
 	// this minute or whether it has to be kept here.
@@ -73,6 +82,7 @@ func NewWSClient(cfg *Config, api *APIServer, reporter *Reporter) *WSClient {
 		api:      api,
 		reporter: reporter,
 		offline:  NewOfflineBuffer(cfg.StateDir()),
+		spikes:   NewSpikeBuffer(cfg.StateDir()),
 	}
 }
 
@@ -88,13 +98,16 @@ func (c *WSClient) isConnected() bool {
 	return c.connected
 }
 
-// sampleOffline records one sample per interval whenever the panel is not
-// listening. Deliberately outside the session: sessions end every time the
-// laptop sleeps, and that is exactly when this has to keep running.
+// sampleOffline takes a reading a minute for the life of the agent.
 //
-// Sampling is skipped while connected — the backend is already recording from
-// the live snapshots, and writing here too would only produce duplicates for
-// it to discard.
+// Deliberately outside the session: sessions end every time the laptop sleeps,
+// and that is exactly when this has to keep running.
+//
+// It does two things with each reading. The sample is stored only while the
+// panel is away — the backend is already recording from live snapshots, and
+// writing here too would only make duplicates for it to discard. Spike
+// detection runs either way: a jump at four in the morning is worth explaining
+// whether or not anyone was watching at the time.
 func (c *WSClient) sampleOffline(ctx context.Context) {
 	t := time.NewTicker(offlineSampleInterval)
 	defer t.Stop()
@@ -103,19 +116,83 @@ func (c *WSClient) sampleOffline(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if c.isConnected() {
-				continue
-			}
 			m, err := c.reporter.Metrics()
 			if err != nil {
 				continue
 			}
-			if err := c.offline.Append(shared.SampleFrom(m)); err != nil {
+			sample := shared.SampleFrom(m)
+			c.checkSpikes(sample)
+
+			if c.isConnected() {
+				continue
+			}
+			if err := c.offline.Append(sample); err != nil {
 				// A full or read-only disk is worth one line in the log, not a
 				// line a minute for as long as the panel stays shut.
 				log.Printf("offline sample not stored: %v", err)
 			}
 		}
+	}
+}
+
+// checkSpikes records what the machine was running when a metric departed from
+// its own baseline.
+//
+// The process list is collected only when something has actually jumped. It
+// costs a `ps` and it is the whole point: by the time anyone looks at the chart
+// the next morning, the process that caused the wall at four a.m. is long gone,
+// and nothing short of having written it down then can bring it back.
+func (c *WSClient) checkSpikes(s shared.MetricSample) {
+	var metric string
+	var value, base float64
+
+	switch {
+	case c.cpuSpike.observe(s.CPU):
+		metric, value = "cpu", s.CPU
+		base, _ = c.cpuSpike.baseline()
+	case c.memSpike.observe(s.Mem):
+		metric, value = "mem", s.Mem
+		base, _ = c.memSpike.baseline()
+	default:
+		return
+	}
+
+	procs, err := c.reporter.Processes()
+	if err != nil {
+		return
+	}
+	rec := shared.SpikeRecord{
+		At:       s.At,
+		Metric:   metric,
+		Value:    value,
+		Baseline: base,
+		Top:      topProcesses(procs, metric, spikeTopN),
+	}
+	if err := c.spikes.Append(rec); err != nil {
+		log.Printf("spike record not stored: %v", err)
+	}
+}
+
+// flushSpikes hands over recorded spikes, dropping each batch only once it has
+// gone out. Same discipline as the sample buffer: a drop part-way costs
+// nothing but a repeat.
+func (c *WSClient) flushSpikes(sync *SyncEngine) {
+	records, err := c.spikes.Load()
+	if err != nil || len(records) == 0 {
+		return
+	}
+	sent := 0
+	for _, chunk := range chunkSpikes(records, spikeChunkSize) {
+		if err := sync.sendSpikes(chunk); err != nil {
+			break
+		}
+		if err := c.spikes.DropUpTo(chunk[len(chunk)-1].At); err != nil {
+			break
+		}
+		sent += len(chunk)
+	}
+	if sent > 0 {
+		log.Printf("handed over %d spike records", sent)
 	}
 }
 
@@ -312,6 +389,7 @@ func (c *WSClient) session() (registered bool, err error) {
 	// after a night away draws the whole night rather than filling in from the
 	// moment it happened to start.
 	go c.flushOffline(sync)
+	go c.flushSpikes(sync)
 
 	err = <-errCh
 	cancel()

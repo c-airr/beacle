@@ -26,6 +26,7 @@ type Server struct {
 	dataDir   string
 	startedAt time.Time
 	uptime    *UptimeLog
+	spikes    *Spikes
 
 	uiPowerMu   sync.RWMutex
 	uiPowerMode shared.PowerMode
@@ -101,6 +102,7 @@ func (s *Server) handleVPSByID(w http.ResponseWriter, r *http.Request) {
 		s.store.DeleteVPS(id)
 		if s.history != nil {
 			s.history.Forget(id)
+			s.spikes.Forget(id)
 		}
 		s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
 		s.logAction(entry.VPS, "vps_delete", "VPS removed", true)
@@ -324,6 +326,9 @@ func (s *Server) handleVPSHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	samples := s.history.Query(id, from, to)
+	// Spikes ride along with the chart data rather than needing a second
+	// round trip: the panel wants to mark them on the line as it draws it.
+	spikes := s.spikes.Query(id, from, to)
 	first, last := s.history.Span(id)
 	// Stretches where the panel itself was not running. Without these the
 	// chart cannot tell "this server was down" from "nobody was recording",
@@ -339,6 +344,7 @@ func (s *Server) handleVPSHistory(w http.ResponseWriter, r *http.Request) {
 		"first":      first,
 		"last":       last,
 		"panel_down": panelDown,
+		"spikes":     spikes,
 	})
 }
 

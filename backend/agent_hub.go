@@ -37,6 +37,7 @@ type AgentHub struct {
 	hub     *Hub
 	alerts  *AlertEngine
 	history *History
+	spikes  *Spikes
 }
 
 type agentSession struct {
@@ -53,7 +54,7 @@ type agentSession struct {
 	tokenEntry *VPSEntry
 }
 
-func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine, history *History) *AgentHub {
+func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine, history *History, spikes *Spikes) *AgentHub {
 	return &AgentHub{
 		agents:  make(map[string]*agentSession),
 		pending: make(map[string]chan shared.AgentCommandResult),
@@ -61,6 +62,7 @@ func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine, history *History) 
 		hub:     hub,
 		alerts:  alerts,
 		history: history,
+		spikes:  spikes,
 	}
 }
 
@@ -253,6 +255,16 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 			// The chart reads its data over HTTP, but the panel only refetches
 			// when something tells it to.
 			h.hub.Broadcast(shared.WSVPSUpdate, h.store.GetSnapshot(sess.entry.VPS.ID))
+		}
+
+	case shared.AgentWSSpikes:
+		if !sess.registered.Load() || sess.entry == nil || len(msg.Spikes) == 0 {
+			return
+		}
+		// Evidence about the past, like backfill: never merged into the live
+		// snapshot, only filed against the chart it explains.
+		if n := h.spikes.Record(sess.entry.VPS.ID, msg.Spikes); n > 0 {
+			log.Printf("recorded %d spike snapshots from %s", n, sess.entry.VPS.Name)
 		}
 
 	case shared.AgentWSDockerSnapshot:
