@@ -6,8 +6,7 @@
   <img src="https://img.shields.io/badge/protocol-gRPC-4285F4?logo=grpc&logoColor=white" alt="Protocol: gRPC">
   <img src="https://img.shields.io/badge/security-mTLS-critical?logo=letsencrypt&logoColor=white" alt="Security: mTLS">
   <img src="https://img.shields.io/badge/networking-Tailscale-black?logo=tailscale&logoColor=white" alt="Networking: Tailscale">
-  <img src="https://img.shields.io/badge/status-beta-orange" alt="Status: beta">
-  <img src="https://img.shields.io/github/license/c-airr/beacle" alt="License">
+  <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Status: stable"> src="https://img.shields.io/github/license/c-airr/beacle" alt="License">
 </p>
 
 <p align="center">
