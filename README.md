@@ -39,6 +39,66 @@ A desktop panel for managing your VPS fleet, so you don't have to juggle SSH ses
 
 ---
 
+## Screenshots
+
+### Overview — is everything working?
+
+Fleet totals up top, anything that needs attention right below, then a card per VPS.
+
+![Overview](docs/screenshots/overview.png)
+
+Scroll down for recent agent activity and 24h fleet-wide CPU / RAM / network charts.
+
+![Overview — activity and global charts](docs/screenshots/overview-activity.png)
+
+### Servers — exact host statistics
+
+CPU per core, memory split into apps vs cache, disks, network interfaces, uptime and system info.
+
+![Servers](docs/screenshots/servers.png)
+
+History goes back 7 days. Grey means Beacle was closed and nothing was recorded — red is the server itself having gone away. Drag to scroll back in time, Ctrl+scroll to zoom, click a spike to see what was running.
+
+![Servers — history](docs/screenshots/servers-history.png)
+
+### Docker
+
+Every container across the fleet in one list — logs, exec, stats, restart, stop, remove. Images, volumes, networks and compose are one tab away.
+
+![Docker](docs/screenshots/docker.png)
+
+### Services
+
+systemd units, processes, screen and nohup sessions side by side, sortable by CPU or memory.
+
+![Services](docs/screenshots/services.png)
+
+### Proxy
+
+Caddy sites with their upstreams and TLS state, edited from the GUI instead of by hand. The port checker tells you whether anything is actually listening.
+
+![Proxy](docs/screenshots/proxy.png)
+
+### Map
+
+Where your servers physically are, grouped by continent.
+
+![Map](docs/screenshots/map.png)
+
+### Alerts
+
+Thresholds breached, with hysteresis so a flapping disk doesn't spam you. Mute, resolve, or jump straight to the VPS.
+
+![Alerts](docs/screenshots/alerts.png)
+
+### Settings
+
+Theme, language, startup and tray behaviour — plus agent updates and backend status on the other tabs.
+
+![Settings](docs/screenshots/settings.png)
+
+---
+
 ## What it actually does
 
 Beacle is three components talking to each other over Tailscale:
@@ -81,15 +141,15 @@ That's it — the agent registers itself and the panel starts getting data.
 sha256sum -c SHA256SUMS.txt
 
 # Prove the file was built by this repository's Release workflow
-gh attestation verify ./beacle-setup-0.9.1.exe --repo c-airr/beacle
+gh attestation verify ./beacle-setup-1.1.0.exe --repo c-airr/beacle
 ```
 
 ### Cut a release (maintainers)
 
 ```bash
-git tag 0.9.1
-git push origin 0.9.1
-# or: Actions → Release → Run workflow → tag 0.9.1
+git tag 1.2.0
+git push origin 1.2.0
+# or: Actions → Release → Run workflow → tag 1.2.0
 ```
 
 Do **not** upload `.exe` / agent binaries by hand. The workflow builds them on `windows-latest` / `ubuntu-latest`, attaches SLSA provenance attestations, and publishes the GitHub Release.
