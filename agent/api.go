@@ -96,6 +96,28 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, p)
 	}))
+	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
+		pid, err := strconv.Atoi(r.PathValue("pid"))
+		if err != nil {
+			jsonErr(w, 400, "bad pid")
+			return
+		}
+		var req shared.KillProcessRequest
+		if r.Body != nil {
+			b, _ := io.ReadAll(r.Body)
+			if len(b) > 0 {
+				if err := json.Unmarshal(b, &req); err != nil {
+					jsonErr(w, 400, "bad json")
+					return
+				}
+			}
+		}
+		if err := s.col.KillProcess(pid, req.Signal); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
 
 	// docker
 	mux.HandleFunc("GET /api/docker/containers", a(func(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +155,48 @@ func (s *APIServer) Routes() http.Handler {
 	}))
 	mux.HandleFunc("GET /api/docker/compose", a(func(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, 200, s.col.Docker().Compose)
+	}))
+	mux.HandleFunc("POST /api/docker/containers/{id}/exec", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.DockerExecRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		res, err := s.col.DockerExec(r.PathValue("id"), req.Command)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
+	mux.HandleFunc("POST /api/docker/compose/{project}/{action}", a(func(w http.ResponseWriter, r *http.Request) {
+		res, err := s.col.ComposeAction(r.PathValue("project"), r.PathValue("action"))
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
+	mux.HandleFunc("GET /api/docker/prune/preview", a(func(w http.ResponseWriter, r *http.Request) {
+		preview, err := s.col.PrunePreview()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, preview)
+	}))
+	mux.HandleFunc("POST /api/docker/prune", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.DockerPruneRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		res, err := s.col.DockerPrune(req)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
 	}))
 
 	// services

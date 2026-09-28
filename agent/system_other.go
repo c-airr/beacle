@@ -200,6 +200,66 @@ func (c *devCollector) DockerStats(id string) (shared.ContainerStats, error) {
 	}, nil
 }
 
+func (c *devCollector) DockerExec(id, command string) (shared.DockerExecResult, error) {
+	if strings.TrimSpace(command) == "" {
+		return shared.DockerExecResult{}, fmt.Errorf("command is required")
+	}
+	short := id
+	if len(short) > 12 {
+		short = short[:12]
+	}
+	return shared.DockerExecResult{
+		Output:   fmt.Sprintf("simulated output of %q in container %s\n", command, short),
+		ExitCode: 0,
+	}, nil
+}
+
+func (c *devCollector) ComposeAction(project, action string) (shared.ComposeActionResult, error) {
+	switch action {
+	case "restart", "up", "down", "pull":
+	default:
+		return shared.ComposeActionResult{}, fmt.Errorf("unknown compose action %q", action)
+	}
+	return shared.ComposeActionResult{
+		Output: fmt.Sprintf("simulated compose %s for project %s\n", action, project),
+	}, nil
+}
+
+func (c *devCollector) PrunePreview() (shared.DockerPrunePreview, error) {
+	return shared.DockerPrunePreview{
+		DanglingImages: 3, DanglingBytes: 890 << 20,
+		UnusedVolumes: 2, UnusedVolumesBytes: 120 << 20,
+	}, nil
+}
+
+func (c *devCollector) DockerPrune(req shared.DockerPruneRequest) (shared.DockerPruneResult, error) {
+	if !req.Images && !req.Volumes && !req.Builder {
+		return shared.DockerPruneResult{}, fmt.Errorf("nothing selected")
+	}
+	res := shared.DockerPruneResult{}
+	if req.Images {
+		res.ImagesDeleted = 3
+		res.SpaceReclaimed += 890 << 20
+	}
+	if req.Volumes {
+		res.VolumesDeleted = 2
+		res.SpaceReclaimed += 120 << 20
+	}
+	return res, nil
+}
+
+func (c *devCollector) KillProcess(pid int, signal string) error {
+	if pid <= 1 {
+		return fmt.Errorf("refusing to signal PID %d", pid)
+	}
+	switch signal {
+	case "", "term", "kill":
+		return nil
+	default:
+		return fmt.Errorf("unknown signal %q (want term or kill)", signal)
+	}
+}
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

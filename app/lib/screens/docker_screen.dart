@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -19,14 +20,21 @@ class _DockerScreenState extends State<DockerScreen> {
   int tab = 0; // containers, images, volumes, networks, compose
   String filter = '';
 
-  static const _tabs = ['Containers', 'Images', 'Volumes', 'Networks', 'Compose'];
+  List<String> _tabLabels() => [
+        context.l.t('dockerTabContainers'),
+        context.l.t('dockerTabImages'),
+        context.l.t('dockerTabVolumes'),
+        context.l.t('dockerTabNetworks'),
+        context.l.t('dockerTabCompose'),
+      ];
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final tabs = _tabLabels();
     final hosts = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (hosts.isEmpty) {
-      return const Center(child: Text('No VPS with agent data', style: TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('dockerNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
     }
 
     var running = 0, total = 0;
@@ -43,7 +51,7 @@ class _DockerScreenState extends State<DockerScreen> {
           child: Row(
             children: [
               Text(
-                '$running/$total running · ${hosts.length} VPS',
+                context.l.f('dockerRunning', {'r': running, 't': total, 'h': hosts.length}),
                 style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
               const Spacer(),
@@ -51,11 +59,11 @@ class _DockerScreenState extends State<DockerScreen> {
                 SizedBox(
                   width: 220,
                   child: TextField(
-                    decoration: const InputDecoration(
-                      hintText: 'Filter containers…',
-                      prefixIcon: Icon(Icons.search, size: 16),
+                    decoration: InputDecoration(
+                      hintText: context.l.t('dockerFilterHint'),
+                      prefixIcon: const Icon(Icons.search, size: 16),
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     ),
                     style: const TextStyle(fontSize: 12),
                     onChanged: (v) => setState(() => filter = v.trim().toLowerCase()),
@@ -70,10 +78,10 @@ class _DockerScreenState extends State<DockerScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (var i = 0; i < _tabs.length; i++) ...[
+                for (var i = 0; i < tabs.length; i++) ...[
                   if (i > 0) const SizedBox(width: 6),
                   _TabChip(
-                    label: _tabs[i],
+                    label: tabs[i],
                     selected: tab == i,
                     onTap: () => setState(() => tab = i),
                   ),
@@ -107,13 +115,14 @@ class _DockerScreenState extends State<DockerScreen> {
                     vps: hosts[i],
                     docker: state.snapshots[hosts[i].id]!.docker,
                     filter: filter,
+                    l: context.l,
                   )
                 else
                   switch (tab) {
                     1 => _ImagesBlock(docker: state.snapshots[hosts[i].id]!.docker),
                     2 => _VolumesBlock(docker: state.snapshots[hosts[i].id]!.docker),
                     3 => _NetworksBlock(docker: state.snapshots[hosts[i].id]!.docker),
-                    _ => _ComposeBlock(docker: state.snapshots[hosts[i].id]!.docker),
+                    _ => _ComposeBlock(vps: hosts[i], docker: state.snapshots[hosts[i].id]!.docker),
                   },
               ],
             ],
@@ -182,15 +191,28 @@ class _VpsSectionHeader extends StatelessWidget {
           Text(vps.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
           const Spacer(),
           if (docker.available) ...[
-            Text('$run/${docker.containers.length} up',
+            Text(context.l.f('dockerUp', {'r': run, 't': docker.containers.length}),
                 style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const SizedBox(width: 12),
-            Text('Docker ${docker.version}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            Text(context.l.f('dockerVersion', {'v': docker.version}),
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+              tooltip: context.l.t('pruneRun'),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => _PruneDialog(vps: vps),
+              ),
+            ),
           ] else
-            Text(
-              docker.error.isEmpty ? 'Docker unavailable' : docker.error,
-              style: const TextStyle(fontSize: 11, color: BeacleColors.err),
-              overflow: TextOverflow.ellipsis,
+            Flexible(
+              child: Text(
+                docker.error.isEmpty ? context.l.t('dockerUnavailable') : docker.error,
+                style: const TextStyle(fontSize: 11, color: BeacleColors.err),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
       ),
@@ -204,11 +226,12 @@ List<Widget> _containerRows({
   required Vps vps,
   required DockerState docker,
   required String filter,
+  required L l,
 }) {
   if (!docker.available) {
-    return const [_EmptyNote('Docker not available on this VPS')];
+    return [_EmptyNote(l.t('dockerUnavailable'))];
   }
-  if (docker.containers.isEmpty) return const [_EmptyNote('No containers')];
+  if (docker.containers.isEmpty) return [_EmptyNote(l.t('dockerNoContainers'))];
 
   final list = docker.containers.where((c) {
     if (filter.isEmpty) return true;
@@ -216,7 +239,7 @@ List<Widget> _containerRows({
         c.image.toLowerCase().contains(filter) ||
         c.state.toLowerCase().contains(filter);
   }).toList();
-  if (list.isEmpty) return const [_EmptyNote('No containers match filter')];
+  if (list.isEmpty) return [_EmptyNote(l.t('dockerNoMatch'))];
 
   // Stats were looked up by scanning the whole stats list per container, so a
   // host with fifty containers did twenty-five hundred comparisons on every
@@ -327,17 +350,17 @@ class _ContainerCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _Meta(label: 'STATUS', value: container.status.isEmpty ? container.state : container.status),
-              _Meta(label: 'PORTS', value: _ports),
+              _Meta(label: context.l.t('dockerStatus'), value: container.status.isEmpty ? container.state : container.status),
+              _Meta(label: context.l.t('dockerPorts'), value: _ports),
               _Meta(
-                label: 'CPU',
+                label: context.l.t('dockerCpu'),
                 value: stats == null ? '—' : '${stats!.cpuPercent.toStringAsFixed(1)}%',
               ),
               _Meta(
-                label: 'RAM',
+                label: context.l.t('dockerRam'),
                 value: stats == null ? '—' : '${fmtBytes(stats!.memUsage)} (${stats!.memPercent.toStringAsFixed(0)}%)',
               ),
-              _Meta(label: 'UPTIME', value: _uptimeLabel(container)),
+              _Meta(label: context.l.t('dockerUptime'), value: _uptimeLabel(container)),
             ],
           ),
           if (stats != null) ...[
@@ -411,16 +434,26 @@ class _ActionBar extends StatelessWidget {
   final AppState state;
   const _ActionBar({required this.vps, required this.container, required this.state});
 
+  String _actionLabel(BuildContext context, String action) => switch (action) {
+        'restart' => context.l.t('actRestart'),
+        'stop' => context.l.t('actStop'),
+        'start' => context.l.t('actStart'),
+        'remove' => context.l.t('actRemove'),
+        _ => action,
+      };
+
   Future<void> _act(BuildContext context, String action, {bool confirm = false}) async {
+    final label = _actionLabel(context, action);
     if (confirm) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('$action ${container.name}?'),
-          content: Text('This will $action the container on ${vps.name}.'),
+          title: Text(context.l.f('confirmTitle', {'action': label, 'name': container.name})),
+          content: Text(context.l.f('confirmBody',
+              {'verb': action, 'action': label, 'vps': vps.name, 'name': container.name})),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(label)),
           ],
         ),
       );
@@ -429,7 +462,9 @@ class _ActionBar extends StatelessWidget {
     try {
       state.onUserAction();
       await state.api.dockerAction(vps.id, container.id, action);
-      if (context.mounted) showToast(context, '${container.name}: $action ok');
+      if (context.mounted) {
+        showToast(context, context.l.f('actionDone', {'name': container.name, 'action': label}));
+      }
     } catch (e) {
       if (context.mounted) showToast(context, '$e', error: true);
     }
@@ -443,22 +478,23 @@ class _ActionBar extends StatelessWidget {
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Stats · ${container.name}'),
+          title: Text(context.l.f('statsTitle', {'name': container.name})),
           content: SizedBox(
             width: 360,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _statLine('CPU', '${s.cpuPercent.toStringAsFixed(1)}%'),
-                _statLine('Memory', '${fmtBytes(s.memUsage)} / ${fmtBytes(s.memLimit)} (${s.memPercent.toStringAsFixed(1)}%)'),
-                _statLine('Network RX', fmtBytes(s.netRx)),
-                _statLine('Network TX', fmtBytes(s.netTx)),
-                _statLine('PIDs', '${s.pids}'),
+                _statLine(context.l.t('statsCpu'), '${s.cpuPercent.toStringAsFixed(1)}%'),
+                _statLine(context.l.t('statsMemory'),
+                    '${fmtBytes(s.memUsage)} / ${fmtBytes(s.memLimit)} (${s.memPercent.toStringAsFixed(1)}%)'),
+                _statLine(context.l.t('statsNetRx'), fmtBytes(s.netRx)),
+                _statLine(context.l.t('statsNetTx'), fmtBytes(s.netTx)),
+                _statLine(context.l.t('statsPids'), '${s.pids}'),
               ],
             ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.l.t('close')))],
         ),
       );
     } catch (e) {
@@ -474,47 +510,10 @@ class _ActionBar extends StatelessWidget {
         ]),
       );
 
-  Future<void> _terminal(BuildContext context) async {
-    final cmd = 'docker exec -it ${container.name} sh';
+  Future<void> _exec(BuildContext context) async {
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Terminal · ${container.name}'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Interactive shell from Beacle is not wired yet. Run this on the VPS:',
-                style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: BeacleColors.bg,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: BeacleColors.border),
-                ),
-                child: SelectableText(cmd, style: const TextStyle(fontFamily: 'Consolas', fontSize: 12)),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: cmd));
-              showToast(context, 'Copied');
-            },
-            child: const Text('Copy'),
-          ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
-      ),
+      builder: (_) => _ExecDialog(vps: vps, container: container),
     );
   }
 
@@ -523,19 +522,20 @@ class _ActionBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _iconBtn(Icons.article_outlined, 'Logs', () => showLogsDialog(
+        _iconBtn(Icons.article_outlined, context.l.t('actLogs'), () => showLogsDialog(
               context,
               '${vps.name} · ${container.name}',
               () => state.api.dockerLogs(vps.id, container.id, tail: 400),
             )),
-        _iconBtn(Icons.terminal, 'Terminal', () => _terminal(context)),
-        _iconBtn(Icons.bar_chart, 'Stats', () => _stats(context)),
-        _iconBtn(Icons.refresh, 'Restart', () => _act(context, 'restart')),
+        _iconBtn(Icons.terminal, context.l.t('actExec'), () => _exec(context)),
+        _iconBtn(Icons.bar_chart, context.l.t('actStats'), () => _stats(context)),
+        _iconBtn(Icons.refresh, context.l.t('actRestart'), () => _act(context, 'restart')),
         if (container.running)
-          _iconBtn(Icons.stop, 'Stop', () => _act(context, 'stop'), color: BeacleColors.err)
+          _iconBtn(Icons.stop, context.l.t('actStop'), () => _act(context, 'stop'), color: BeacleColors.err)
         else
-          _iconBtn(Icons.play_arrow, 'Start', () => _act(context, 'start'), color: BeacleColors.ok),
-        _iconBtn(Icons.delete_outline, 'Remove', () => _act(context, 'remove', confirm: true), color: BeacleColors.err),
+          _iconBtn(Icons.play_arrow, context.l.t('actStart'), () => _act(context, 'start'), color: BeacleColors.ok),
+        _iconBtn(Icons.delete_outline, context.l.t('actRemove'), () => _act(context, 'remove', confirm: true),
+            color: BeacleColors.err),
       ],
     );
   }
@@ -546,6 +546,339 @@ class _ActionBar extends StatelessWidget {
       tooltip: tip,
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
+    );
+  }
+}
+
+/// One-shot command inside a container: type, run, read the answer.
+/// No PTY — for an interactive shell, SSH to the VPS instead.
+class _ExecDialog extends StatefulWidget {
+  final Vps vps;
+  final ContainerInfo container;
+  const _ExecDialog({required this.vps, required this.container});
+
+  @override
+  State<_ExecDialog> createState() => _ExecDialogState();
+}
+
+class _ExecDialogState extends State<_ExecDialog> {
+  final _cmd = TextEditingController();
+  bool _running = false;
+  DockerExecResult? _result;
+  String? _error;
+
+  /// Session history, most recent first. Per-app rather than per-container:
+  /// the same three commands get typed everywhere.
+  static final List<String> _history = [];
+
+  @override
+  void dispose() {
+    _cmd.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run() async {
+    final command = _cmd.text.trim();
+    if (command.isEmpty || _running) return;
+    setState(() {
+      _running = true;
+      _error = null;
+      _result = null;
+    });
+    final state = context.read<AppState>();
+    try {
+      state.onUserAction();
+      final res = await state.api.dockerExec(widget.vps.id, widget.container.id, command);
+      _history.remove(command);
+      _history.insert(0, command);
+      if (_history.length > 10) _history.removeLast();
+      if (mounted) setState(() => _result = res);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final res = _result;
+    return AlertDialog(
+      title: Text(context.l.f('execTitle', {'name': widget.container.name})),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l.t('execBody'),
+              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _cmd,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: context.l.t('execHint'),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    ),
+                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+                    onSubmitted: (_) => _run(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SmallButton(
+                  _running ? context.l.t('runningEllipsis') : context.l.t('execRun'),
+                  icon: Icons.play_arrow,
+                  onPressed: _running ? null : _run,
+                ),
+              ],
+            ),
+            if (_history.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text('${context.l.t('historyLabel')}:',
+                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  ),
+                  for (final h in _history)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: _running
+                          ? null
+                          : () {
+                              _cmd.text = h;
+                              _run();
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: BeacleColors.surfaceHi,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: BeacleColors.border),
+                        ),
+                        child: Text(h,
+                            style: const TextStyle(fontFamily: 'Consolas', fontSize: 11),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 120, maxHeight: 300),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: BeacleColors.bg,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: BeacleColors.border),
+              ),
+              child: _running
+                  ? const Center(
+                      child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                  : _error != null
+                      ? SelectableText(_error!,
+                          style: const TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4))
+                      : res == null
+                          ? Text(context.l.t('execEmpty'),
+                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                          : SmoothSingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '${context.l.t('exitCode')}: ${res.exitCode}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: res.exitCode == 0 ? BeacleColors.ok : BeacleColors.err,
+                                        ),
+                                      ),
+                                      if (res.truncated) ...[
+                                        const SizedBox(width: 8),
+                                        Text(context.l.t('truncatedNote'),
+                                            style: const TextStyle(
+                                                fontSize: 11, color: BeacleColors.warn)),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  SelectableText(
+                                    res.output.isEmpty ? context.l.t('emptyOutput') : res.output,
+                                    style: const TextStyle(
+                                        fontFamily: 'Consolas', fontSize: 11, height: 1.4),
+                                  ),
+                                ],
+                              ),
+                            ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        if (res != null && res.output.isNotEmpty)
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: res.output));
+              showToast(context, context.l.t('copied'));
+            },
+            child: Text(context.l.t('execCopyOutput')),
+          ),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.l.t('close'))),
+      ],
+    );
+  }
+}
+
+/// Docker cleanup with a preview: the dialog shows what dockerd reports as
+/// reclaimable before anything is removed.
+class _PruneDialog extends StatefulWidget {
+  final Vps vps;
+  const _PruneDialog({required this.vps});
+
+  @override
+  State<_PruneDialog> createState() => _PruneDialogState();
+}
+
+class _PruneDialogState extends State<_PruneDialog> {
+  PrunePreview? _preview;
+  String? _error;
+  bool _images = true;
+  bool _volumes = false;
+  bool _builder = false;
+  bool _working = false;
+  PruneResult? _done;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final p = await context.read<AppState>().api.prunePreview(widget.vps.id);
+      if (mounted) setState(() => _preview = p);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  Future<void> _run() async {
+    if (_working) return;
+    setState(() {
+      _working = true;
+      _error = null;
+    });
+    final state = context.read<AppState>();
+    try {
+      state.onUserAction();
+      final res = await state.api.dockerPrune(widget.vps.id,
+          images: _images, volumes: _volumes, builder: _builder);
+      if (mounted) setState(() => _done = res);
+      await state.refreshAll();
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _preview;
+    final done = _done;
+    return AlertDialog(
+      title: Text(context.l.f('pruneTitle', {'vps': widget.vps.name})),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l.t('pruneBody'),
+              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            if (_error != null)
+              Text(_error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4))
+            else if (p == null)
+              const Center(
+                  child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))))
+            else if (p.totalBytes == 0 && done == null)
+              Text(context.l.t('pruneNone'),
+                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4))
+            else ...[
+              CheckboxListTile(
+                value: _images,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  context.l.f('pruneImages', {'n': p.danglingImages, 'size': fmtBytes(p.danglingBytes)}),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onChanged: _working || done != null ? null : (v) => setState(() => _images = v ?? false),
+              ),
+              CheckboxListTile(
+                value: _volumes,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  context.l.f('pruneVolumes', {'n': p.unusedVolumes, 'size': fmtBytes(p.unusedVolumesBytes)}),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onChanged: _working || done != null ? null : (v) => setState(() => _volumes = v ?? false),
+              ),
+              CheckboxListTile(
+                value: _builder,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(context.l.t('pruneBuilder'), style: const TextStyle(fontSize: 12)),
+                onChanged: _working || done != null ? null : (v) => setState(() => _builder = v ?? false),
+              ),
+            ],
+            if (done != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.l.f('pruneDone', {
+                  'size': fmtBytes(done.spaceReclaimed),
+                  'images': done.imagesDeleted,
+                  'volumes': done.volumesDeleted,
+                }),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.ok, height: 1.4),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.l.t('close'))),
+        if (done == null && p != null && p.totalBytes > 0)
+          SmallButton(
+            _working ? context.l.t('runningEllipsis') : context.l.t('pruneRun'),
+            icon: Icons.cleaning_services_outlined,
+            onPressed: (!_images && !_volumes && !_builder) || _working ? null : _run,
+          ),
+      ],
     );
   }
 }
@@ -562,8 +895,8 @@ class _ImagesBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!docker.available) return const _EmptyNote('Docker not available on this VPS');
-    if (docker.images.isEmpty) return const _EmptyNote('No images');
+    if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
+    if (docker.images.isEmpty) return _EmptyNote(context.l.t('dockerNoImages'));
     const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return PanelCard(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -611,8 +944,8 @@ class _VolumesBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!docker.available) return const _EmptyNote('Docker not available on this VPS');
-    if (docker.volumes.isEmpty) return const _EmptyNote('No volumes');
+    if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
+    if (docker.volumes.isEmpty) return _EmptyNote(context.l.t('dockerNoVolumes'));
     const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return PanelCard(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -651,8 +984,8 @@ class _NetworksBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!docker.available) return const _EmptyNote('Docker not available on this VPS');
-    if (docker.networks.isEmpty) return const _EmptyNote('No networks');
+    if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
+    if (docker.networks.isEmpty) return _EmptyNote(context.l.t('dockerNoNetworks'));
     const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return PanelCard(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -687,13 +1020,101 @@ class _NetworksBlock extends StatelessWidget {
 }
 
 class _ComposeBlock extends StatelessWidget {
+  final Vps vps;
   final DockerState docker;
-  const _ComposeBlock({required this.docker});
+  const _ComposeBlock({required this.vps, required this.docker});
+
+  Future<void> _act(BuildContext context, ComposeProject p, String action) async {
+    final state = context.read<AppState>();
+    if (action == 'down') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(context.l.f('composeOutputTitle', {'action': 'down', 'project': p.name})),
+          content: Text(context.l.f('composeDownBody', {'project': p.name, 'vps': vps.name})),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l.t('composeDown'))),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    // Pulls can take minutes — a blocking dialog with an honest note beats a
+    // dead-looking button.
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          content: Row(children: [
+            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                context.l.f('composeWorking', {'action': action, 'project': p.name}),
+                style: const TextStyle(fontSize: 12, height: 1.4),
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
+    String output;
+    try {
+      state.onUserAction();
+      output = await state.api.composeAction(vps.id, p.name, action);
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // progress
+        showToast(context, '$e', error: true);
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    Navigator.pop(context); // progress
+    await state.refreshAll();
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l.f('composeOutputTitle', {'action': action, 'project': p.name})),
+        content: SizedBox(
+          width: 520,
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 320),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: BeacleColors.bg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: BeacleColors.border),
+            ),
+            child: SmoothSingleChildScrollView(
+              child: SelectableText(
+                output.isEmpty ? context.l.t('emptyOutput') : output,
+                style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, height: 1.4),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: output));
+              showToast(context, context.l.t('copied'));
+            },
+            child: Text(context.l.t('copy')),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.l.t('close'))),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (!docker.available) return const _EmptyNote('Docker not available on this VPS');
-    if (docker.compose.isEmpty) return const _EmptyNote('No compose projects');
+    if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
+    if (docker.compose.isEmpty) return _EmptyNote(context.l.t('dockerNoCompose'));
     return Column(
       children: [
         for (final p in docker.compose)
@@ -701,7 +1122,7 @@ class _ComposeBlock extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: PanelCard(
               title: p.name.toUpperCase(),
-              trailing: Text('${p.running}/${p.total} running',
+              trailing: Text(context.l.f('dockerUp', {'r': p.running, 't': p.total}),
                   style: TextStyle(
                       fontSize: 12, color: p.running == p.total ? BeacleColors.ok : BeacleColors.warn)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -722,10 +1143,30 @@ class _ComposeBlock extends StatelessWidget {
                       child: Text(s, style: const TextStyle(fontSize: 11)),
                     ),
                 ]),
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, children: [
+                  _composeBtn(context, Icons.refresh, context.l.t('composeRestart'), () => _act(context, p, 'restart')),
+                  _composeBtn(context, Icons.system_update, context.l.t('composeUpdate'), () => _act(context, p, 'up')),
+                  _composeBtn(context, Icons.download_outlined, context.l.t('composePull'), () => _act(context, p, 'pull')),
+                  _composeBtn(context, Icons.stop, context.l.t('composeDown'), () => _act(context, p, 'down'),
+                      color: BeacleColors.err),
+                ]),
               ]),
             ),
           ),
       ],
+    );
+  }
+
+  Widget _composeBtn(BuildContext context, IconData icon, String label, VoidCallback onPressed, {Color? color}) {
+    return OutlinedButton.icon(
+      icon: Icon(icon, size: 14, color: color),
+      label: Text(label, style: TextStyle(fontSize: 12, color: color)),
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: BeacleColors.border),
+        visualDensity: VisualDensity.compact,
+      ),
+      onPressed: onPressed,
     );
   }
 }

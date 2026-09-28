@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -334,11 +335,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: switch (tab) {
-                      0 => 'Filter everything...',
-                      2 => 'Filter processes...',
-                      3 => 'Filter sessions...',
-                      4 => 'Filter jobs...',
-                      _ => 'Filter services...',
+                      0 => context.l.t('svcFilterAll'),
+                      2 => context.l.t('svcFilterProcs'),
+                      3 => context.l.t('svcFilterSessions'),
+                      4 => context.l.t('svcFilterJobs'),
+                      _ => context.l.t('svcFilterServices'),
                     },
                     prefixIcon: const Icon(Icons.search, size: 16),
                   ),
@@ -350,7 +351,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 if (loadingProcs)
                   const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 else
-                  SmallButton('Refresh', icon: Icons.refresh, onPressed: _loadProcesses),
+                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadProcesses),
               ],
               const Spacer(),
               SegmentedButton<int>(
@@ -690,7 +691,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (!vps.online || state.isReportStale(vps)) {
       return Center(
         child: Text(
-          state.isReportStale(vps) ? 'Data outdated — agent offline' : 'Waiting for agent…',
+          state.isReportStale(vps) ? context.l.t('svcStale') : context.l.t('svcWaiting'),
           style: const TextStyle(color: BeacleColors.textDim),
         ),
       );
@@ -707,7 +708,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (rows.isEmpty) {
       return Center(
         child: Text(
-          loadingProcs ? 'Loading…' : (filter.isEmpty ? 'No process data' : 'Nothing matches the filter'),
+          loadingProcs
+              ? context.l.t('svcLoading')
+              : (filter.isEmpty ? context.l.t('svcNoProcData') : context.l.t('svcNothingMatches')),
           style: const TextStyle(color: BeacleColors.textDim),
         ),
       );
@@ -721,12 +724,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
           padding: const EdgeInsets.fromLTRB(22, 10, 22, 6),
           child: Row(
             children: [
-              SizedBox(width: 60, child: _sortHeader('PID', SortKey.pid)),
-              Expanded(flex: 2, child: _sortHeader('NAME', SortKey.name)),
-              const SizedBox(width: 90, child: Text('USER', style: hdr)),
-              const SizedBox(width: 60, child: Text('STATE', style: hdr)),
-              SizedBox(width: 70, child: _sortHeader('CPU %', SortKey.cpu, align: TextAlign.right)),
-              SizedBox(width: 90, child: _sortHeader('MEMORY', SortKey.mem, align: TextAlign.right)),
+              SizedBox(width: 60, child: _sortHeader(context.l.t('procPid'), SortKey.pid)),
+              Expanded(flex: 2, child: _sortHeader(context.l.t('procName'), SortKey.name)),
+              SizedBox(width: 90, child: Text(context.l.t('procUser'), style: hdr)),
+              SizedBox(width: 60, child: Text(context.l.t('procState'), style: hdr)),
+              SizedBox(width: 70, child: _sortHeader(context.l.t('procCpu'), SortKey.cpu, align: TextAlign.right)),
+              SizedBox(width: 90, child: _sortHeader(context.l.t('procMemory'), SortKey.mem, align: TextAlign.right)),
+              const SizedBox(width: 64),
             ],
           ),
         ),
@@ -785,6 +789,26 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           child: Text(fmtBytes(p.memBytes),
                               textAlign: TextAlign.right, style: const TextStyle(fontSize: 12)),
                         ),
+                        SizedBox(
+                          width: 64,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              _killBtn(
+                                icon: Icons.close,
+                                tip: context.l.t('killTerminate'),
+                                color: BeacleColors.warn,
+                                onPressed: () => _killProcess(state, vps, p, 'term'),
+                              ),
+                              _killBtn(
+                                icon: Icons.delete_forever_outlined,
+                                tip: context.l.t('killForce'),
+                                color: BeacleColors.err,
+                                onPressed: () => _killProcess(state, vps, p, 'kill'),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -795,6 +819,59 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ),
       ],
     );
+  }
+
+  Widget _killBtn(
+      {required IconData icon, required String tip, required Color color, required VoidCallback onPressed}) {
+    return SizedBox(
+      width: 30,
+      height: 26,
+      child: IconButton(
+        icon: Icon(icon, size: 15, color: color),
+        tooltip: tip,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        onPressed: onPressed,
+      ),
+    );
+  }
+
+  /// Asks for confirmation, then signals the process. The list refreshes right
+  /// away so a successful kill reads as the row disappearing.
+  Future<void> _killProcess(AppState state, Vps vps, ProcessInfo p, String signal) async {
+    final force = signal == 'kill';
+    final cmd = p.command.isEmpty ? p.name : p.command;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(force
+            ? context.l.f('killKillTitle', {'name': p.name})
+            : context.l.f('killTermTitle', {'name': p.name})),
+        content: Text(
+          force
+              ? context.l.f('killKillBody', {'pid': p.pid, 'command': cmd, 'vps': vps.name})
+              : context.l.f('killTermBody', {'pid': p.pid, 'command': cmd, 'vps': vps.name}),
+          style: const TextStyle(fontSize: 13, height: 1.45),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(force ? context.l.t('killForce') : context.l.t('killTerminate'),
+                style: const TextStyle(color: BeacleColors.err)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      state.onUserAction();
+      await state.api.killProcess(vps.id, p.pid, signal);
+      if (mounted) showToast(context, context.l.f('killDone', {'pid': p.pid}));
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+    _loadProcesses(silent: true);
   }
 
   Future<void> _refreshScreens(AppState state, Vps vps) async {

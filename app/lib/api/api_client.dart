@@ -45,11 +45,11 @@ class ApiClient {
 
   Uri _u(String path) => Uri.parse('$baseUrl$path');
 
-  Future<dynamic> _req(String method, String path, {Object? body}) async {
+  Future<dynamic> _req(String method, String path, {Object? body, Duration? timeout}) async {
     final req = http.Request(method, _u(path));
     req.headers['Content-Type'] = 'application/json';
     if (body != null) req.body = jsonEncode(body);
-    final streamed = await _http.send(req).timeout(const Duration(seconds: 20));
+    final streamed = await _http.send(req).timeout(timeout ?? const Duration(seconds: 20));
     final resp = await http.Response.fromStream(streamed);
     dynamic decoded;
     try {
@@ -152,6 +152,33 @@ class ApiClient {
 
   Future<ContainerStats> dockerStats(String vpsId, String containerId) async =>
       ContainerStats.fromJson(await get(_a(vpsId, 'docker/containers/$containerId/stats')));
+
+  /// Runs a one-shot shell command inside a container (no TTY).
+  /// The agent caps execution at 30s; the client budget covers that plus proxy overhead.
+  Future<DockerExecResult> dockerExec(String vpsId, String containerId, String command) async =>
+      DockerExecResult.fromJson(await _req('POST', _a(vpsId, 'docker/containers/$containerId/exec'),
+          body: {'command': command},
+          timeout: const Duration(seconds: 45)) as Map<String, dynamic>);
+
+  /// Compose lifecycle: restart | up (pull + up -d) | down | pull.
+  /// Image pulls can take minutes, hence the long timeout.
+  Future<String> composeAction(String vpsId, String project, String action) async =>
+      ((await _req('POST', _a(vpsId, 'docker/compose/$project/$action'),
+              timeout: const Duration(minutes: 6))) as Map)['output'] as String? ?? '';
+
+  Future<PrunePreview> prunePreview(String vpsId) async =>
+      PrunePreview.fromJson(await get(_a(vpsId, 'docker/prune/preview')));
+
+  Future<PruneResult> dockerPrune(String vpsId,
+          {bool images = false, bool volumes = false, bool builder = false}) async =>
+      PruneResult.fromJson(
+          await _req('POST', _a(vpsId, 'docker/prune'),
+              body: {'images': images, 'volumes': volumes, 'builder': builder},
+              timeout: const Duration(minutes: 3)) as Map<String, dynamic>);
+
+  /// Signals a process: 'term' (SIGTERM) or 'kill' (SIGKILL).
+  Future<void> killProcess(String vpsId, int pid, String signal) =>
+      post(_a(vpsId, 'system/processes/$pid/kill'), body: {'signal': signal});
 
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));

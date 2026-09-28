@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -125,6 +127,32 @@ func (d *dockerClient) delete(path string) error {
 		return fmt.Errorf("docker api %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	return nil
+}
+
+// postJSON sends a JSON body and decodes a JSON answer. A nil in sends an
+// empty body; a nil out skips decoding (status is still checked).
+func (d *dockerClient) postJSON(path string, in, out any) error {
+	var body io.Reader
+	if in != nil {
+		b, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(b)
+	}
+	resp, err := d.http.Post("http://docker"+path, "application/json", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("docker api %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
 }
 
 // --- raw API shapes ----------------------------------------------------------
@@ -497,10 +525,17 @@ func (c *linuxCollector) DockerLogs(id string, tail int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return demuxDockerStream(raw), nil
+}
+
+// demuxDockerStream decodes the 8-byte-header multiplexed stream dockerd
+// returns for non-TTY output (logs, exec). TTY output is a raw stream and
+// passes through untouched — see the header sniff below.
+func demuxDockerStream(raw []byte) string {
 	// TTY containers return a raw stream; multiplexed streams start with a
 	// header whose byte 0 is 0/1/2 and bytes 1-3 are zero.
 	if len(raw) < 8 || raw[0] > 2 || raw[1] != 0 || raw[2] != 0 || raw[3] != 0 {
-		return string(raw), nil
+		return string(raw)
 	}
 	var sb strings.Builder
 	for len(raw) >= 8 {
@@ -513,5 +548,257 @@ func (c *linuxCollector) DockerLogs(id string, tail int) (string, error) {
 		sb.Write(raw[:size])
 		raw = raw[size:]
 	}
-	return sb.String(), nil
+	return sb.String()
+}
+
+const (
+	// dockerExecTimeout bounds one-shot exec. The default 10s client budget is
+	// too tight for migrations; beyond 30s the user should open a shell.
+	dockerExecTimeout = 30 * time.Second
+	dockerExecMaxOut  = 256 << 10
+	dockerExecMaxCmd  = 4 << 10
+)
+
+// DockerExec runs a one-shot shell command inside a container and returns its
+// combined output. The command runs as `sh -c "<command>"` so pipes and
+// redirects work the way they do in a terminal.
+func (c *linuxCollector) DockerExec(id, command string) (shared.DockerExecResult, error) {
+	var res shared.DockerExecResult
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return res, fmt.Errorf("command is required")
+	}
+	if len(command) > dockerExecMaxCmd {
+		return res, fmt.Errorf("command too long (max %d bytes)", dockerExecMaxCmd)
+	}
+
+	var created struct {
+		ID string `json:"Id"`
+	}
+	if err := c.docker.postJSON("/containers/"+id+"/exec", map[string]any{
+		"AttachStdout": true,
+		"AttachStderr": true,
+		"Cmd":          []string{"sh", "-c", command},
+	}, &created); err != nil {
+		return res, err
+	}
+	if created.ID == "" {
+		return res, fmt.Errorf("docker exec: no exec id returned")
+	}
+
+	// The start call streams until the command finishes, so it gets its own
+	// client with an exec-sized budget instead of the 10s collection one.
+	long := &http.Client{Timeout: dockerExecTimeout + 10*time.Second, Transport: c.docker.http.Transport}
+	startBody, _ := json.Marshal(map[string]any{"Detach": false, "Tty": false})
+	ctx, cancel := context.WithTimeout(context.Background(), dockerExecTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://docker/exec/"+created.ID+"/start", bytes.NewReader(startBody))
+	if err != nil {
+		return res, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := long.Do(req)
+	if err != nil {
+		return res, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return res, fmt.Errorf("docker exec start: %s", strings.TrimSpace(string(b)))
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, dockerExecMaxOut+1))
+	if err != nil {
+		return res, err
+	}
+	if len(raw) > dockerExecMaxOut {
+		res.Truncated = true
+		raw = raw[:dockerExecMaxOut]
+	}
+	res.Output = demuxDockerStream(raw)
+
+	var inspect struct {
+		ExitCode int `json:"ExitCode"`
+	}
+	if err := c.docker.get("/exec/"+created.ID+"/json", &inspect); err == nil {
+		res.ExitCode = inspect.ExitCode
+	}
+	return res, nil
+}
+
+const composeTimeout = 5 * time.Minute
+
+// ComposeAction runs a compose lifecycle command against a project the agent
+// knows from container labels. Unlike containers, compose has no Engine API —
+// this shells out to the docker CLI, which must be installed on the VPS.
+func (c *linuxCollector) ComposeAction(project, action string) (shared.ComposeActionResult, error) {
+	var res shared.ComposeActionResult
+	switch action {
+	case "restart", "up", "down", "pull":
+	default:
+		return res, fmt.Errorf("unknown compose action %q", action)
+	}
+	if strings.TrimSpace(project) == "" {
+		return res, fmt.Errorf("project is required")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		return res, fmt.Errorf("docker CLI not found on this host")
+	}
+
+	dir, cfg := c.composeProjectDir(project)
+	if dir == "" {
+		return res, fmt.Errorf("compose project %q not found (no containers carry its labels)", project)
+	}
+
+	// "up" means pull-then-up: separate invocations, one answer.
+	steps := [][]string{}
+	switch action {
+	case "restart":
+		steps = append(steps, []string{"restart"})
+	case "pull":
+		steps = append(steps, []string{"pull"})
+	case "down":
+		steps = append(steps, []string{"down"})
+	case "up":
+		steps = append(steps, []string{"pull"}, []string{"up", "-d"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), composeTimeout)
+	defer cancel()
+	var sb strings.Builder
+	for _, step := range steps {
+		args := []string{"compose", "-p", project}
+		for _, f := range strings.Split(cfg, ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				args = append(args, "-f", f)
+			}
+		}
+		args = append(args, step...)
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		sb.Write(out)
+		if len(sb.String()) > dockerExecMaxOut {
+			break
+		}
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return res, fmt.Errorf("compose %s timed out after %s", strings.Join(step, " "), composeTimeout)
+			}
+			return res, fmt.Errorf("compose %s failed: %s", strings.Join(step, " "), strings.TrimSpace(string(out)))
+		}
+	}
+	res.Output = sb.String()
+	if len(res.Output) > dockerExecMaxOut {
+		res.Output = res.Output[:dockerExecMaxOut] + "\n…(truncated)"
+	}
+	return res, nil
+}
+
+// composeProjectDir recovers a project's working dir and config files from the
+// labels dockerd stamps on every compose-created container.
+func (c *linuxCollector) composeProjectDir(project string) (dir, config string) {
+	var raw []apiContainer
+	if err := c.docker.get("/containers/json?all=1", &raw); err != nil {
+		return "", ""
+	}
+	for _, rc := range raw {
+		if rc.Labels["com.docker.compose.project"] == project {
+			return rc.Labels["com.docker.compose.project.working_dir"],
+				rc.Labels["com.docker.compose.project.config_files"]
+		}
+	}
+	return "", ""
+}
+
+type apiDiskUsage struct {
+	Images []struct {
+		Size       int64 `json:"Size"`
+		SharedSize int64 `json:"SharedSize"`
+		UsageCount int   `json:"UsageCount"`
+	} `json:"Images"`
+	Volumes []struct {
+		Size       int64 `json:"Size"`
+		UsageCount int   `json:"UsageCount"`
+	} `json:"Volumes"`
+}
+
+// PrunePreview estimates what a prune would reclaim, from dockerd's own disk
+// usage report. Shared layers are subtracted so the number does not pretend
+// every image owns its base.
+func (c *linuxCollector) PrunePreview() (shared.DockerPrunePreview, error) {
+	var res shared.DockerPrunePreview
+	var du apiDiskUsage
+	if err := c.docker.get("/system/df", &du); err != nil {
+		return res, err
+	}
+	for _, im := range du.Images {
+		if im.UsageCount <= 0 {
+			res.DanglingImages++
+			if own := im.Size - im.SharedSize; own > 0 {
+				res.DanglingBytes += uint64(own)
+			}
+		}
+	}
+	for _, v := range du.Volumes {
+		if v.UsageCount <= 0 {
+			res.UnusedVolumes++
+			if v.Size > 0 {
+				res.UnusedVolumesBytes += uint64(v.Size)
+			}
+		}
+	}
+	return res, nil
+}
+
+// DockerPrune removes unused images, volumes and/or builder cache, exactly the
+// scopes the panel asked for. The inventory cache is dropped so the next
+// snapshot shows the freed space immediately.
+func (c *linuxCollector) DockerPrune(req shared.DockerPruneRequest) (shared.DockerPruneResult, error) {
+	var res shared.DockerPruneResult
+	if !req.Images && !req.Volumes && !req.Builder {
+		return res, fmt.Errorf("nothing selected")
+	}
+	var sb strings.Builder
+	if req.Images {
+		var out struct {
+			ImagesDeleted []struct {
+				Deleted  string `json:"Deleted"`
+				Untagged string `json:"Untagged"`
+			} `json:"ImagesDeleted"`
+			SpaceReclaimed uint64 `json:"SpaceReclaimed"`
+		}
+		if err := c.docker.postJSON("/images/prune", map[string]any{}, &out); err != nil {
+			return res, err
+		}
+		res.ImagesDeleted = len(out.ImagesDeleted)
+		res.SpaceReclaimed += out.SpaceReclaimed
+		fmt.Fprintf(&sb, "images: %d entries deleted\n", len(out.ImagesDeleted))
+	}
+	if req.Volumes {
+		var out struct {
+			VolumesDeleted []string `json:"VolumesDeleted"`
+			SpaceReclaimed uint64   `json:"SpaceReclaimed"`
+		}
+		if err := c.docker.postJSON("/volumes/prune", map[string]any{}, &out); err != nil {
+			return res, err
+		}
+		res.VolumesDeleted = len(out.VolumesDeleted)
+		res.SpaceReclaimed += out.SpaceReclaimed
+		fmt.Fprintf(&sb, "volumes: %d deleted\n", len(out.VolumesDeleted))
+	}
+	if req.Builder {
+		var out struct {
+			SpaceReclaimed uint64 `json:"SpaceReclaimed"`
+		}
+		if err := c.docker.postJSON("/build/prune", map[string]any{}, &out); err != nil {
+			return res, err
+		}
+		res.SpaceReclaimed += out.SpaceReclaimed
+		sb.WriteString("builder cache pruned\n")
+	}
+	c.docker.invMu.Lock()
+	c.docker.inventoryAt = time.Time{}
+	c.docker.invMu.Unlock()
+	res.Output = sb.String()
+	return res, nil
 }

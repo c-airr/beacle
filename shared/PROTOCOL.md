@@ -80,6 +80,24 @@ request as an `AgentCommand` on the agent's WebSocket. The agent executes the
 route locally and returns `AgentCommandResult`. There is **no** inbound HTTP
 listener on the agent in production.
 
+### Agent command routes (1.2)
+
+Docker lifecycle (existing): `POST /api/docker/containers/{id}/{start|stop|restart|remove}`,
+`GET .../logs`, `GET .../stats`, `GET /api/docker/compose` (read-only list).
+
+New in 1.2:
+
+- `POST /api/docker/containers/{id}/exec` with `{"command": "..."}` — one-shot
+  `sh -c` inside the container, 30 s limit, combined output + exit code.
+- `POST /api/docker/compose/{project}/{restart|up|down|pull}` — compose CLI in
+  the project's working dir (from container labels). `up` means pull-then-up.
+  Long timeout (5 min agent-side).
+- `GET /api/docker/prune/preview` — reclaimable images/volumes estimate.
+- `POST /api/docker/prune` with `{"images": bool, "volumes": bool, "builder": bool}` —
+  removes exactly the selected scopes.
+- `POST /api/system/processes/{pid}/kill` with `{"signal": "term"|"kill"}` —
+  SIGTERM/SIGKILL. The agent refuses PID 1 and its own PID.
+
 ## UI → Backend
 
 REST under `/api/*`, live stream at `GET /ws` (JSON `WSMessage` frames).

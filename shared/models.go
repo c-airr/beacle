@@ -229,6 +229,57 @@ type DockerState struct {
 	Networks   []DockerNetwork  `json:"networks"`
 }
 
+// DockerExecRequest runs a one-shot command inside a container, like
+// `docker exec <name> sh -c "<command>"`. No TTY, no interactivity — for the
+// 90% of cases where you just want to read a file or run a migration.
+type DockerExecRequest struct {
+	Command string `json:"command"`
+}
+
+// DockerExecResult carries the combined stdout/stderr of the command.
+type DockerExecResult struct {
+	Output    string `json:"output"`
+	ExitCode  int    `json:"exit_code"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
+// ComposeActionResult carries the combined output of a compose CLI invocation.
+type ComposeActionResult struct {
+	Output string `json:"output"`
+}
+
+// DockerPruneRequest selects what `docker system prune`-style cleanup removes.
+// Each scope defaults to false: the panel must ask explicitly, because
+// volumes in particular are data loss by design.
+type DockerPruneRequest struct {
+	Images  bool `json:"images"`
+	Volumes bool `json:"volumes"`
+	Builder bool `json:"builder"`
+}
+
+// DockerPruneResult says what the cleanup actually reclaimed.
+type DockerPruneResult struct {
+	ImagesDeleted  int    `json:"images_deleted"`
+	VolumesDeleted int    `json:"volumes_deleted"`
+	SpaceReclaimed uint64 `json:"space_reclaimed_bytes"`
+	Output         string `json:"output,omitempty"`
+}
+
+// DockerPrunePreview estimates reclaimable space before anything is removed,
+// so the panel can show "this frees ~2.3 GB" on the confirmation dialog.
+type DockerPrunePreview struct {
+	DanglingImages     int    `json:"dangling_images"`
+	DanglingBytes      uint64 `json:"dangling_bytes"`
+	UnusedVolumes      int    `json:"unused_volumes"`
+	UnusedVolumesBytes uint64 `json:"unused_volumes_bytes"`
+}
+
+// KillProcessRequest asks the agent to signal a process. Signal is "term"
+// (SIGTERM, ask nicely) or "kill" (SIGKILL, no asking).
+type KillProcessRequest struct {
+	Signal string `json:"signal"`
+}
+
 // ---------------------------------------------------------------------------
 // Services (systemd + screen)
 // ---------------------------------------------------------------------------

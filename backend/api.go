@@ -366,7 +366,19 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		bodyBytes, _ = io.ReadAll(r.Body)
 	}
-	respBody, code, err := s.agentHub.Request(entry.VPS.ID, r.Method, path, bodyBytes, 30*time.Second)
+	// Long operations get a matching budget: image pulls and prunes take
+	// minutes, and answering 502 while the agent is still working would leave
+	// the panel and the VPS disagreeing about what happened.
+	timeout := 30 * time.Second
+	switch {
+	case strings.HasPrefix(path, "/api/docker/compose/"):
+		timeout = 6 * time.Minute
+	case path == "/api/docker/prune":
+		timeout = 3 * time.Minute
+	case strings.HasSuffix(path, "/exec"):
+		timeout = 45 * time.Second
+	}
+	respBody, code, err := s.agentHub.Request(entry.VPS.ID, r.Method, path, bodyBytes, timeout)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

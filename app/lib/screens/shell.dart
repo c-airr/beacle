@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../update/app_updater.dart';
@@ -41,15 +42,17 @@ class AppShellState extends State<AppShell> {
 
   @visibleForTesting
   static const items = [
-    (Icons.space_dashboard_outlined, 'Overview'),
-    (Icons.public_outlined, 'Map'),
-    (Icons.dns_outlined, 'Servers'),
-    (Icons.view_in_ar_outlined, 'Docker'),
-    (Icons.miscellaneous_services_outlined, 'Services'),
-    (Icons.alt_route_outlined, 'Proxy'),
-    (Icons.notifications_outlined, 'Alerts'),
-    (Icons.tune_outlined, 'Settings'),
+    (Icons.space_dashboard_outlined, 'navOverview'),
+    (Icons.public_outlined, 'navMap'),
+    (Icons.dns_outlined, 'navServers'),
+    (Icons.view_in_ar_outlined, 'navDocker'),
+    (Icons.miscellaneous_services_outlined, 'navServices'),
+    (Icons.alt_route_outlined, 'navProxy'),
+    (Icons.notifications_outlined, 'navAlerts'),
+    (Icons.tune_outlined, 'navSettings'),
   ];
+
+  String _label(BuildContext context, int i) => context.l.t(items[i].$2);
 
   @override
   void initState() {
@@ -174,7 +177,7 @@ class AppShellState extends State<AppShell> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
               child: _NavItem(
                 icon: items[i].$1,
-                label: items[i].$2,
+                label: _label(context, i),
                 selected: index == i,
                 badge: i == _tabAlerts ? state.activeAlerts : 0,
                 onTap: () {
@@ -205,7 +208,7 @@ class AppShellState extends State<AppShell> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    state.connected ? 'Connected' : 'Offline',
+                    state.connected ? context.l.t('connected') : context.l.t('offline'),
                     style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                   ),
                 ),
@@ -245,7 +248,7 @@ class AppShellState extends State<AppShell> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('Settings', style: TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
+              Text(context.l.t('navSettings'), style: TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -262,16 +265,19 @@ class AppShellState extends State<AppShell> {
       ),
       child: Row(
         children: [
-          Text(items[index].$2, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
+          Text(_label(context, index), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
           const Spacer(),
           Text(
-            '${state.vpsList.where((v) => v.online).length}/${state.vpsList.length} online',
+            context.l.f('onlineOf', {
+              'on': state.vpsList.where((v) => v.online).length,
+              'total': state.vpsList.length,
+            }),
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.add_circle_outline, size: 18),
-            tooltip: 'Add VPS',
+            tooltip: context.l.t('addVps'),
             onPressed: () => showAddVpsDialog(context),
           ),
           Stack(

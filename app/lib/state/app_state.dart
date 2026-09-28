@@ -7,6 +7,7 @@ import 'package:web_socket_channel/io.dart';
 import '../alert_sound.dart';
 import '../api/api_client.dart';
 import '../config.dart';
+import '../l10n/language.dart';
 import '../models/models.dart';
 import '../tray.dart';
 import '../update/app_updater.dart';
@@ -78,6 +79,20 @@ class AppState extends ChangeNotifier {
     animationsEnabled = _settings.raw['animations'] != false;
     startMinimised = _settings.raw['start_minimised'] == true;
     closeBehaviour = _settings.raw['close_behaviour'] as String? ?? 'tray';
+    language = AppLanguageWire.fromWire(_settings.raw['language'] as String?);
+  }
+
+  /// Interface language. English by default; the onboarding wizard asks on
+  /// first run. Every localized widget watches AppState, so switching
+  /// re-renders the whole panel immediately.
+  AppLanguage language = AppLanguage.en;
+
+  void setLanguage(AppLanguage l) {
+    if (language == l) return;
+    language = l;
+    _settings.raw['language'] = l.wire;
+    _settings.save();
+    notifyListeners();
   }
 
   /// Hover/selection transitions. No longer exposed as a setting — it stayed

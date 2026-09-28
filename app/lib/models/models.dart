@@ -409,6 +409,40 @@ class SystemdUnitPreview {
         exists = _b(j['exists']);
 }
 
+/// The combined stdout/stderr of a one-shot `docker exec` command.
+class DockerExecResult {
+  final String output;
+  final int exitCode;
+  final bool truncated;
+  DockerExecResult.fromJson(Map<String, dynamic> j)
+      : output = _s(j['output']),
+        exitCode = _i(j['exit_code']),
+        truncated = _b(j['truncated']);
+}
+
+/// Estimate of what a docker prune would reclaim, shown on the confirmation.
+class PrunePreview {
+  final int danglingImages, unusedVolumes;
+  final int danglingBytes, unusedVolumesBytes;
+  PrunePreview.fromJson(Map<String, dynamic> j)
+      : danglingImages = _i(j['dangling_images']),
+        unusedVolumes = _i(j['unused_volumes']),
+        danglingBytes = _i(j['dangling_bytes']),
+        unusedVolumesBytes = _i(j['unused_volumes_bytes']);
+  int get totalBytes => danglingBytes + unusedVolumesBytes;
+}
+
+/// What a docker prune actually removed.
+class PruneResult {
+  final int imagesDeleted, volumesDeleted, spaceReclaimed;
+  final String output;
+  PruneResult.fromJson(Map<String, dynamic> j)
+      : imagesDeleted = _i(j['images_deleted']),
+        volumesDeleted = _i(j['volumes_deleted']),
+        spaceReclaimed = _i(j['space_reclaimed_bytes']),
+        output = _s(j['output']);
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

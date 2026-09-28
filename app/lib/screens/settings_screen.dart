@@ -8,6 +8,8 @@ import '../api/api_client.dart';
 import '../backend/autostart.dart';
 import '../backend/config_maintenance.dart';
 import '../config.dart';
+import '../l10n/language.dart';
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../paths.dart';
 import '../state/app_state.dart';
@@ -99,10 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             indicatorColor: BeacleColors.text,
             labelColor: BeacleColors.text,
             unselectedLabelColor: BeacleColors.textDim,
-            tabs: const [
-              Tab(text: 'General'),
-              Tab(text: 'Updates'),
-              Tab(text: 'Status'),
+            tabs: [
+              Tab(text: context.l.t('setGeneral')),
+              Tab(text: context.l.t('setUpdates')),
+              Tab(text: context.l.t('setStatus')),
             ],
           ),
         ),
@@ -141,11 +143,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ),
               const Divider(height: 24),
               _choice(
-                label: 'Language',
-                detail: 'Translations need the interface strings extracted first.',
-                value: 'en',
-                options: const {'en': 'English'},
-                onChanged: (_) {},
+                label: context.l.t('setLanguage'),
+                detail: context.l.t('setLanguageDetail'),
+                value: state.language.wire,
+                options: const {'en': 'English', 'pl': 'Polski'},
+                onChanged: (v) => state.setLanguage(AppLanguageWire.fromWire(v)),
               ),
             ],
           ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/api_client.dart';
+import '../../l10n/language.dart';
+import '../../l10n/strings.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../user_config.dart';
@@ -20,10 +22,27 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int step = 0;
+  AppLanguage lang = AppLanguage.en;
   SshDisplayMode sshMode = SshDisplayMode.separateWindow;
   final List<SavedServer> _servers = [];
   bool _finishing = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // A reinstall keeps settings.json — respect a language chosen earlier.
+    lang = AppLanguageWire.fromWire(UserSettings.load().raw['language'] as String?);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AppState>().setLanguage(lang);
+    });
+  }
+
+  void _pickLanguage(AppLanguage v) {
+    setState(() => lang = v);
+    // Applied live so the rest of the wizard already shows the new language.
+    context.read<AppState>().setLanguage(v);
+  }
 
   void _finish() async {
     if (_servers.isEmpty) return;
@@ -56,10 +75,65 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             border: Border.all(color: BeacleColors.border),
           ),
           child: switch (step) {
-            0 => _stepWelcome(),
-            1 => _stepSshMode(),
+            0 => _stepLanguage(),
+            1 => _stepWelcome(),
+            2 => _stepSshMode(),
             _ => _stepVps(),
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _stepLanguage() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(context.l.t('obLanguageTitle'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Text(
+          context.l.t('obLanguageBody'),
+          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+        ),
+        const SizedBox(height: 16),
+        _langTile(AppLanguage.en),
+        _langTile(AppLanguage.pl),
+        const SizedBox(height: 24),
+        Align(
+          alignment: Alignment.centerRight,
+          child: SmallButton(context.l.t('continueBtn'),
+              icon: Icons.arrow_forward, onPressed: () => setState(() => step = 1)),
+        ),
+      ],
+    );
+  }
+
+  Widget _langTile(AppLanguage mode) {
+    final selected = lang == mode;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _pickLanguage(mode),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
+            color: selected ? BeacleColors.surfaceHi : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                  size: 16, color: selected ? BeacleColors.text : BeacleColors.textDim),
+              const SizedBox(width: 10),
+              Text(mode.label,
+                  style:
+                      TextStyle(fontSize: 13, color: selected ? BeacleColors.text : BeacleColors.textDim)),
+            ],
+          ),
         ),
       ),
     );
@@ -72,16 +146,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: [
         const Text('BEACLE', style: TextStyle(fontSize: 12, letterSpacing: 4, color: BeacleColors.textDim)),
         const SizedBox(height: 12),
-        const Text('Welcome', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
+        Text(context.l.t('obWelcomeTitle'),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
         const SizedBox(height: 12),
-        const Text(
-          'Beacle is a local panel for managing your VPS infrastructure — monitoring, Docker, systemd, and reverse proxy — over your Tailscale network.',
-          style: TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.5),
+        Text(
+          context.l.t('obWelcomeBody'),
+          style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.5),
         ),
         const SizedBox(height: 28),
-        Align(
-          alignment: Alignment.centerRight,
-          child: SmallButton('Continue', icon: Icons.arrow_forward, onPressed: () => setState(() => step = 1)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(onPressed: () => setState(() => step = 0), child: Text(context.l.t('back'))),
+            SmallButton(context.l.t('continueBtn'),
+                icon: Icons.arrow_forward, onPressed: () => setState(() => step = 2)),
+          ],
         ),
       ],
     );
@@ -92,22 +171,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('SSH display', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        Text(context.l.t('obSshTitle'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
-        const Text(
-          'Choose how SSH sessions will open in a future release. SSH is not available yet.',
-          style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+        Text(
+          context.l.t('obSshBody'),
+          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
         ),
         const SizedBox(height: 16),
-        _modeTile('Separate window', SshDisplayMode.separateWindow),
-        _modeTile('Split view', SshDisplayMode.splitView),
-        _modeTile('Fullscreen', SshDisplayMode.fullscreen),
+        _modeTile(context.l.t('obSshSeparate'), SshDisplayMode.separateWindow),
+        _modeTile(context.l.t('obSshSplit'), SshDisplayMode.splitView),
+        _modeTile(context.l.t('obSshFullscreen'), SshDisplayMode.fullscreen),
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton(onPressed: () => setState(() => step = 0), child: const Text('Back')),
-            SmallButton('Continue', icon: Icons.arrow_forward, onPressed: () => setState(() => step = 2)),
+            TextButton(onPressed: () => setState(() => step = 1), child: Text(context.l.t('back'))),
+            SmallButton(context.l.t('continueBtn'),
+                icon: Icons.arrow_forward, onPressed: () => setState(() => step = 3)),
           ],
         ),
       ],
@@ -146,12 +227,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Add VPS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        Text(context.l.t('obVpsTitle'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         const SizedBox(height: 10),
         tailscaleRequirementBanner(),
         const SizedBox(height: 16),
         if (_servers.isEmpty)
-          const Text('No servers yet', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
+          Text(context.l.t('obNoServers'),
+              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
         else ...[
           for (final s in _servers) ...[
             Padding(
@@ -170,7 +253,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Remove',
+                    tooltip: context.l.t('obRemove'),
                     icon: const Icon(Icons.close, size: 16, color: BeacleColors.textDim),
                     onPressed: _finishing
                         ? null
@@ -193,14 +276,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Text(_error!, style: const TextStyle(fontSize: 11, color: BeacleColors.err)),
         ],
         const SizedBox(height: 12),
-        SmallButton('Add VPS', icon: Icons.add, onPressed: _finishing ? null : () => _showAddVps()),
+        SmallButton(context.l.t('addVps'), icon: Icons.add, onPressed: _finishing ? null : () => _showAddVps()),
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton(onPressed: _finishing ? null : () => setState(() => step = 1), child: const Text('Back')),
+            TextButton(onPressed: _finishing ? null : () => setState(() => step = 2), child: Text(context.l.t('back'))),
             SmallButton(
-              'Finish',
+              context.l.t('finish'),
               icon: Icons.check,
               onPressed: _servers.isEmpty || _finishing ? null : _finish,
             ),
@@ -228,7 +311,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final picked = await showDialog<TailscaleDevice>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Select Tailscale device'),
+        title: Text(context.l.t('obSelectDevice')),
         content: SizedBox(
           width: 400,
           child: Column(
@@ -273,23 +356,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: BeacleColors.glassHi,
-          title: Text('Install agent on ${picked.name}'),
+          title: Text(context.l.f('obInstallTitle', {'name': picked.name})),
           content: SizedBox(
             width: 520,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Run on the VPS as root. Downloads from GitHub only.',
-                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                Text(
+                  context.l.t('obInstallBody'),
+                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
                 ),
                 const SizedBox(height: 8),
                 CopyField(cmd),
               ],
             ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))],
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.l.t('obDone')))],
         ),
       );
     } catch (e) {
@@ -311,12 +394,13 @@ class _InstallBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: BeacleColors.border),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Install command', style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-          SizedBox(height: 6),
-          AddVpsCommand(),
+          Text(context.l.t('obInstallCmd'),
+              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+          const SizedBox(height: 6),
+          const AddVpsCommand(),
         ],
       ),
     );

@@ -15,6 +15,17 @@ type Collector interface {
 	DockerAction(id, action string) error // start | stop | restart | remove
 	DockerLogs(id string, tail int) (string, error)
 	DockerStats(id string) (shared.ContainerStats, error)
+	// DockerExec runs a one-shot shell command inside a container (no TTY).
+	DockerExec(id, command string) (shared.DockerExecResult, error)
+	// ComposeAction runs a compose lifecycle command: restart | up | down | pull.
+	ComposeAction(project, action string) (shared.ComposeActionResult, error)
+	// PrunePreview estimates reclaimable space; DockerPrune removes it.
+	PrunePreview() (shared.DockerPrunePreview, error)
+	DockerPrune(req shared.DockerPruneRequest) (shared.DockerPruneResult, error)
+
+	// KillProcess signals a process by PID ("term" | "kill"). The agent
+	// refuses PID 1 and its own PID.
+	KillProcess(pid int, signal string) error
 
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)

@@ -33,7 +33,7 @@
 
 A desktop panel for managing your VPS fleet, so you don't have to juggle SSH sessions across ten terminals anymore. Monitoring, Docker, systemd, reverse proxy, and a map of your infrastructure — all in one app.
 
-**Status: stable** — 1.1.0 is out, with builds for Windows, Linux and macOS.
+**Status: stable** — 1.2.0 is out, with builds for Windows, Linux and macOS.
 
 ---
 
@@ -145,7 +145,7 @@ That's it — the agent registers itself and the panel starts getting data. Agen
 sha256sum -c SHA256SUMS.txt
 
 # Prove the file was built by this repository's Release workflow
-gh attestation verify ./beacle-setup-1.1.0.exe --repo c-airr/beacle
+gh attestation verify ./beacle-setup-1.2.0.exe --repo c-airr/beacle
 ```
 
 ### Cut a release (maintainers)
@@ -177,7 +177,7 @@ Do **not** upload app or agent binaries by hand. The workflow builds them on `wi
 ### Next
 
 - [ ] Light theme — the palette is compiled in as constants, so it is a rework of every screen
-- [ ] Translations — the interface strings need extracting first
+- [x] Translations (core) — 1.2 ships English + Polish for onboarding, nav, Docker, Services and Settings; remaining screens still English
 - [ ] Signed and notarised macOS builds (right-click → Open until then)
 
 ### v2.0 — platform
