@@ -355,6 +355,69 @@ type CronEntrySpec struct {
 	DayWeek  string `json:"day_week"`
 	Command  string `json:"command"`
 }
+
+// FirewallRule is one input rule in the active backend's native terms. The
+// panel only sends IDs and specs — never raw commands.
+type FirewallRule struct {
+	ID        string `json:"id"`
+	Action    string `json:"action"` // "allow" | "deny" | "other"
+	Proto     string `json:"proto"`  // "tcp" | "udp" | "any"
+	Port      string `json:"port"`   // "80", "8000:8010", "" when the rule is not port-scoped
+	Source    string `json:"source"` // CIDR/IP or "" for anywhere
+	Comment   string `json:"comment,omitempty"`
+	Raw       string `json:"raw"` // backend-native line, for display
+	Protected bool   `json:"protected"` // guard: deleting needs force, the panel confirms twice
+}
+
+// FirewallStatus is the whole input-filtering picture of a host.
+type FirewallStatus struct {
+	Backend         string         `json:"backend"` // "ufw" | "firewalld" | "iptables" | "nftables" | "none"
+	BackendDetail   string         `json:"backend_detail,omitempty"` // e.g. zone, or which nft table
+	Enabled         bool           `json:"enabled"`
+	DefaultIncoming string         `json:"default_incoming,omitempty"` // "allow" | "deny" | ""
+	Note            string         `json:"note,omitempty"`             // caveats, e.g. no persistence
+	Editable        bool           `json:"editable"`                   // false for nftables/none
+	Rules           []FirewallRule `json:"rules"`
+	ProtectedPorts  []int          `json:"protected_ports"` // ssh + agent ports the guard defends
+	OpenPorts       []PortInfo     `json:"open_ports"`      // listeners, so allows match reality
+}
+
+// FirewallRuleSpec is a rule the panel wants added.
+type FirewallRuleSpec struct {
+	Action  string `json:"action"` // "allow" | "deny"
+	Proto   string `json:"proto"`  // "tcp" | "udp"
+	Port    string `json:"port"`   // "80" or "8000-8010"/"8000:8010"; "" only with Source on deny
+	Source  string `json:"source,omitempty"` // optional CIDR/IP restriction
+	Comment string `json:"comment,omitempty"`
+}
+
+// FirewallDryRun previews the native commands a mutation would run.
+type FirewallDryRun struct {
+	Commands []string `json:"commands"`
+	Warning  string   `json:"warning,omitempty"`
+}
+
+// FirewallMutation is the result of allow/deny/delete.
+type FirewallMutation struct {
+	OK      bool          `json:"ok"`
+	Rule    *FirewallRule `json:"rule,omitempty"`
+	Warning string        `json:"warning,omitempty"`
+}
+
+// FirewallDeleteRequest carries the rule ID plus the explicit override the
+// guard demands for protected allows.
+type FirewallDeleteRequest struct {
+	ID    string `json:"id"`
+	Force bool   `json:"force"`
+}
+
+// FirewallDryRunRequest previews allow/deny/delete without changing anything.
+type FirewallDryRunRequest struct {
+	Action string            `json:"action"` // "allow" | "deny" | "delete"
+	Spec   *FirewallRuleSpec `json:"spec,omitempty"` // allow/deny
+	ID     string            `json:"id,omitempty"`   // delete
+}
+
 // ---------------------------------------------------------------------------
 // Services (systemd + screen)
 // ---------------------------------------------------------------------------

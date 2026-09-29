@@ -9,6 +9,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/cron_dialog.dart';
+import '../widgets/firewall_dialog.dart';
 import '../widgets/screen_launcher.dart';
 import '../widgets/service_wizard.dart';
 
@@ -76,10 +77,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
   List<ProcessInfo> processes = [];
   bool loadingProcs = false;
   Timer? _procTimer;
+  Timer? _nohupTimer;
   Timer? _logTimer;
   Timer? _logDebounce;
-  Timer? _nohupTimer;
   int _refreshSec = 10;
+
   /// System logs tab state. The global filter field doubles as the grep query.
   List<SystemLogFile> logFiles = [];
   String? logFileId;
@@ -87,15 +89,20 @@ class _ServicesScreenState extends State<ServicesScreen> {
   String logText = '';
   bool loadingLogs = false;
 
+  /// Keyed by VPS id: the nohup tab shows the whole fleet at once.
+  Map<String, List<NohupJob>> nohupByVps = {};
+
   /// Cron tab state. Per-host like logs, but loaded once per host — crontabs
   /// do not change under their own power, so no polling.
   CronState? cron;
   String? _cronHostId;
   bool loadingCron = false;
 
-
-  /// Keyed by VPS id: the nohup tab shows the whole fleet at once.
-  Map<String, List<NohupJob>> nohupByVps = {};
+  /// Firewall tab state. Same shape as cron: load on open, reload after
+  /// every mutation.
+  FirewallStatus? fw;
+  String? _fwHostId;
+  bool loadingFw = false;
 
   /// Tabs that need the process list: the processes tab and the merged view.
   bool get _needsProcesses => tab == 0 || tab == 2;
@@ -244,9 +251,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   void dispose() {
     _procTimer?.cancel();
+    _nohupTimer?.cancel();
     _logTimer?.cancel();
     _logDebounce?.cancel();
-    _nohupTimer?.cancel();
     super.dispose();
   }
 
@@ -266,6 +273,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     if (tab != 4) {
       _nohupTimer?.cancel();
+      _nohupTimer = null;
     } else if (_nohupTimer == null) {
       // Slower than processes: a detached job either runs or it does not, and
       // this is one round trip per server in the fleet.
@@ -417,13 +425,51 @@ class _ServicesScreenState extends State<ServicesScreen> {
     await _loadCron();
   }
 
-      _nohupTimer = null;
+  Future<void> _loadFw() async {
+    final state = context.read<AppState>();
+    final id = selectedId;
+    if (id == null) return;
+    final vps = state.vpsList.where((v) => v.id == id).firstOrNull;
+    if (vps == null || !vps.online || state.isReportStale(vps)) {
+      if (mounted) {
+        setState(() {
+          fw = null;
+          _fwHostId = id;
+          loadingFw = false;
+        });
+      }
       return;
     }
-    if (_nohupTimer != null) return;
-    // Slower than processes: a detached job either runs or it does not, and
-    // this is one round trip per server in the fleet.
-    _nohupTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadNohup());
+    if (mounted) setState(() => loadingFw = true);
+    try {
+      final f = await state.api.firewallStatus(id);
+      if (!mounted || selectedId != id) return;
+      setState(() {
+        fw = f;
+        _fwHostId = id;
+        loadingFw = false;
+      });
+    } catch (_) {
+      if (mounted && selectedId == id) {
+        setState(() {
+          fw = null;
+          _fwHostId = id;
+          loadingFw = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _fwRule(AppState state, Vps vps, String action) async {
+    final applied =
+        await showFirewallRuleDialog(context, vpsId: vps.id, vpsName: vps.name, action: action);
+    if (applied) await _loadFw();
+  }
+
+  Future<void> _fwDelete(AppState state, Vps vps, FirewallRule r) async {
+    final applied =
+        await showFirewallDeleteDialog(context, vpsId: vps.id, vpsName: vps.name, rule: r);
+    if (applied) await _loadFw();
   }
 
   Future<void> _loadProcesses({bool silent = false}) async {
@@ -499,6 +545,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       setState(() => selectedId = v);
                       if (tab == 5) _loadLogFiles();
                       if (tab == 6) _loadCron();
+                      if (tab == 7) _loadFw();
                     },
                   ),
                 ),
@@ -511,9 +558,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       0 => context.l.t('svcFilterAll'),
                       2 => context.l.t('svcFilterProcs'),
                       3 => context.l.t('svcFilterSessions'),
+                      4 => context.l.t('svcFilterJobs'),
                       5 => context.l.t('logsGrepHint'),
                       6 => context.l.t('cronFilterHint'),
-                      4 => context.l.t('svcFilterJobs'),
+                      7 => context.l.t('fwFilterHint'),
                       _ => context.l.t('svcFilterServices'),
                     },
                     prefixIcon: const Icon(Icons.search, size: 16),
@@ -524,18 +572,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   },
                 ),
               ),
-                  if (_needsProcesses || tab == 5 || tab == 6) ...[
+              if (_needsProcesses || tab == 5 || tab == 6 || tab == 7) ...[
                 const SizedBox(width: 12),
                 if ((tab == 5
                         ? loadingLogs
-                                : tab == 6
-                                    ? loadingCron
-                                    : loadingProcs))
+                        : tab == 6
+                            ? loadingCron
+                            : tab == 7
+                                ? loadingFw
+                                : loadingProcs))
+                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 else if (tab == 5)
                   SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadLogs)
                 else if (tab == 6)
                   SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadCron)
-                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                else if (tab == 7)
+                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadFw)
                 else
                   SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadProcesses),
               ],
@@ -553,20 +605,25 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   ButtonSegment(value: 2, label: Text('processes (${processes.length})', style: const TextStyle(fontSize: 12))),
                   // Fleet-wide counts, because these two tabs are fleet-wide.
                   ButtonSegment(value: 3, label: Text('screen ($_fleetScreenCount)', style: const TextStyle(fontSize: 12))),
+                  ButtonSegment(value: 4, label: Text('nohup ($_fleetNohupCount)', style: const TextStyle(fontSize: 12))),
                   ButtonSegment(value: 5, label: Text('logs (${logFiles.length})', style: const TextStyle(fontSize: 12))),
                   ButtonSegment(
                       value: 6,
                       label: Text('cron (${(cron?.entries.length ?? 0) + (cron?.timers.length ?? 0)})',
                           style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 4, label: Text('nohup ($_fleetNohupCount)', style: const TextStyle(fontSize: 12))),
+                  ButtonSegment(
+                      value: 7,
+                      label: Text('firewall (${fw?.rules.length ?? 0})',
+                          style: const TextStyle(fontSize: 12))),
                 ],
                 selected: {tab},
                 onSelectionChanged: (s) {
                   setState(() => tab = s.first);
                   if ((s.first == 0 || s.first == 2) && processes.isEmpty) _loadProcesses();
+                  if (s.first == 4) _loadNohup();
                   if (s.first == 5) _loadLogFiles();
                   if (s.first == 6 && _cronHostId != selectedId) _loadCron();
-                  if (s.first == 4) _loadNohup();
+                  if (s.first == 7 && _fwHostId != selectedId) _loadFw();
                 },
               ),
             ],
@@ -582,7 +639,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             4 => _fleetNohupList(state, withAgent),
             5 => _systemLogsList(state, vps),
             6 => _cronList(state, vps),
-            _ => _fleetNohupList(state, withAgent),
+            _ => _fwList(state, vps),
           },
         ),
       ],
@@ -1069,6 +1126,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
     _loadProcesses(silent: true);
   }
+
   /// System logs for one host: a file picker plus the filter field above
   /// doubling as a grep query. Polls while the tab is open.
   Widget _systemLogsList(AppState state, Vps vps) {
@@ -1162,6 +1220,335 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
+  /// Cron for one host: root's crontab (editable) plus read-only system
+  /// cron files and systemd timers. The global filter matches commands.
+  Widget _cronList(AppState state, Vps vps) {
+    final live = vps.online && !state.isReportStale(vps);
+    final c = cron;
+    if (c == null && loadingCron) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (c == null) {
+      return Center(
+        child: Text(!live ? context.l.t('svcStale') : context.l.t('cronLoadFailed'),
+            style: const TextStyle(color: BeacleColors.textDim)),
+      );
+    }
+    bool matches(CronEntry e) {
+      if (filter.isEmpty) return true;
+      final hay = '${e.command} ${e.source} ${e.schedule} ${e.user}'.toLowerCase();
+      return hay.contains(filter);
+    }
+
+    bool timerMatches(SystemdTimer t) {
+      if (filter.isEmpty) return true;
+      return t.unit.toLowerCase().contains(filter);
+    }
+
+    final mine = c.entries.where((e) => e.source == 'crontab' && matches(e)).toList();
+    final system = c.entries.where((e) => e.source != 'crontab' && matches(e)).toList();
+    final timers = c.timers.where(timerMatches).toList();
+
+    return SmoothListView(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
+      children: [
+        Row(children: [
+          Expanded(
+            child: Text(context.l.t('cronMine'),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          if (!c.cronAvailable)
+            Text(context.l.t('cronNoCron'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+          const SizedBox(width: 8),
+          SmallButton(context.l.t('cronNew'),
+              icon: Icons.add,
+              onPressed: !live || !c.cronAvailable ? null : () => _cronCreate(state, vps)),
+        ]),
+        const SizedBox(height: 8),
+        if (mine.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(context.l.t('cronEmpty'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+          ),
+        for (final e in mine) _cronEntryCard(state, vps, e, live),
+        if (system.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(context.l.t('cronSystem'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          for (final e in system) _cronEntryCard(state, vps, e, live),
+        ],
+        if (timers.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(context.l.t('cronTimers'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          for (final t in timers)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: BeacleColors.surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: BeacleColors.border),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: t.active == 'active' ? BeacleColors.ok : BeacleColors.textDim,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.unit, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(
+                          '${context.l.t('cronNext')}: ${t.next.isEmpty ? '—' : t.next}   ·   '
+                          '${context.l.t('cronLast')}: ${t.last.isEmpty ? '—' : t.last}',
+                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _cronEntryCard(AppState state, Vps vps, CronEntry e, bool live) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: BeacleColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: BeacleColors.border),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(e.command,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'Consolas')),
+                const SizedBox(height: 3),
+                Text(
+                  '${e.schedule}${e.user.isNotEmpty ? '   ·   ${e.user}' : ''}   ·   ${e.source}',
+                  style: const TextStyle(
+                      fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                ),
+              ],
+            ),
+          ),
+          if (e.editable) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 17),
+              tooltip: context.l.t('edit'),
+              color: BeacleColors.textDim,
+              onPressed: !live ? null : () => _cronEdit(state, vps, e),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 17),
+              tooltip: context.l.t('delete'),
+              color: BeacleColors.err,
+              onPressed: !live ? null : () => _cronDelete(state, vps, e),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  /// Firewall for one host: backend state, editable rules with the SSH
+  /// guard, and the listener list so allows match open ports.
+  Widget _fwList(AppState state, Vps vps) {
+    final live = vps.online && !state.isReportStale(vps);
+    final f = fw;
+    if (f == null && loadingFw) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (f == null) {
+      return Center(
+        child: Text(!live ? context.l.t('svcStale') : context.l.t('fwLoadFailed'),
+            style: const TextStyle(color: BeacleColors.textDim)),
+      );
+    }
+    bool matches(FirewallRule r) {
+      if (filter.isEmpty) return true;
+      return '${r.raw} ${r.summary} ${r.comment}'.toLowerCase().contains(filter);
+    }
+
+    bool portMatches(PortInfo p) {
+      if (filter.isEmpty) return true;
+      return '${p.port} ${p.protocol} ${p.processName}'.toLowerCase().contains(filter);
+    }
+
+    final rules = f.rules.where(matches).toList();
+    final open = f.openPorts.where(portMatches).toList();
+    final canEdit = live && f.editable;
+
+    Widget chip(String text, Color color) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(text, style: TextStyle(fontSize: 11, color: color)),
+        );
+
+    return SmoothListView(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            chip(f.backend, BeacleColors.text),
+            if (f.backendDetail.isNotEmpty)
+              Text(f.backendDetail,
+                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            chip(
+                f.enabled ? context.l.t('fwEnabled') : context.l.t('fwDisabled'),
+                f.enabled ? BeacleColors.ok : BeacleColors.warn),
+            if (f.defaultIncoming.isNotEmpty)
+              chip('${context.l.t('fwDefaultIn')}: ${f.defaultIncoming}',
+                  f.defaultIncoming == 'deny' ? BeacleColors.ok : BeacleColors.warn),
+            if (f.protectedPorts.isNotEmpty)
+              chip('${context.l.t('fwGuarded')}: ${f.protectedPorts.join(', ')}',
+                  BeacleColors.accent),
+          ],
+        ),
+        if (f.note.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(f.note,
+                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+          ),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: Text(context.l.t('fwRules'),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          SmallButton(context.l.t('fwAllow'),
+              icon: Icons.add, onPressed: canEdit ? () => _fwRule(state, vps, 'allow') : null),
+          const SizedBox(width: 8),
+          SmallButton(context.l.t('fwBlockIp'),
+              icon: Icons.block_outlined,
+              color: BeacleColors.err,
+              onPressed: canEdit ? () => _fwRule(state, vps, 'deny') : null),
+        ]),
+        const SizedBox(height: 8),
+        if (rules.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(context.l.t('fwEmpty'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+          ),
+        for (final r in rules)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: BeacleColors.surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: BeacleColors.border),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: r.action == 'allow'
+                        ? BeacleColors.ok
+                        : r.action == 'deny'
+                            ? BeacleColors.err
+                            : BeacleColors.textDim,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Flexible(
+                          child: Text(r.summary,
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (r.protected) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.shield_outlined,
+                              size: 13, color: BeacleColors.accent),
+                        ],
+                      ]),
+                      const SizedBox(height: 2),
+                      SelectableText(r.raw,
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: BeacleColors.textDim,
+                              fontFamily: 'Consolas')),
+                      if (r.comment.isNotEmpty)
+                        Text(r.comment,
+                            style: const TextStyle(
+                                fontSize: 11, color: BeacleColors.textDim)),
+                    ],
+                  ),
+                ),
+                if (r.id.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 17),
+                    tooltip: context.l.t('delete'),
+                    color: BeacleColors.err,
+                    onPressed: canEdit ? () => _fwDelete(state, vps, r) : null,
+                  ),
+              ]),
+            ),
+          ),
+        if (open.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(context.l.t('fwOpenPorts'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          for (final p in open)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(children: [
+                SizedBox(
+                  width: 110,
+                  child: Text('${p.port}/${p.protocol}',
+                      style: const TextStyle(fontSize: 12, fontFamily: 'Consolas')),
+                ),
+                Expanded(
+                  child: Text(
+                    p.processName.isEmpty ? '—' : p.processName,
+                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ]),
+            ),
+        ],
+      ],
+    );
+  }
 
   Future<void> _refreshScreens(AppState state, Vps vps) async {
     // The snapshot stream carries screen sessions, but after start/stop the
@@ -1501,157 +1888,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
             color: BeacleColors.err,
             onPressed: !live ? null : () => _killScreen(state, vps, s),
           ),
-        ]),
-      ),
-    );
-  }
-
-  /// Cron for one host: root's crontab (editable) plus read-only system
-  /// cron files and systemd timers. The global filter matches commands.
-  Widget _cronList(AppState state, Vps vps) {
-    final live = vps.online && !state.isReportStale(vps);
-    final c = cron;
-    if (c == null && loadingCron) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-    }
-    if (c == null) {
-      return Center(
-        child: Text(!live ? context.l.t('svcStale') : context.l.t('cronLoadFailed'),
-            style: const TextStyle(color: BeacleColors.textDim)),
-      );
-    }
-    bool matches(CronEntry e) {
-      if (filter.isEmpty) return true;
-      final hay = '${e.command} ${e.source} ${e.schedule} ${e.user}'.toLowerCase();
-      return hay.contains(filter);
-    }
-
-    bool timerMatches(SystemdTimer t) {
-      if (filter.isEmpty) return true;
-      return t.unit.toLowerCase().contains(filter);
-    }
-
-    final mine = c.entries.where((e) => e.source == 'crontab' && matches(e)).toList();
-    final system = c.entries.where((e) => e.source != 'crontab' && matches(e)).toList();
-    final timers = c.timers.where(timerMatches).toList();
-
-    return SmoothListView(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
-      children: [
-        Row(children: [
-          Expanded(
-            child: Text(context.l.t('cronMine'),
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          ),
-          if (!c.cronAvailable)
-            Text(context.l.t('cronNoCron'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
-          const SizedBox(width: 8),
-          SmallButton(context.l.t('cronNew'),
-              icon: Icons.add,
-              onPressed: !live || !c.cronAvailable ? null : () => _cronCreate(state, vps)),
-        ]),
-        const SizedBox(height: 8),
-        if (mine.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(context.l.t('cronEmpty'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
-          ),
-        for (final e in mine) _cronEntryCard(state, vps, e, live),
-        if (system.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Text(context.l.t('cronSystem'),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          for (final e in system) _cronEntryCard(state, vps, e, live),
-        ],
-        if (timers.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Text(context.l.t('cronTimers'),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          for (final t in timers)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(
-                  color: BeacleColors.surface,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: BeacleColors.border),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: t.active == 'active' ? BeacleColors.ok : BeacleColors.textDim,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(t.unit, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                        Text(
-                          '${context.l.t('cronNext')}: ${t.next.isEmpty ? '—' : t.next}   ·   '
-                          '${context.l.t('cronLast')}: ${t.last.isEmpty ? '—' : t.last}',
-                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
-                        ),
-                      ],
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-        ],
-      ],
-    );
-  }
-
-  Widget _cronEntryCard(AppState state, Vps vps, CronEntry e, bool live) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: BeacleColors.surface,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: BeacleColors.border),
-        ),
-        child: Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SelectableText(e.command,
-                    style: const TextStyle(fontSize: 12, fontFamily: 'Consolas')),
-                const SizedBox(height: 3),
-                Text(
-                  '${e.schedule}${e.user.isNotEmpty ? '   ·   ${e.user}' : ''}   ·   ${e.source}',
-                  style: const TextStyle(
-                      fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
-                ),
-              ],
-            ),
-          ),
-          if (e.editable) ...[
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 17),
-              tooltip: context.l.t('edit'),
-              color: BeacleColors.textDim,
-              onPressed: !live ? null : () => _cronEdit(state, vps, e),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 17),
-              tooltip: context.l.t('delete'),
-              color: BeacleColors.err,
-              onPressed: !live ? null : () => _cronDelete(state, vps, e),
-            ),
-          ],
         ]),
       ),
     );

@@ -380,6 +380,80 @@ func (c *devCollector) CronDelete(id string) error {
 	return fmt.Errorf("unknown entry %q", id)
 }
 
+var devFwRules = []shared.FirewallRule{
+	{ID: "1", Action: "allow", Proto: "tcp", Port: "22", Raw: "[ 1] 22/tcp ALLOW IN Anywhere", Protected: true},
+	{ID: "2", Action: "allow", Proto: "tcp", Port: "80", Raw: "[ 2] 80/tcp ALLOW IN Anywhere"},
+	{ID: "3", Action: "allow", Proto: "tcp", Port: "443", Raw: "[ 3] 443/tcp ALLOW IN Anywhere"},
+	{ID: "4", Action: "deny", Proto: "any", Source: "203.0.113.7", Raw: "[ 4] Anywhere DENY IN 203.0.113.7"},
+}
+
+func (c *devCollector) FirewallStatus() (shared.FirewallStatus, error) {
+	ports, _ := c.Ports()
+	return shared.FirewallStatus{
+		Backend: "ufw", Enabled: true, DefaultIncoming: "deny", Editable: true,
+		Rules: append([]shared.FirewallRule{}, devFwRules...),
+		ProtectedPorts: []int{22, 8931},
+		OpenPorts:      ports,
+	}, nil
+}
+
+func (c *devCollector) FirewallDryRun(req shared.FirewallDryRunRequest) (shared.FirewallDryRun, error) {
+	if req.Action == "delete" {
+		for _, r := range devFwRules {
+			if r.ID == req.ID {
+				out := shared.FirewallDryRun{Commands: []string{"ufw --force delete " + req.ID}}
+				if r.Protected {
+					out.Warning = "allows protected port " + r.Port + " — deleting may cut off SSH"
+				}
+				return out, nil
+			}
+		}
+		return shared.FirewallDryRun{}, fmt.Errorf("rule %q no longer exists", req.ID)
+	}
+	if req.Spec == nil {
+		return shared.FirewallDryRun{}, fmt.Errorf("spec is required")
+	}
+	cmd := "ufw " + req.Action + " " + req.Spec.Port + "/" + req.Spec.Proto
+	if req.Spec.Source != "" {
+		cmd += " from " + req.Spec.Source
+	}
+	return shared.FirewallDryRun{Commands: []string{cmd}}, nil
+}
+
+func (c *devCollector) FirewallAllow(spec shared.FirewallRuleSpec) (shared.FirewallMutation, error) {
+	devFwRules = append(devFwRules, shared.FirewallRule{
+		ID: fmt.Sprintf("%d", len(devFwRules)+1), Action: "allow",
+		Proto: spec.Proto, Port: spec.Port, Source: spec.Source,
+		Comment: spec.Comment, Raw: "simulated allow",
+	})
+	return shared.FirewallMutation{OK: true}, nil
+}
+
+func (c *devCollector) FirewallDeny(spec shared.FirewallRuleSpec) (shared.FirewallMutation, error) {
+	if (spec.Port == "22" || spec.Port == "8931") && spec.Source == "" {
+		return shared.FirewallMutation{}, fmt.Errorf("refusing to deny protected port %s to the whole world (ssh/agent guard)", spec.Port)
+	}
+	devFwRules = append(devFwRules, shared.FirewallRule{
+		ID: fmt.Sprintf("%d", len(devFwRules)+1), Action: "deny",
+		Proto: spec.Proto, Port: spec.Port, Source: spec.Source,
+		Comment: spec.Comment, Raw: "simulated deny",
+	})
+	return shared.FirewallMutation{OK: true}, nil
+}
+
+func (c *devCollector) FirewallDelete(req shared.FirewallDeleteRequest) (shared.FirewallMutation, error) {
+	for i, r := range devFwRules {
+		if r.ID == req.ID {
+			if r.Protected && !req.Force {
+				return shared.FirewallMutation{}, fmt.Errorf("allows protected port %s — confirm explicitly to proceed", r.Port)
+			}
+			devFwRules = append(devFwRules[:i], devFwRules[i+1:]...)
+			return shared.FirewallMutation{OK: true}, nil
+		}
+	}
+	return shared.FirewallMutation{}, fmt.Errorf("rule %q no longer exists", req.ID)
+}
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

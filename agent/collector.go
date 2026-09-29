@@ -45,6 +45,15 @@ type Collector interface {
 	CronUpdate(id string, spec shared.CronEntrySpec) error
 	CronDelete(id string) error
 
+	// Firewall across ufw/firewalld/iptables (nftables is read-only), with
+	// an SSH guard: protected ports can never be denied to the world, and
+	// deleting an allow that covers them needs force.
+	FirewallStatus() (shared.FirewallStatus, error)
+	FirewallDryRun(req shared.FirewallDryRunRequest) (shared.FirewallDryRun, error)
+	FirewallAllow(spec shared.FirewallRuleSpec) (shared.FirewallMutation, error)
+	FirewallDeny(spec shared.FirewallRuleSpec) (shared.FirewallMutation, error)
+	FirewallDelete(req shared.FirewallDeleteRequest) (shared.FirewallMutation, error)
+
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)

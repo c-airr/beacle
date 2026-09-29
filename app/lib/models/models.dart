@@ -558,6 +558,79 @@ class CronEntrySpec {
       };
 }
 
+/// One input rule in the active firewall backend's native terms.
+class FirewallRule {
+  final String id, action, proto, port, source, comment, raw;
+  final bool protected;
+  FirewallRule.fromJson(Map<String, dynamic> j)
+      : id = _s(j['id']),
+        action = _s(j['action']),
+        proto = _s(j['proto']),
+        port = _s(j['port']),
+        source = _s(j['source']),
+        comment = _s(j['comment']),
+        raw = _s(j['raw']),
+        protected = _b(j['protected']);
+  String get summary {
+    final what = port.isEmpty ? (source.isEmpty ? 'all' : source) : '$port/$proto';
+    final from = port.isEmpty || source.isEmpty ? '' : ' from $source';
+    return '$action $what$from';
+  }
+}
+
+class FirewallStatus {
+  final String backend, backendDetail, defaultIncoming, note;
+  final bool enabled, editable;
+  final List<FirewallRule> rules;
+  final List<int> protectedPorts;
+  final List<PortInfo> openPorts;
+  FirewallStatus.fromJson(Map<String, dynamic> j)
+      : backend = _s(j['backend']),
+        backendDetail = _s(j['backend_detail']),
+        defaultIncoming = _s(j['default_incoming']),
+        note = _s(j['note']),
+        enabled = _b(j['enabled']),
+        editable = _b(j['editable']),
+        rules = _list(j['rules'], FirewallRule.fromJson),
+        protectedPorts = ((j['protected_ports'] as List?) ?? [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        openPorts = _list(j['open_ports'], PortInfo.fromJson);
+}
+
+class FirewallRuleSpec {
+  String action, proto, port, source, comment;
+  FirewallRuleSpec(
+      {this.action = 'allow',
+      this.proto = 'tcp',
+      this.port = '',
+      this.source = '',
+      this.comment = ''});
+  Map<String, dynamic> toJson() => {
+        'action': action,
+        'proto': proto,
+        'port': port,
+        'source': source,
+        'comment': comment,
+      };
+}
+
+class FirewallDryRun {
+  final List<String> commands;
+  final String warning;
+  FirewallDryRun.fromJson(Map<String, dynamic> j)
+      : commands = ((j['commands'] as List?) ?? []).map((e) => '$e').toList(),
+        warning = _s(j['warning']);
+}
+
+class FirewallMutation {
+  final bool ok;
+  final String warning;
+  FirewallMutation.fromJson(Map<String, dynamic> j)
+      : ok = _b(j['ok']),
+        warning = _s(j['warning']);
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

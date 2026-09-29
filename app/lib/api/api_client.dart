@@ -220,6 +220,27 @@ class ApiClient {
   Future<void> cronDelete(String vpsId, String id) =>
       delete(_a(vpsId, 'system/cron/${Uri.encodeComponent(id)}'));
 
+  Future<FirewallStatus> firewallStatus(String vpsId) async =>
+      FirewallStatus.fromJson(await get(_a(vpsId, 'firewall/status')));
+
+  Future<FirewallDryRun> firewallDryRun(
+      String vpsId, String action, FirewallRuleSpec? spec, String id) async {
+    final body = <String, dynamic>{'action': action};
+    if (spec != null) body['spec'] = spec.toJson();
+    if (id.isNotEmpty) body['id'] = id;
+    return FirewallDryRun.fromJson(await post(_a(vpsId, 'firewall/dry-run'), body: body));
+  }
+
+  Future<FirewallMutation> firewallAllow(String vpsId, FirewallRuleSpec spec) async =>
+      FirewallMutation.fromJson(await post(_a(vpsId, 'firewall/allow'), body: spec.toJson()));
+
+  Future<FirewallMutation> firewallDeny(String vpsId, FirewallRuleSpec spec) async =>
+      FirewallMutation.fromJson(await post(_a(vpsId, 'firewall/deny'), body: spec.toJson()));
+
+  Future<FirewallMutation> firewallDelete(String vpsId, String id, {bool force = false}) async =>
+      FirewallMutation.fromJson(
+          await post(_a(vpsId, 'firewall/delete'), body: {'id': id, 'force': force}));
+
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));
 

@@ -176,6 +176,68 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, map[string]any{"ok": true})
 	}))
+	mux.HandleFunc("GET /api/firewall/status", a(func(w http.ResponseWriter, r *http.Request) {
+		st, err := s.col.FirewallStatus()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, st)
+	}))
+	mux.HandleFunc("POST /api/firewall/dry-run", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FirewallDryRunRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		dry, err := s.col.FirewallDryRun(req)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, dry)
+	}))
+	mux.HandleFunc("POST /api/firewall/allow", a(func(w http.ResponseWriter, r *http.Request) {
+		var spec shared.FirewallRuleSpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		spec.Action = "allow"
+		res, err := s.col.FirewallAllow(spec)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
+	mux.HandleFunc("POST /api/firewall/deny", a(func(w http.ResponseWriter, r *http.Request) {
+		var spec shared.FirewallRuleSpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		spec.Action = "deny"
+		res, err := s.col.FirewallDeny(spec)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
+	mux.HandleFunc("POST /api/firewall/delete", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FirewallDeleteRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		res, err := s.col.FirewallDelete(req)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
 	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
 		pid, err := strconv.Atoi(r.PathValue("pid"))
 		if err != nil {
