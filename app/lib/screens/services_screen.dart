@@ -8,6 +8,7 @@ import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/cron_dialog.dart';
 import '../widgets/screen_launcher.dart';
 import '../widgets/service_wizard.dart';
 
@@ -85,6 +86,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
   String? _logHostId;
   String logText = '';
   bool loadingLogs = false;
+
+  /// Cron tab state. Per-host like logs, but loaded once per host — crontabs
+  /// do not change under their own power, so no polling.
+  CronState? cron;
+  String? _cronHostId;
+  bool loadingCron = false;
 
 
   /// Keyed by VPS id: the nohup tab shows the whole fleet at once.
@@ -328,6 +335,88 @@ class _ServicesScreenState extends State<ServicesScreen> {
     _logDebounce = Timer(const Duration(milliseconds: 600), () => _loadLogs(silent: true));
   }
 
+  Future<void> _loadCron() async {
+    final state = context.read<AppState>();
+    final id = selectedId;
+    if (id == null) return;
+    final vps = state.vpsList.where((v) => v.id == id).firstOrNull;
+    if (vps == null || !vps.online || state.isReportStale(vps)) {
+      if (mounted) {
+        setState(() {
+          cron = null;
+          _cronHostId = id;
+          loadingCron = false;
+        });
+      }
+      return;
+    }
+    if (mounted) setState(() => loadingCron = true);
+    try {
+      final c = await state.api.cronState(id);
+      if (!mounted || selectedId != id) return;
+      setState(() {
+        cron = c;
+        _cronHostId = id;
+        loadingCron = false;
+      });
+    } catch (_) {
+      if (mounted && selectedId == id) {
+        setState(() {
+          cron = null;
+          _cronHostId = id;
+          loadingCron = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _cronCreate(AppState state, Vps vps) async {
+    final spec = await showCronEditor(context, vpsName: vps.name);
+    if (spec == null) return;
+    try {
+      state.onUserAction();
+      await state.api.cronCreate(vps.id, spec);
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+    await _loadCron();
+  }
+
+  Future<void> _cronEdit(AppState state, Vps vps, CronEntry e) async {
+    final spec = await showCronEditor(context, existing: e, vpsName: vps.name);
+    if (spec == null) return;
+    try {
+      state.onUserAction();
+      await state.api.cronUpdate(vps.id, e.id, spec);
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+    await _loadCron();
+  }
+
+  Future<void> _cronDelete(AppState state, Vps vps, CronEntry e) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l.t('cronDeleteTitle')),
+        content: Text(context.l.f('cronDeleteBody', {'cmd': e.command, 'vps': vps.name})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+          SmallButton(context.l.t('delete'), icon: Icons.delete_outline, color: BeacleColors.err,
+              onPressed: () => Navigator.pop(ctx, true)),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      state.onUserAction();
+      await state.api.cronDelete(vps.id, e.id);
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+    await _loadCron();
+  }
+
       _nohupTimer = null;
       return;
     }
@@ -409,6 +498,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     onChanged: (v) {
                       setState(() => selectedId = v);
                       if (tab == 5) _loadLogFiles();
+                      if (tab == 6) _loadCron();
                     },
                   ),
                 ),
@@ -422,6 +512,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       2 => context.l.t('svcFilterProcs'),
                       3 => context.l.t('svcFilterSessions'),
                       5 => context.l.t('logsGrepHint'),
+                      6 => context.l.t('cronFilterHint'),
                       4 => context.l.t('svcFilterJobs'),
                       _ => context.l.t('svcFilterServices'),
                     },
@@ -433,13 +524,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   },
                 ),
               ),
-                  if (_needsProcesses || tab == 5) ...[
+                  if (_needsProcesses || tab == 5 || tab == 6) ...[
                 const SizedBox(width: 12),
                 if ((tab == 5
                         ? loadingLogs
-                                : loadingProcs))
+                                : tab == 6
+                                    ? loadingCron
+                                    : loadingProcs))
                 else if (tab == 5)
                   SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadLogs)
+                else if (tab == 6)
+                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadCron)
                   const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 else
                   SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadProcesses),
@@ -459,6 +554,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   // Fleet-wide counts, because these two tabs are fleet-wide.
                   ButtonSegment(value: 3, label: Text('screen ($_fleetScreenCount)', style: const TextStyle(fontSize: 12))),
                   ButtonSegment(value: 5, label: Text('logs (${logFiles.length})', style: const TextStyle(fontSize: 12))),
+                  ButtonSegment(
+                      value: 6,
+                      label: Text('cron (${(cron?.entries.length ?? 0) + (cron?.timers.length ?? 0)})',
+                          style: const TextStyle(fontSize: 12))),
                   ButtonSegment(value: 4, label: Text('nohup ($_fleetNohupCount)', style: const TextStyle(fontSize: 12))),
                 ],
                 selected: {tab},
@@ -466,6 +565,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   setState(() => tab = s.first);
                   if ((s.first == 0 || s.first == 2) && processes.isEmpty) _loadProcesses();
                   if (s.first == 5) _loadLogFiles();
+                  if (s.first == 6 && _cronHostId != selectedId) _loadCron();
                   if (s.first == 4) _loadNohup();
                 },
               ),
@@ -481,6 +581,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             3 => _fleetScreenList(state, withAgent),
             4 => _fleetNohupList(state, withAgent),
             5 => _systemLogsList(state, vps),
+            6 => _cronList(state, vps),
             _ => _fleetNohupList(state, withAgent),
           },
         ),
@@ -1400,6 +1501,157 @@ class _ServicesScreenState extends State<ServicesScreen> {
             color: BeacleColors.err,
             onPressed: !live ? null : () => _killScreen(state, vps, s),
           ),
+        ]),
+      ),
+    );
+  }
+
+  /// Cron for one host: root's crontab (editable) plus read-only system
+  /// cron files and systemd timers. The global filter matches commands.
+  Widget _cronList(AppState state, Vps vps) {
+    final live = vps.online && !state.isReportStale(vps);
+    final c = cron;
+    if (c == null && loadingCron) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (c == null) {
+      return Center(
+        child: Text(!live ? context.l.t('svcStale') : context.l.t('cronLoadFailed'),
+            style: const TextStyle(color: BeacleColors.textDim)),
+      );
+    }
+    bool matches(CronEntry e) {
+      if (filter.isEmpty) return true;
+      final hay = '${e.command} ${e.source} ${e.schedule} ${e.user}'.toLowerCase();
+      return hay.contains(filter);
+    }
+
+    bool timerMatches(SystemdTimer t) {
+      if (filter.isEmpty) return true;
+      return t.unit.toLowerCase().contains(filter);
+    }
+
+    final mine = c.entries.where((e) => e.source == 'crontab' && matches(e)).toList();
+    final system = c.entries.where((e) => e.source != 'crontab' && matches(e)).toList();
+    final timers = c.timers.where(timerMatches).toList();
+
+    return SmoothListView(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
+      children: [
+        Row(children: [
+          Expanded(
+            child: Text(context.l.t('cronMine'),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          if (!c.cronAvailable)
+            Text(context.l.t('cronNoCron'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+          const SizedBox(width: 8),
+          SmallButton(context.l.t('cronNew'),
+              icon: Icons.add,
+              onPressed: !live || !c.cronAvailable ? null : () => _cronCreate(state, vps)),
+        ]),
+        const SizedBox(height: 8),
+        if (mine.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(context.l.t('cronEmpty'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+          ),
+        for (final e in mine) _cronEntryCard(state, vps, e, live),
+        if (system.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(context.l.t('cronSystem'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          for (final e in system) _cronEntryCard(state, vps, e, live),
+        ],
+        if (timers.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(context.l.t('cronTimers'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          for (final t in timers)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: BeacleColors.surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: BeacleColors.border),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: t.active == 'active' ? BeacleColors.ok : BeacleColors.textDim,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.unit, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(
+                          '${context.l.t('cronNext')}: ${t.next.isEmpty ? '—' : t.next}   ·   '
+                          '${context.l.t('cronLast')}: ${t.last.isEmpty ? '—' : t.last}',
+                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _cronEntryCard(AppState state, Vps vps, CronEntry e, bool live) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: BeacleColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: BeacleColors.border),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(e.command,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'Consolas')),
+                const SizedBox(height: 3),
+                Text(
+                  '${e.schedule}${e.user.isNotEmpty ? '   ·   ${e.user}' : ''}   ·   ${e.source}',
+                  style: const TextStyle(
+                      fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                ),
+              ],
+            ),
+          ),
+          if (e.editable) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 17),
+              tooltip: context.l.t('edit'),
+              color: BeacleColors.textDim,
+              onPressed: !live ? null : () => _cronEdit(state, vps, e),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 17),
+              tooltip: context.l.t('delete'),
+              color: BeacleColors.err,
+              onPressed: !live ? null : () => _cronDelete(state, vps, e),
+            ),
+          ],
         ]),
       ),
     );

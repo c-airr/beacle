@@ -315,6 +315,46 @@ type OSUpdateJob struct {
 	Output    string `json:"output,omitempty"` // tail of the run
 }
 
+// CronEntry is one scheduled job. Entries with Source == "crontab" live in
+// root's crontab and are editable; "cron.d/<file>" and "/etc/crontab" rows
+// are shown read-only so foreign tooling (certbot, apt) is never clobbered.
+type CronEntry struct {
+	ID       string `json:"id"` // "crontab:<n>" ordinal, stable until next mutation
+	Source   string `json:"source"`
+	Minute   string `json:"minute"`
+	Hour     string `json:"hour"`
+	DayMonth string `json:"day_month"`
+	Month    string `json:"month"`
+	DayWeek  string `json:"day_week"`
+	User     string `json:"user,omitempty"` // cron.d rows only
+	Command  string `json:"command"`
+	Editable bool   `json:"editable"`
+}
+
+// SystemdTimer is one row of `systemctl list-timers`.
+type SystemdTimer struct {
+	Unit   string `json:"unit"`
+	Active string `json:"active"`
+	Next   string `json:"next"`
+	Last   string `json:"last"`
+}
+
+// CronState bundles every scheduled thing on the host.
+type CronState struct {
+	Entries       []CronEntry    `json:"entries"`
+	Timers        []SystemdTimer `json:"timers"`
+	CronAvailable bool           `json:"cron_available"`
+}
+
+// CronEntrySpec is the editable shape of a crontab row.
+type CronEntrySpec struct {
+	Minute   string `json:"minute"`
+	Hour     string `json:"hour"`
+	DayMonth string `json:"day_month"`
+	Month    string `json:"month"`
+	DayWeek  string `json:"day_week"`
+	Command  string `json:"command"`
+}
 // ---------------------------------------------------------------------------
 // Services (systemd + screen)
 // ---------------------------------------------------------------------------

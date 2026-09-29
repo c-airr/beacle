@@ -208,6 +208,18 @@ class ApiClient {
   Future<OSUpdateJob> osUpdateStatus(String vpsId) async =>
       OSUpdateJob.fromJson(await get(_a(vpsId, 'system/updates/status')));
 
+  Future<CronState> cronState(String vpsId) async =>
+      CronState.fromJson(await get(_a(vpsId, 'system/cron')));
+
+  Future<CronEntry> cronCreate(String vpsId, CronEntrySpec spec) async =>
+      CronEntry.fromJson(await post(_a(vpsId, 'system/cron'), body: spec.toJson()));
+
+  Future<void> cronUpdate(String vpsId, String id, CronEntrySpec spec) =>
+      put(_a(vpsId, 'system/cron/${Uri.encodeComponent(id)}'), body: spec.toJson());
+
+  Future<void> cronDelete(String vpsId, String id) =>
+      delete(_a(vpsId, 'system/cron/${Uri.encodeComponent(id)}'));
+
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));
 

@@ -38,6 +38,13 @@ type Collector interface {
 	OSUpdateApply() error
 	OSUpdateStatus() (shared.OSUpdateJob, error)
 
+	// CronState bundles root's crontab (editable), system cron files and
+	// systemd timers (read-only). Mutations only touch root's crontab.
+	CronState() (shared.CronState, error)
+	CronCreate(spec shared.CronEntrySpec) (shared.CronEntry, error)
+	CronUpdate(id string, spec shared.CronEntrySpec) error
+	CronDelete(id string) error
+
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)

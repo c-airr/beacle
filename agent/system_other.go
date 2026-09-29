@@ -323,6 +323,63 @@ func (c *devCollector) OSUpdateApply() error {
 
 func (c *devCollector) OSUpdateStatus() (shared.OSUpdateJob, error) { return devUpdateJob, nil }
 
+var devCronEntries = []shared.CronEntry{
+	{ID: "crontab:0", Source: "crontab", Minute: "0", Hour: "3", DayMonth: "*", Month: "*", DayWeek: "*",
+		Command: "/opt/beacle/backup.sh >> /var/log/beacle-backup.log 2>&1", Editable: true},
+	{ID: "crontab:1", Source: "crontab", Minute: "*/5", Hour: "*", DayMonth: "*", Month: "*", DayWeek: "*",
+		Command: "/usr/bin/certbot -q renew", Editable: true},
+}
+
+func (c *devCollector) CronState() (shared.CronState, error) {
+	entries := append([]shared.CronEntry{}, devCronEntries...)
+	entries = append(entries,
+		shared.CronEntry{Source: "cron.d/sysstat", Minute: "*/10", Hour: "*", DayMonth: "*", Month: "*", DayWeek: "*",
+			User: "root", Command: "/usr/lib/sysstat/debian-sa1 1 1"},
+		shared.CronEntry{Source: "crontab-system", Minute: "17", Hour: "*", DayMonth: "*", Month: "*", DayWeek: "*",
+			User: "root", Command: "cd / && run-parts --report /etc/cron.hourly"},
+	)
+	return shared.CronState{
+		Entries:       entries,
+		CronAvailable: true,
+		Timers: []shared.SystemdTimer{
+			{Unit: "apt-daily.timer", Active: "active", Next: "Wed 2026-09-30 06:00:00 UTC", Last: "Tue 2026-09-29 06:12:44 UTC"},
+			{Unit: "logrotate.timer", Active: "active", Next: "Wed 2026-09-30 00:00:00 UTC", Last: "n/a"},
+		},
+	}, nil
+}
+
+func (c *devCollector) CronCreate(spec shared.CronEntrySpec) (shared.CronEntry, error) {
+	e := shared.CronEntry{ID: fmt.Sprintf("crontab:%d", len(devCronEntries)), Source: "crontab",
+		Minute: spec.Minute, Hour: spec.Hour, DayMonth: spec.DayMonth, Month: spec.Month, DayWeek: spec.DayWeek,
+		Command: spec.Command, Editable: true}
+	devCronEntries = append(devCronEntries, e)
+	return e, nil
+}
+
+func (c *devCollector) CronUpdate(id string, spec shared.CronEntrySpec) error {
+	for i, e := range devCronEntries {
+		if e.ID == id {
+			devCronEntries[i].Minute, devCronEntries[i].Hour, devCronEntries[i].DayMonth = spec.Minute, spec.Hour, spec.DayMonth
+			devCronEntries[i].Month, devCronEntries[i].DayWeek, devCronEntries[i].Command = spec.Month, spec.DayWeek, spec.Command
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown entry %q", id)
+}
+
+func (c *devCollector) CronDelete(id string) error {
+	for i, e := range devCronEntries {
+		if e.ID == id {
+			devCronEntries = append(devCronEntries[:i], devCronEntries[i+1:]...)
+			for j := range devCronEntries {
+				devCronEntries[j].ID = fmt.Sprintf("crontab:%d", j)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown entry %q", id)
+}
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

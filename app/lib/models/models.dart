@@ -491,6 +491,73 @@ class OSUpdateJob {
   bool get hasRun => startedAt.isNotEmpty;
 }
 
+/// One scheduled job: a row of root's crontab (editable), a system cron file
+/// row (read-only) or a systemd timer (read-only, separate list).
+class CronEntry {
+  final String id, source, minute, hour, dayMonth, month, dayWeek;
+  final String user, command;
+  final bool editable;
+  CronEntry.fromJson(Map<String, dynamic> j)
+      : id = _s(j['id']),
+        source = _s(j['source']),
+        minute = _s(j['minute']),
+        hour = _s(j['hour']),
+        dayMonth = _s(j['day_month']),
+        month = _s(j['month']),
+        dayWeek = _s(j['day_week']),
+        user = _s(j['user']),
+        command = _s(j['command']),
+        editable = _b(j['editable']);
+  String get schedule => minute == '@reboot' ? '@reboot' : '$minute $hour $dayMonth $month $dayWeek';
+}
+
+/// One row of `systemctl list-timers`.
+class SystemdTimer {
+  final String unit, active, next, last;
+  SystemdTimer.fromJson(Map<String, dynamic> j)
+      : unit = _s(j['unit']),
+        active = _s(j['active']),
+        next = _s(j['next']),
+        last = _s(j['last']);
+}
+
+class CronState {
+  final List<CronEntry> entries;
+  final List<SystemdTimer> timers;
+  final bool cronAvailable;
+  CronState.fromJson(Map<String, dynamic> j)
+      : entries = _list(j['entries'], CronEntry.fromJson),
+        timers = _list(j['timers'], SystemdTimer.fromJson),
+        cronAvailable = _b(j['cron_available']);
+}
+
+/// Editable shape of a crontab row.
+class CronEntrySpec {
+  String minute, hour, dayMonth, month, dayWeek, command;
+  CronEntrySpec(
+      {this.minute = '*',
+      this.hour = '*',
+      this.dayMonth = '*',
+      this.month = '*',
+      this.dayWeek = '*',
+      this.command = ''});
+  CronEntrySpec.fromEntry(CronEntry e)
+      : minute = e.minute,
+        hour = e.hour,
+        dayMonth = e.dayMonth,
+        month = e.month,
+        dayWeek = e.dayWeek,
+        command = e.command;
+  Map<String, dynamic> toJson() => {
+        'minute': minute,
+        'hour': hour,
+        'day_month': dayMonth,
+        'month': month,
+        'day_week': dayWeek,
+        'command': command,
+      };
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

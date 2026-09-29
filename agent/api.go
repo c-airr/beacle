@@ -136,6 +136,46 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, st)
 	}))
+	mux.HandleFunc("GET /api/system/cron", a(func(w http.ResponseWriter, r *http.Request) {
+		st, err := s.col.CronState()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, st)
+	}))
+	mux.HandleFunc("POST /api/system/cron", a(func(w http.ResponseWriter, r *http.Request) {
+		var spec shared.CronEntrySpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		created, err := s.col.CronCreate(spec)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, created)
+	}))
+	mux.HandleFunc("PUT /api/system/cron/{id}", a(func(w http.ResponseWriter, r *http.Request) {
+		var spec shared.CronEntrySpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		if err := s.col.CronUpdate(r.PathValue("id"), spec); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("DELETE /api/system/cron/{id}", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.CronDelete(r.PathValue("id")); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
 	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
 		pid, err := strconv.Atoi(r.PathValue("pid"))
 		if err != nil {
