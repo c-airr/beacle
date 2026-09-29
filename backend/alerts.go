@@ -160,25 +160,26 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 	defer e.mu.Unlock()
 
 	m := snap.Metrics
-	if e.sustained(vps.ID, "cpu", m.CPUPercent >= shared.CPUHighPercent) {
+	cpuHigh, memHigh, diskHigh, cpuClear, memClear, diskClear := vps.EffectiveThresholds()
+	if e.sustained(vps.ID, "cpu", m.CPUPercent >= cpuHigh) {
 		e.fire(vps, shared.AlertCPUHigh, shared.SeverityWarning, "",
 			fmt.Sprintf("CPU above %.0f%% for %ds (now %.0f%%)",
-				shared.CPUHighPercent, shared.SustainedSeconds, m.CPUPercent))
-	} else if m.CPUPercent < shared.CPUClearPercent {
+				cpuHigh, shared.SustainedSeconds, m.CPUPercent))
+	} else if m.CPUPercent < cpuClear {
 		e.clear(vps.ID, shared.AlertCPUHigh, "")
 	}
-	if e.sustained(vps.ID, "mem", m.MemPercent >= shared.MemHighPercent) {
+	if e.sustained(vps.ID, "mem", m.MemPercent >= memHigh) {
 		e.fire(vps, shared.AlertMemHigh, shared.SeverityWarning, "",
 			fmt.Sprintf("RAM above %.0f%% for %ds (now %.0f%%)",
-				shared.MemHighPercent, shared.SustainedSeconds, m.MemPercent))
-	} else if m.MemPercent < shared.MemClearPercent {
+				memHigh, shared.SustainedSeconds, m.MemPercent))
+	} else if m.MemPercent < memClear {
 		e.clear(vps.ID, shared.AlertMemHigh, "")
 	}
 	for _, d := range m.Disks {
-		if d.UsedPercent >= shared.DiskHighPercent {
+		if d.UsedPercent >= diskHigh {
 			e.fire(vps, shared.AlertDiskHigh, shared.SeverityWarning, d.Mount,
 				fmt.Sprintf("Disk %s at %.0f%%", d.Mount, d.UsedPercent))
-		} else if d.UsedPercent < shared.DiskClearPercent {
+		} else if d.UsedPercent < diskClear {
 			e.clear(vps.ID, shared.AlertDiskHigh, d.Mount)
 		}
 	}

@@ -173,6 +173,21 @@ const _en = <String, String>{
   'setStatus': 'Status',
   'setLanguage': 'Language',
   'setLanguageDetail': 'Interface language. Applied immediately.',
+  // servers: tags + thresholds
+  'save': 'Save',
+  'editServer': 'Edit server',
+  'serverName': 'Name',
+  'serverLocation': 'Location label',
+  'serverTags': 'Tags (comma separated)',
+  'tagsHint': 'e.g. prod, db',
+  'alertThresholds': 'Alert thresholds',
+  'thresholdsHint': 'Empty = global defaults (CPU 85%, RAM 90%, disk 90%).',
+  'thresholdCpu': 'CPU %',
+  'thresholdMem': 'RAM %',
+  'thresholdDisk': 'Disk %',
+  'allTags': 'All',
+  'customThresholds': 'custom thresholds',
+  'serverUpdated': 'Server updated',
 };
 
 const _pl = <String, String>{
@@ -318,6 +333,21 @@ const _pl = <String, String>{
   'setStatus': 'Status',
   'setLanguage': 'Język',
   'setLanguageDetail': 'Język interfejsu. Zmiana działa od razu.',
+  // servers: tags + thresholds
+  'save': 'Zapisz',
+  'editServer': 'Edytuj serwer',
+  'serverName': 'Nazwa',
+  'serverLocation': 'Etykieta lokalizacji',
+  'serverTags': 'Tagi (po przecinku)',
+  'tagsHint': 'np. prod, db',
+  'alertThresholds': 'Progi alertów',
+  'thresholdsHint': 'Puste = domyślne globalne (CPU 85%, RAM 90%, dysk 90%).',
+  'thresholdCpu': 'CPU %',
+  'thresholdMem': 'RAM %',
+  'thresholdDisk': 'Dysk %',
+  'allTags': 'Wszystkie',
+  'customThresholds': 'własne progi',
+  'serverUpdated': 'Zapisano serwer',
 };
 
 const _table = <AppLanguage, Map<String, String>>{

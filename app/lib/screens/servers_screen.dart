@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/edit_vps_dialog.dart';
 import '../widgets/history_panel.dart';
 
 /// Per-VPS host statistics: CPU (incl. cores), RAM, disk, network, system info.
@@ -19,6 +21,9 @@ class ServersScreen extends StatefulWidget {
 }
 
 class ServersScreenState extends State<ServersScreen> {
+  /// Lowercased tag filter for the sidebar list; null shows everything.
+  String? tagFilter;
+
   String? selectedId;
 
   void selectVps(String id) {
@@ -47,7 +52,20 @@ class ServersScreenState extends State<ServersScreen> {
       return const Center(child: Text('No VPS registered', style: TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= state.vpsList.first.id;
-    final vps = state.vpsList.where((v) => v.id == selectedId).firstOrNull ?? state.vpsList.first;
+    // All distinct tags across the fleet, first-seen casing kept for display.
+    final tagNames = <String, String>{};
+    for (final v in state.vpsList) {
+      for (final t in v.tags) {
+        tagNames.putIfAbsent(t.toLowerCase(), () => t);
+      }
+    }
+    final tags = tagNames.values.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    var shown = state.vpsList;
+    if (tagFilter != null) {
+      shown = shown.where((v) => v.tags.any((t) => t.toLowerCase() == tagFilter)).toList();
+      if (shown.isEmpty) shown = state.vpsList;
+    }
+    final vps = shown.where((v) => v.id == selectedId).firstOrNull ?? shown.first;
     final snap = state.snapshots[vps.id];
     final showDetail = snap != null && vps.online && !state.isReportStale(vps);
 
@@ -56,40 +74,80 @@ class ServersScreenState extends State<ServersScreen> {
         Container(
           width: 230,
           color: BeacleColors.surface,
-          child: SmoothListView(
-            padding: const EdgeInsets.all(8),
+          child: Column(
             children: [
-              for (final v in state.vpsList)
-                HoverRow(
-                  selected: v.id == selectedId,
-                  onTap: () {
-                    context.read<AppState>().bumpActivity();
-                    setState(() => selectedId = v.id);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(
-                      children: [
-                        StatusDot(v.status),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
+                child: Row(
+                  children: [
+                    Text(context.l.t('navServers'),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.tune, size: 16),
+                      tooltip: context.l.t('editServer'),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => showEditVpsDialog(context, vps),
+                    ),
+                  ],
+                ),
+              ),
+              if (tags.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _tagChip(context, context.l.t('allTags'), tagFilter == null, () => setState(() => tagFilter = null)),
+                      for (final t in tags)
+                        _tagChip(context, '#$t', tagFilter == t.toLowerCase(),
+                            () => setState(() => tagFilter = tagFilter == t.toLowerCase() ? null : t.toLowerCase())),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: SmoothListView(
+                  padding: const EdgeInsets.all(8),
+                  children: [
+                    for (final v in shown)
+                      HoverRow(
+                        selected: v.id == selectedId,
+                        onTap: () {
+                          context.read<AppState>().bumpActivity();
+                          setState(() => selectedId = v.id);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Row(
                             children: [
-                              Text(v.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                              Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                              StatusDot(v.status),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(v.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                    Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                                    if (v.tags.isNotEmpty)
+                                      Text(v.tags.map((t) => '#$t').join('  '),
+                                          style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
+                                          overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                              if (state.snapshots[v.id]?.metrics != null && v.online)
+                                Text(
+                                  '${state.snapshots[v.id]!.metrics.cpuPercent.toStringAsFixed(0)}%',
+                                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                                ),
                             ],
                           ),
                         ),
-                        if (state.snapshots[v.id]?.metrics != null && v.online)
-                          Text(
-                            '${state.snapshots[v.id]!.metrics.cpuPercent.toStringAsFixed(0)}%',
-                            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
-                          ),
-                      ],
-                    ),
-                  ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
         ),
@@ -100,6 +158,24 @@ class ServersScreenState extends State<ServersScreen> {
               : _PendingView(vps: vps, state: state, stale: state.isReportStale(vps)),
         ),
       ],
+    );
+  }
+
+  Widget _tagChip(BuildContext context, String label, bool selected, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? BeacleColors.glassHi : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 11, color: selected ? BeacleColors.text : BeacleColors.textDim)),
+      ),
     );
   }
 }

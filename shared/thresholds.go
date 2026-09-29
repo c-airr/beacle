@@ -31,3 +31,43 @@ const (
 	OfflineAfterSec  = 45
 	DefaultAgentPort = 8931
 )
+
+// EffectiveThresholds resolves the firing/clearing thresholds for one server:
+// per-VPS overrides win, globals fill the rest. A custom firing threshold
+// drags its clear threshold below it (5 points of hysteresis), because a
+// custom high of 60 with the global clear of 75 would flap on every sample.
+func (v VPS) EffectiveThresholds() (cpuHigh, memHigh, diskHigh, cpuClear, memClear, diskClear float64) {
+	cpuHigh, memHigh, diskHigh = CPUHighPercent, MemHighPercent, DiskHighPercent
+	cpuClear, memClear, diskClear = CPUClearPercent, MemClearPercent, DiskClearPercent
+	if v.Thresholds == nil {
+		return cpuHigh, memHigh, diskHigh, cpuClear, memClear, diskClear
+	}
+	if v.Thresholds.CPUHigh > 0 {
+		cpuHigh = v.Thresholds.CPUHigh
+		if cpuClear >= cpuHigh {
+			cpuClear = cpuHigh - 5
+		}
+	}
+	if v.Thresholds.MemHigh > 0 {
+		memHigh = v.Thresholds.MemHigh
+		if memClear >= memHigh {
+			memClear = memHigh - 5
+		}
+	}
+	if v.Thresholds.DiskHigh > 0 {
+		diskHigh = v.Thresholds.DiskHigh
+		if diskClear >= diskHigh {
+			diskClear = diskHigh - 5
+		}
+	}
+	if cpuClear < 0 {
+		cpuClear = 0
+	}
+	if memClear < 0 {
+		memClear = 0
+	}
+	if diskClear < 0 {
+		diskClear = 0
+	}
+	return cpuHigh, memHigh, diskHigh, cpuClear, memClear, diskClear
+}

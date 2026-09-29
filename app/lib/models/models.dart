@@ -578,6 +578,12 @@ class Vps {
   /// The agent's GOARCH ("amd64", "arm64"). Empty for agents too old to report
   /// it. Decides which release asset this server is compared against.
   final String arch;
+
+  /// Free-form grouping tags (#prod, #db). Empty when unset.
+  final List<String> tags;
+
+  /// Per-server alert threshold overrides. Null means "use globals".
+  final VpsThresholds? thresholds;
   final double latitude, longitude;
   final int weight, agentPort;
   final DateTime createdAt, lastSeen;
@@ -592,6 +598,10 @@ class Vps {
         agentVersion = _s(j['agent_version']),
         agentDigest = _s(j['agent_digest']),
         arch = _s(j['arch']),
+        tags = (j['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
+        thresholds = j['thresholds'] is Map<String, dynamic>
+            ? VpsThresholds.fromJson(j['thresholds'] as Map<String, dynamic>)
+            : null,
         latitude = _d(j['latitude']),
         longitude = _d(j['longitude']),
         weight = _i(j['weight']),
@@ -606,6 +616,22 @@ class Vps {
     if (!online) return true;
     return DateTime.now().difference(lastSeen.toLocal()).inSeconds > 12;
   }
+}
+
+/// Per-server alert threshold overrides. Zero means "use the global value".
+class VpsThresholds {
+  final double cpuHigh, memHigh, diskHigh;
+  VpsThresholds({this.cpuHigh = 0, this.memHigh = 0, this.diskHigh = 0});
+  VpsThresholds.fromJson(Map<String, dynamic> j)
+      : cpuHigh = _d(j['cpu_high']),
+        memHigh = _d(j['mem_high']),
+        diskHigh = _d(j['disk_high']);
+  Map<String, dynamic> toJson() => {
+        'cpu_high': cpuHigh,
+        'mem_high': memHigh,
+        'disk_high': diskHigh,
+      };
+  bool get isCustom => cpuHigh > 0 || memHigh > 0 || diskHigh > 0;
 }
 
 class VpsLink {

@@ -685,7 +685,13 @@ type VPS struct {
 	Longitude     float64   `json:"longitude"`
 	Location      string    `json:"location"`
 	Weight        int       `json:"weight"`
-	Status        VPSStatus `json:"status"`
+	// Tags group servers across the panel (#prod, #db). Free-form, matched
+	// case-insensitively by the UI filter.
+	Tags   []string        `json:"tags,omitempty"`
+	Status VPSStatus       `json:"status"`
+	// Thresholds overrides the global alert thresholds for this server only.
+	// Nil means "use globals"; a zero value inside means "global for this metric".
+	Thresholds *VPSThresholds `json:"thresholds,omitempty"`
 	AgentPort     int       `json:"agent_port"`
 	AgentVer      string    `json:"agent_version"`
 	// AgentDigest identifies the exact binary a server is running; see
@@ -705,6 +711,14 @@ type CreateVPSRequest struct {
 	TailscaleIP   string `json:"tailscale_ip"`
 }
 
+// VPSThresholds overrides global alert thresholds for one server. Each value
+// is a percent (0-100); 0 or negative means "use the global threshold".
+type VPSThresholds struct {
+	CPUHigh  float64 `json:"cpu_high,omitempty"`
+	MemHigh  float64 `json:"mem_high,omitempty"`
+	DiskHigh float64 `json:"disk_high,omitempty"`
+}
+
 // UpdateVPSRequest edits metadata of an auto-registered VPS (display name,
 // map position, weight). VPS entries themselves are only ever created by
 // agents registering - never manually from the UI.
@@ -715,6 +729,11 @@ type UpdateVPSRequest struct {
 	Longitude float64 `json:"longitude"`
 	Location  string  `json:"location"`
 	Weight    int     `json:"weight"`
+	// Tags replaces the tag list when present (nil = leave alone).
+	Tags *[]string `json:"tags,omitempty"`
+	// Thresholds replaces the per-server overrides when present
+	// (nil = leave alone).
+	Thresholds *VPSThresholds `json:"thresholds,omitempty"`
 }
 
 // VPSLink is a user created connection between two VPSes shown on the map.

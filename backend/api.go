@@ -129,12 +129,59 @@ func (s *Server) handleVPSByID(w http.ResponseWriter, r *http.Request) {
 			if req.Weight > 0 {
 				e.VPS.Weight = req.Weight
 			}
+			if req.Tags != nil {
+				e.VPS.Tags = normalizeTags(*req.Tags)
+			}
+			if req.Thresholds != nil {
+				e.VPS.Thresholds = normalizeThresholds(req.Thresholds)
+			}
 		})
 		s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
 		writeJSON(w, http.StatusOK, updated.VPS)
 	default:
 		writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+// normalizeTags trims, de-duplicates (case-insensitively) and caps the tag
+// list so a paste accident cannot grow the registry without bound.
+func normalizeTags(tags []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t == "" || len(out) >= 20 {
+			continue
+		}
+		if len(t) > 32 {
+			t = t[:32]
+		}
+		if low := strings.ToLower(t); !seen[low] {
+			seen[low] = true
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// normalizeThresholds clamps overrides to 0-100. An all-zero struct collapses
+// to nil ("use globals") so the panel can tell "customized" from "default"
+// by presence alone.
+func normalizeThresholds(t *shared.VPSThresholds) *shared.VPSThresholds {
+	clamp := func(v float64) float64 {
+		if v < 0 {
+			return 0
+		}
+		if v > 100 {
+			return 100
+		}
+		return v
+	}
+	t.CPUHigh, t.MemHigh, t.DiskHigh = clamp(t.CPUHigh), clamp(t.MemHigh), clamp(t.DiskHigh)
+	if t.CPUHigh == 0 && t.MemHigh == 0 && t.DiskHigh == 0 {
+		return nil
+	}
+	return t
 }
 
 func (s *Server) handleCreateVPS(w http.ResponseWriter, r *http.Request) {
