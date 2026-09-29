@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -302,7 +301,11 @@ func withJitter(d time.Duration) time.Duration {
 
 // session returns registered=true once register_ack was received (backoff should reset).
 func (c *WSClient) session() (registered bool, err error) {
-	wsURL, err := agentWSURL(c.cfg.BackendURL)
+	dial, backendURL, err := transport.current(c.cfg)
+	if err != nil {
+		return false, err
+	}
+	wsURL, err := agentWSURL(backendURL)
 	if err != nil {
 		return false, err
 	}
@@ -313,13 +316,7 @@ func (c *WSClient) session() (registered bool, err error) {
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: wsHandshakeTimeout,
-		NetDialContext: (&net.Dialer{
-			Timeout: wsHandshakeTimeout,
-			// The panel machine can drop off the tailnet without closing
-			// anything; keepalives make a half-open socket surface as an error
-			// instead of hanging on a read.
-			KeepAlive: 15 * time.Second,
-		}).DialContext,
+		NetDialContext:   dial,
 	}
 	conn, _, err := dialer.Dial(wsURL, hdr)
 	if err != nil {

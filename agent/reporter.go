@@ -133,19 +133,27 @@ func (r *Reporter) Proxy() shared.ProxyState {
 }
 
 func (r *Reporter) ApplyRegisterAck(ack shared.RegisterResponse) {
-	changed := false
-	if ack.VPSID != "" && r.cfg.VPSID != ack.VPSID {
-		r.cfg.VPSID = ack.VPSID
-		changed = true
-	}
-	if ack.Token != "" && r.cfg.Token != ack.Token {
-		r.cfg.Token = ack.Token
-		changed = true
-	}
-	if changed {
-		if err := r.cfg.Save(); err != nil {
-			log.Printf("warning: could not persist credentials: %v", err)
+	err := transport.update(r.cfg, func(c *Config) bool {
+		changed := false
+		if ack.VPSID != "" && c.VPSID != ack.VPSID {
+			c.VPSID = ack.VPSID
+			changed = true
 		}
+		if ack.Token != "" && c.Token != ack.Token {
+			c.Token = ack.Token
+			changed = true
+		}
+		if c.IsWireGuard() && c.FallbackBackendURL != "" {
+			// The panel answered through the tunnel: the trial switch worked
+			// and there is nothing to fall back to any more.
+			c.FallbackBackendURL, c.FallbackUntil = "", time.Time{}
+			changed = true
+			log.Printf("wireguard: switch confirmed, Tailscale fallback dropped")
+		}
+		return changed
+	})
+	if err != nil {
+		log.Printf("warning: could not persist credentials: %v", err)
 	}
 	if ack.VPSID != "" {
 		log.Printf("registered as vps %s", ack.VPSID)

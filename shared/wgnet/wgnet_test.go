@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"runtime"
 	"testing"
 	"time"
 
@@ -102,6 +103,41 @@ func TestRemovedPeerCannotReach(t *testing.T) {
 	if c, err := agent.Net.DialContext(ctx, "tcp", "10.87.0.1:9930"); err == nil {
 		c.Close()
 		t.Fatal("dial succeeded after the peer was removed")
+	}
+}
+
+// The agent runs on small VPSes; the stock bind alone would add ~16 MiB of
+// preallocated batch buffers. Keep one live tunnel well under that.
+func TestTunnelHeapFootprint(t *testing.T) {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	backend, agent, _, _ := pair(t)
+	ln, err := backend.Net.ListenTCPAddrPort(netip.MustParseAddrPort("10.87.0.1:9930"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		if c, err := ln.Accept(); err == nil {
+			_, _ = io.WriteString(c, "ok")
+			c.Close()
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c, err := agent.Net.DialContext(ctx, "tcp", "10.87.0.1:9930")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.ReadAll(c)
+	c.Close()
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	perTunnel := (int64(after.HeapInuse) - int64(before.HeapInuse)) / 2
+	t.Logf("heap in use per live tunnel: %.2f MiB", float64(perTunnel)/(1<<20))
+	if perTunnel > 6<<20 {
+		t.Fatalf("one tunnel holds %.1f MiB of heap", float64(perTunnel)/(1<<20))
 	}
 }
 

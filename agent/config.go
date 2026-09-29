@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
+
+	"beacle/shared"
 )
 
 const AgentVersion = "2.0.0"
@@ -24,7 +27,21 @@ type Config struct {
 	NPMPassword string `json:"npm_password,omitempty"`
 	CaddyDir    string `json:"caddy_dir,omitempty"` // default /etc/caddy/beacle.d
 
+	// Transport is how the WebSocket reaches the panel: blank/"tailscale"
+	// dials BackendURL directly, "wireguard" dials it through the in-process
+	// tunnel described by WG.
+	Transport string    `json:"transport,omitempty"`
+	WG        *WGConfig `json:"wireguard,omitempty"`
+	// During a trial switch to WireGuard: where to go back to if the tunnel
+	// has not registered by FallbackUntil. Cleared once it has.
+	FallbackBackendURL string    `json:"fallback_backend_url,omitempty"`
+	FallbackUntil      time.Time `json:"fallback_until,omitempty"`
+
 	path string // where this config was loaded from
+}
+
+func (c *Config) IsWireGuard() bool {
+	return c.Transport == shared.TransportWireGuard && c.WG != nil
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -66,5 +83,13 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(c.path, b, 0o600)
+	// Rename over the old file rather than rewriting it: WriteFile keeps an
+	// existing file's mode, and installers before 2.0 created this one 0644 —
+	// too open for a file that now holds a private key.
+	tmp := c.path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	_ = os.Chmod(tmp, 0o600)
+	return os.Rename(tmp, c.path)
 }
