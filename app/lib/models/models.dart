@@ -452,6 +452,45 @@ class SystemLogFile {
         path = _s(j['path']);
 }
 
+/// One upgradable system package.
+class OSPackage {
+  final String name, current, latest;
+  final bool security;
+  OSPackage.fromJson(Map<String, dynamic> j)
+      : name = _s(j['name']),
+        current = _s(j['current']),
+        latest = _s(j['latest']),
+        security = _b(j['security']);
+}
+
+/// Pending system updates of a host.
+class OSUpdates {
+  final String manager, checkedAt;
+  final List<OSPackage> packages;
+  final int securityCount;
+  final bool rebootRequired;
+  OSUpdates.fromJson(Map<String, dynamic> j)
+      : manager = _s(j['manager']),
+        checkedAt = _s(j['checked_at']),
+        packages = _list(j['packages'], OSPackage.fromJson),
+        securityCount = _i(j['security_count']),
+        rebootRequired = _b(j['reboot_required']);
+}
+
+/// A background `upgrade -y` run.
+class OSUpdateJob {
+  final bool running;
+  final String startedAt, finishedAt, output;
+  final int exitCode;
+  OSUpdateJob.fromJson(Map<String, dynamic> j)
+      : running = _b(j['running']),
+        startedAt = _s(j['started_at']),
+        finishedAt = _s(j['finished_at']),
+        output = _s(j['output']),
+        exitCode = _i(j['exit_code']);
+  bool get hasRun => startedAt.isNotEmpty;
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

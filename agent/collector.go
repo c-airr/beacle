@@ -32,6 +32,12 @@ type Collector interface {
 	SystemLogFiles() ([]shared.SystemLogFile, error)
 	SystemLogs(id string, tail int, grep string) (string, error)
 
+	// OSUpdates lists pending system package updates; OSUpdateApply starts a
+	// background upgrade; OSUpdateStatus reports on the running/last job.
+	OSUpdates() (shared.OSUpdates, error)
+	OSUpdateApply() error
+	OSUpdateStatus() (shared.OSUpdateJob, error)
+
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)

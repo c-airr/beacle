@@ -293,6 +293,36 @@ func (c *devCollector) SystemLogs(id string, tail int, grep string) (string, err
 
 var devUpdateJob = shared.OSUpdateJob{}
 
+func (c *devCollector) OSUpdates() (shared.OSUpdates, error) {
+	return shared.OSUpdates{
+		Manager: "apt",
+		Packages: []shared.OSPackage{
+			{Name: "openssl", Current: "3.0.2-0ubuntu1.10", Latest: "3.0.2-0ubuntu1.12", Security: true},
+			{Name: "curl", Current: "7.81.0-1", Latest: "7.81.0-1ubuntu1.15", Security: true},
+			{Name: "vim", Current: "8.2.3995-1", Latest: "8.2.3995-1ubuntu2", Security: false},
+		},
+		SecurityCount:  2,
+		RebootRequired: true,
+		CheckedAt:      time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func (c *devCollector) OSUpdateApply() error {
+	if devUpdateJob.Running {
+		return fmt.Errorf("an upgrade is already running")
+	}
+	devUpdateJob = shared.OSUpdateJob{Running: true, StartedAt: time.Now().UTC().Format(time.RFC3339)}
+	go func() {
+		time.Sleep(5 * time.Second)
+		devUpdateJob.Running = false
+		devUpdateJob.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+		devUpdateJob.Output = "simulated upgrade finished: 3 upgraded, 0 newly installed"
+	}()
+	return nil
+}
+
+func (c *devCollector) OSUpdateStatus() (shared.OSUpdateJob, error) { return devUpdateJob, nil }
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

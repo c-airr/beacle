@@ -280,7 +280,6 @@ type KillProcessRequest struct {
 	Signal string `json:"signal"`
 }
 
-
 // SystemLogFile is one readable system log. The panel only ever sends the ID
 // back — paths never cross the wire from client to agent, so there is no
 // path traversal to defend against.
@@ -289,6 +288,33 @@ type SystemLogFile struct {
 	Label string `json:"label"` // human name for the picker
 	Path  string `json:"path"`  // resolved source (file path or "dmesg")
 }
+
+// OSPackage is one upgradable system package.
+type OSPackage struct {
+	Name     string `json:"name"`
+	Current  string `json:"current"`
+	Latest   string `json:"latest"`
+	Security bool   `json:"security"`
+}
+
+// OSUpdates is the pending system update state of a host.
+type OSUpdates struct {
+	Manager       string      `json:"manager"` // "apt" | "dnf" | "" when none found
+	Packages      []OSPackage `json:"packages"`
+	SecurityCount int         `json:"security_count"`
+	RebootRequired bool       `json:"reboot_required"`
+	CheckedAt     string      `json:"checked_at"`
+}
+
+// OSUpdateJob tracks a background `upgrade -y` run.
+type OSUpdateJob struct {
+	Running   bool   `json:"running"`
+	StartedAt string `json:"started_at,omitempty"`
+	FinishedAt string `json:"finished_at,omitempty"`
+	ExitCode  int    `json:"exit_code"`
+	Output    string `json:"output,omitempty"` // tail of the run
+}
+
 // ---------------------------------------------------------------------------
 // Services (systemd + screen)
 // ---------------------------------------------------------------------------
@@ -682,6 +708,12 @@ const (
 	// not reporting. That is a service to restart, not a server that died, and
 	// the two call for completely different reactions at 3am.
 	VPSAgentDown VPSStatus = "agent_down"
+	// VPSRestarting is set when the user reboots through Beacle: the socket is
+	// about to drop on purpose, so the offline watcher stays quiet instead of
+	// crying outage. Cleared on reconnect, or expires into a normal offline.
+	VPSRestarting VPSStatus = "restarting"
+	// VPSPoweredOff is the same idea for a deliberate poweroff.
+	VPSPoweredOff VPSStatus = "powered_off"
 )
 
 type VPS struct {

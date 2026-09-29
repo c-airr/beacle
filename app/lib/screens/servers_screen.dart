@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
 import '../widgets/edit_vps_dialog.dart';
+import '../widgets/os_updates.dart';
 import '../widgets/history_panel.dart';
 
 /// Per-VPS host statistics: CPU (incl. cores), RAM, disk, network, system info.
@@ -227,6 +228,8 @@ class _PendingView extends StatelessWidget {
                   style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
                 ),
                 const SizedBox(height: 10),
+            OsUpdatesBanner(vps: v),
+            const SizedBox(height: 10),
                 const AddVpsCommand(),
               ],
               const SizedBox(height: 16),

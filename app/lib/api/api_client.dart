@@ -119,6 +119,15 @@ class ApiClient {
 
   Future<void> resolveAlert(String id) => post('/api/alerts/$id/resolve');
 
+  Future<WebhooksConfig> getWebhooks() async =>
+      WebhooksConfig.fromJson(await get('/api/webhooks'));
+
+  Future<void> setWebhooks(List<WebhookTarget> targets) =>
+      put('/api/webhooks', body: {'targets': targets.map((t) => t.toJson()).toList()});
+
+  Future<String> testWebhooks() async =>
+      ((await post('/api/webhooks/test')) as Map)['via'] as String? ?? '';
+
   Future<List<VpsLink>> links() async =>
       ((await get('/api/links')) as List? ?? []).map((e) => VpsLink.fromJson(e)).toList();
 
@@ -180,7 +189,6 @@ class ApiClient {
   Future<void> killProcess(String vpsId, int pid, String signal) =>
       post(_a(vpsId, 'system/processes/$pid/kill'), body: {'signal': signal});
 
-
   Future<List<SystemLogFile>> systemLogFiles(String vpsId) async =>
       ((await get(_a(vpsId, 'system/logs'))) as List? ?? [])
           .map((e) => SystemLogFile.fromJson(e as Map<String, dynamic>))
@@ -191,6 +199,15 @@ class ApiClient {
                   'system/logs/${Uri.encodeComponent(id)}?tail=$tail&grep=${Uri.encodeQueryComponent(grep)}')))
               as Map)['logs'] as String? ??
       '';
+
+  Future<OSUpdates> osUpdates(String vpsId) async =>
+      OSUpdates.fromJson(await get(_a(vpsId, 'system/updates')));
+
+  Future<void> osUpdateApply(String vpsId) => post(_a(vpsId, 'system/updates/apply'));
+
+  Future<OSUpdateJob> osUpdateStatus(String vpsId) async =>
+      OSUpdateJob.fromJson(await get(_a(vpsId, 'system/updates/status')));
+
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));
 

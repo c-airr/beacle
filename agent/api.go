@@ -113,6 +113,29 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, map[string]string{"logs": logs})
 	}))
+	mux.HandleFunc("GET /api/system/updates", a(func(w http.ResponseWriter, r *http.Request) {
+		u, err := s.col.OSUpdates()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, u)
+	}))
+	mux.HandleFunc("POST /api/system/updates/apply", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.OSUpdateApply(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("GET /api/system/updates/status", a(func(w http.ResponseWriter, r *http.Request) {
+		st, err := s.col.OSUpdateStatus()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, st)
+	}))
 	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
 		pid, err := strconv.Atoi(r.PathValue("pid"))
 		if err != nil {
