@@ -83,12 +83,33 @@ class ApiClient {
           .map((e) => TailscaleDevice.fromJson(e as Map<String, dynamic>))
           .toList();
 
-  Future<Vps> createVps({required String name, required String tailscaleName, required String tailscaleIp}) async =>
+  Future<Vps> createVps({
+    required String name,
+    String tailscaleName = '',
+    String tailscaleIp = '',
+    String transport = '',
+    String publicIp = '',
+    int wgPort = 0,
+  }) async =>
       Vps.fromJson(await post('/api/vps', body: {
         'name': name,
-        'tailscale_name': tailscaleName,
-        'tailscale_ip': tailscaleIp,
+        if (tailscaleName.isNotEmpty) 'tailscale_name': tailscaleName,
+        if (tailscaleIp.isNotEmpty) 'tailscale_ip': tailscaleIp,
+        if (transport.isNotEmpty) 'transport': transport,
+        if (publicIp.isNotEmpty) 'public_ip': publicIp,
+        if (wgPort > 0) 'wg_port': wgPort,
       }));
+
+  Future<ConnectivityProbe> probeConnectivity(String host) async =>
+      ConnectivityProbe.fromJson(await post('/api/connectivity/probe', body: {'host': host}));
+
+  Future<String> wireGuardInstallCommand(String vpsId) async {
+    final r = (await get('/api/vps/$vpsId/wireguard/install')) as Map;
+    return (r['install_command'] as String? ?? '').trim();
+  }
+
+  Future<WgStatus> wireGuardStatus() async =>
+      WgStatus.fromJson(await get('/api/wireguard/status') as Map<String, dynamic>);
 
   Future<String> installCommand() async {
     final r = (await get('/api/install-command')) as Map;

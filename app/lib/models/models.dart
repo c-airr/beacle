@@ -820,6 +820,7 @@ class PingResult {
 
 class Vps {
   final String id, name, host, tailscaleName, publicIp, location, status, agentVersion;
+  final String transport, wgEndpoint, wgTunnelIp, wgPublicKey;
 
   /// sha256 of the binary this agent is running, as `sha256:<hex>`. Empty for
   /// agents too old to report it. Compared against the release asset's digest
@@ -845,6 +846,10 @@ class Vps {
         host = _s(j['host']),
         tailscaleName = _s(j['tailscale_name']),
         publicIp = _s(j['public_ip']),
+        transport = _s(j['transport']),
+        wgEndpoint = _s(j['wg_endpoint']),
+        wgTunnelIp = _s(j['wg_tunnel_ip']),
+        wgPublicKey = _s(j['wg_public_key']),
         location = _s(j['location']),
         status = _s(j['status']),
         agentVersion = _s(j['agent_version']),
@@ -860,6 +865,9 @@ class Vps {
         agentPort = _i(j['agent_port']),
         createdAt = _dt(j['created_at']),
         lastSeen = _dt(j['last_seen']);
+
+  bool get isWireGuard => transport == 'wireguard';
+  bool get isTailscale => !isWireGuard;
 
   bool get online => status == 'online' || status == 'high_load';
 
@@ -974,3 +982,43 @@ String fmtAgo(DateTime when) {
   if (sec < 86400) return '${sec ~/ 3600}h ago';
   return '${sec ~/ 86400}d ago';
 }
+
+class ConnectivityProbe {
+  final String host, ip, ipClass, recommended, reason;
+  final bool pingOk, wireguardOk;
+  final double latencyMs;
+  ConnectivityProbe.fromJson(Map<String, dynamic> j)
+      : host = _s(j['host']),
+        ip = _s(j['ip']),
+        ipClass = _s(j['class']),
+        recommended = _s(j['recommended']),
+        reason = _s(j['reason']),
+        pingOk = _b(j['ping_ok']),
+        wireguardOk = _b(j['wireguard_ok']),
+        latencyMs = _d(j['latency_ms']);
+}
+
+class WgPeerStatus {
+  final String vpsId, name, endpoint, tunnelIp;
+  final int lastHandshake, rxBytes, txBytes;
+  WgPeerStatus.fromJson(Map<String, dynamic> j)
+      : vpsId = _s(j['vps_id']),
+        name = _s(j['name']),
+        endpoint = _s(j['endpoint']),
+        tunnelIp = _s(j['tunnel_ip']),
+        lastHandshake = _i(j['last_handshake']),
+        rxBytes = _i(j['rx_bytes']),
+        txBytes = _i(j['tx_bytes']);
+}
+
+class WgStatus {
+  final bool running;
+  final String publicKey, error;
+  final List<WgPeerStatus> peers;
+  WgStatus.fromJson(Map<String, dynamic> j)
+      : running = _b(j['running']),
+        publicKey = _s(j['public_key']),
+        error = _s(j['error']),
+        peers = _list(j['peers'], WgPeerStatus.fromJson);
+}
+

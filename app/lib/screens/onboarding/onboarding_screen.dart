@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../api/api_client.dart';
 import '../../l10n/language.dart';
 import '../../l10n/strings.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../user_config.dart';
-import '../../config.dart';
 import '../../widgets/add_vps_dialog.dart';
 import '../../widgets/common.dart';
 import '../shell.dart';
 
-/// First-run wizard: welcome → SSH display mode → add VPS (Tailscale).
+/// First-run wizard: welcome → SSH display mode → add VPS.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -295,86 +293,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _showAddVps() async {
     final state = context.read<AppState>();
-    List<TailscaleDevice> devices;
-    try {
-      devices = await state.api.tailscaleDevices();
-    } catch (e) {
-      setState(() => _error = e is ApiException && e.status == 503 ? tailscaleNotOnPc : '$e');
-      return;
-    }
-    final available = devices.where((d) => !d.self).toList();
+    await showAddVpsDialog(context);
     if (!mounted) return;
-    if (available.isEmpty) {
-      setState(() => _error = tailscaleNoPeers);
-      return;
-    }
-    final picked = await showDialog<TailscaleDevice>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.l.t('obSelectDevice')),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              tailscaleRequirementBanner(),
-              const SizedBox(height: 12),
-              SmoothListView(
-                shrinkWrap: true,
-                children: [
-                  for (final d in available)
-                    ListTile(
-                      title: Text(d.name),
-                      subtitle: Text(
-                        [
-                          if (d.ips.isNotEmpty) d.ips.first,
-                          if (!d.online) 'offline',
-                        ].where((s) => s.isNotEmpty).join(' · '),
-                        style: const TextStyle(fontSize: 11, fontFamily: 'Consolas'),
-                      ),
-                      onTap: () => Navigator.pop(ctx, d),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (picked == null) return;
-    final ip = picked.ips.isNotEmpty ? picked.ips.first : '';
     try {
-      final vps = await state.api.createVps(name: picked.name, tailscaleName: picked.name, tailscaleIp: ip);
+      final list = await state.api.listVps();
       setState(() {
-        _servers.add(SavedServer(id: vps.id, name: vps.name, tailscaleName: picked.name, tailscaleIp: ip));
+        _servers
+          ..clear()
+          ..addAll(list.map((v) => SavedServer(
+                id: v.id,
+                name: v.name,
+                tailscaleName: v.tailscaleName,
+                tailscaleIp: v.host,
+              )));
         _error = null;
       });
-      if (!mounted) return;
-      final cmd = await state.api.installCommand();
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: BeacleColors.glassHi,
-          title: Text(context.l.f('obInstallTitle', {'name': picked.name})),
-          content: SizedBox(
-            width: 520,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l.t('obInstallBody'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
-                ),
-                const SizedBox(height: 8),
-                CopyField(cmd),
-              ],
-            ),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.l.t('obDone')))],
-        ),
-      );
     } catch (e) {
       setState(() => _error = '$e');
     }

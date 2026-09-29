@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 
@@ -252,6 +253,60 @@ class CopyField extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Install command with the join token masked. The copy button still puts
+/// the real command on the clipboard — the token is a secret key.
+class SecretCopyField extends StatelessWidget {
+  final String value;
+  const SecretCopyField(this.value, {super.key});
+
+  String get masked {
+    final i = value.indexOf('bcwg1.');
+    if (i < 0) return value;
+    return '${value.substring(0, i)}bcwg1.${'•' * 12}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: BeacleColors.bg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: BeacleColors.border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SelectableText(masked,
+                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, color: BeacleColors.ok)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy, size: 14, color: BeacleColors.textDim),
+                tooltip: context.l.t('copyFullCommand'),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(context.l.t('copied')),
+                    duration: const Duration(seconds: 1),
+                    width: 220,
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(context.l.t('wgContainsSecret'),
+            style: const TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.35)),
+      ],
     );
   }
 }
