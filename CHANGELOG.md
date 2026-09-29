@@ -7,6 +7,9 @@ webhooks, tags and per-server thresholds.
 
 ### Added
 
+- **WireGuard transport** — optional built-in tunnel so VPS hosts do not need
+  Tailscale; connectivity probe, add-server flow, Tailscale→WireGuard migration
+  with timed fallback, and switch-back from server settings.
 - **Tags and per-server thresholds** — group servers with tags and filter by
   them; override CPU/RAM/disk alert thresholds per server.
 - **System log viewer** — syslog, auth.log, dmesg and proxy logs with live

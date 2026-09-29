@@ -5,10 +5,26 @@ the Flutter app mirrors them in `app/lib/models/`.
 
 ## Network model (CGNAT-safe)
 
-- **Backend** is the only network entry point on the desktop.
+- **Backend** is the only network entry point on the desktop (panel API on
+  loopback; agents use a separate listener on the Tailscale IP or inside the
+  WireGuard tunnel).
 - **Agent** connects **outbound-only** to the backend over a single WebSocket.
-- The backend **never** initiates TCP connections to agents.
+- The backend **never** initiates TCP connections to agents for commands or
+  metrics (WireGuard handshakes are UDP and only carry the same WebSocket).
 - Commands and snapshots share that one WebSocket tunnel.
+
+### Transports (2.0)
+
+| Transport   | Agent dials | Notes |
+|-------------|-------------|-------|
+| `tailscale` | `http://<panel-tailscale-ip>:9930/agent/ws` | default for pre-2.0 servers |
+| `wireguard` | `http://10.87.0.1:9930/agent/ws` via in-process tunnel | panel initiates UDP to VPS `:51931` |
+
+Migration from Tailscale: backend `POST /api/vps/{id}/wireguard/migrate` issues
+keys and pushes `POST /api/transport/wireguard` to the agent (join token in body).
+The agent keeps the old panel URL for `WGSwitchFallback` (10 minutes) until
+`register_ack` arrives over WireGuard. Switch back:
+`POST /api/vps/{id}/wireguard/switch-tailscale`.
 
 ## Agent ↔ Backend (WebSocket only)
 

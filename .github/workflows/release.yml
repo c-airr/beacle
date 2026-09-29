@@ -18,8 +18,10 @@ on:
       # Matches 0.9.1 / 1.0-rc1 — not the rolling agentbeta channel.
       - "0.*"
       - "1.*"
+      - "2.*"
       - "v0.*"
       - "v1.*"
+      - "v2.*"
   workflow_dispatch:
     inputs:
       tag:
@@ -83,9 +85,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path ../dist/agent | Out-Null
           $env:GOOS = 'linux'
           $env:GOARCH = 'amd64'
-          go build -o ../dist/agent/beacle-agent-amd64 .
+          go build -trimpath -ldflags "-s -w" -o ../dist/agent/beacle-agent-amd64 .
           $env:GOARCH = 'arm64'
-          go build -o ../dist/agent/beacle-agent-arm64 .
+          go build -trimpath -ldflags "-s -w" -o ../dist/agent/beacle-agent-arm64 .
           Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
           # VERSION carries what the agent binary actually reports, read from
           # its source rather than assumed from the tag. Agent and app share a
