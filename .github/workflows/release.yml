@@ -290,6 +290,20 @@ jobs:
 
             **Built by GitHub Actions** from commit `${{ github.sha }}` on runners owned by GitHub — not uploaded manually.
 
+            ### What should I download?
+
+            | I use… | Download this | Notes |
+            |---|---|---|
+            | Windows | `beacle-setup-*.exe` | Installer — downloads the app itself, Start Menu entry included. |
+            | Windows (portable) | `beacle-windows-x64.zip` | App + embedded backend, no install. |
+            | macOS | `beacle-macos.zip` | Unsigned — right-click → Open on first launch. |
+            | Linux | `beacle-linux-x64.tar.gz` | Desktop bundle. |
+            | — | `SHA256SUMS.txt` | Optional: proves the files arrived intact (see below). |
+
+            You do **not** need `install_agent.sh`, `beacle-agent-amd64` or
+            `beacle-agent-arm64` — those are fetched automatically by the
+            install command the panel shows when you add a VPS.
+
             ### Verify the download
 
             ```bash
@@ -301,7 +315,7 @@ jobs:
             gh attestation verify ./beacle-agent-amd64 --repo c-airr/beacle
             ```
 
-            ### Assets
+            ### All assets
 
             | File | What |
             |---|---|
