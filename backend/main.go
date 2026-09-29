@@ -36,6 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("wireguard: %v", err)
 	}
+	alerts.SetWireGuard(wg)
 
 	base := *baseURL
 	if base == "" {

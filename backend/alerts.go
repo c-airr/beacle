@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -24,7 +25,7 @@ type AlertEngine struct {
 	// previous per-VPS state used for transition detection
 	prevContainers map[string]map[string]shared.ContainerInfo // vps -> containerID -> info
 	prevServices   map[string]map[string]string               // vps -> unit -> active_state
-	// reach caches the Tailscale probe per VPS; see hostReachable.
+	// reach caches the host probe per VPS; see hostReachable.
 	reach map[string]reachProbe
 
 	// startedAt gates the first sweep. See WatchOffline.
@@ -32,6 +33,7 @@ type AlertEngine struct {
 	// notify hands fired alerts to the webhook delivery queue. Set by main;
 	// nil-safe so tests and old call paths never notice.
 	notify func(shared.WebhookMessage)
+	wg     *WireGuardService
 }
 
 type reachProbe struct {
@@ -79,7 +81,7 @@ const reachProbeEvery = 2 * time.Minute
 
 // hostReachable answers "is the machine there, or only the agent gone", from a
 // cache. WatchOffline ticks every three seconds; without this it would spawn a
-// tailscale process on nearly every tick.
+// probe on nearly every tick.
 func (e *AlertEngine) hostReachable(id, host string) bool {
 	e.mu.Lock()
 	c, ok := e.reach[id]
@@ -87,11 +89,35 @@ func (e *AlertEngine) hostReachable(id, host string) bool {
 	if ok && time.Since(c.at) < reachProbeEvery {
 		return c.up
 	}
-	up := tailscaleReachable(host)
+	up := e.probeHost(id, host)
 	e.mu.Lock()
 	e.reach[id] = reachProbe{up: up, at: time.Now()}
 	e.mu.Unlock()
 	return up
+}
+
+func (e *AlertEngine) probeHost(id, host string) bool {
+	entry := e.store.GetVPS(id)
+	if entry != nil && entry.VPS.IsWireGuard() {
+		if e.wg != nil {
+			hs := e.wg.LastHandshake(entry.VPS.WGPublicKey)
+			if !hs.IsZero() && time.Since(hs) < shared.WGHandshakeFresh {
+				return true
+			}
+		}
+		pingHost := entry.VPS.PublicIP
+		if pingHost == "" {
+			if h, _, err := net.SplitHostPort(entry.VPS.WGEndpoint); err == nil {
+				pingHost = h
+			}
+		}
+		if pingHost == "" {
+			pingHost = host
+		}
+		ok, _ := icmpPing(pingHost)
+		return ok
+	}
+	return tailscaleReachable(host)
 }
 
 func (e *AlertEngine) SetAgentHub(h *AgentHub) { e.agentHub = h }
@@ -99,6 +125,8 @@ func (e *AlertEngine) SetAgentHub(h *AgentHub) { e.agentHub = h }
 // SetNotifier wires alert delivery (webhooks via watcher agents). The queue
 // is buffered and the enqueue never blocks, so firing stays synchronous.
 func (e *AlertEngine) SetNotifier(n func(shared.WebhookMessage)) { e.notify = n }
+
+func (e *AlertEngine) SetWireGuard(w *WireGuardService) { e.wg = w }
 
 func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertSeverity, key, msg string) {
 	id := vps.ID + "|" + string(t) + "|" + key
@@ -377,11 +405,11 @@ func (e *AlertEngine) WatchOffline() {
 				if hostUp {
 					e.clear(v.ID, shared.AlertAgentOffline, "")
 					e.fire(v, shared.AlertAgentDown, shared.SeverityCritical, "",
-						"Agent is not responding — the VPS itself answers on Tailscale")
+						"Agent is not responding — the VPS itself still answers")
 				} else {
 					e.clear(v.ID, shared.AlertAgentDown, "")
 					e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
-						"VPS offline — no answer on its Tailscale address")
+						"VPS offline — no answer on its address")
 				}
 				e.mu.Unlock()
 			}

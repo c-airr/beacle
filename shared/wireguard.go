@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"time"
 )
 
 const (
@@ -30,6 +31,11 @@ const (
 	WGTunnelPrefix    = "10.87.0.0/16"
 	WGBackendPort     = 9930
 	WGKeepaliveSec    = 25
+	// A handshake older than this means the tunnel is gone, not just idle.
+	WGHandshakeFresh = 3 * time.Minute
+	// How long a trial switch from Tailscale may fail before the agent
+	// goes back on its own.
+	WGSwitchFallback = 10 * time.Minute
 	// WGJoinPrefix versions the install token format.
 	WGJoinPrefix = "bcwg1."
 )
@@ -230,8 +236,9 @@ type WGStatus struct {
 // TransportSwitchRequest is sent backend→agent over the current tunnel to
 // move an existing agent onto WireGuard (Join) or back to Tailscale.
 type TransportSwitchRequest struct {
-	Transport string `json:"transport"`
-	Join      string `json:"join,omitempty"`
+	Transport  string `json:"transport"`
+	Join       string `json:"join,omitempty"`
+	BackendURL string `json:"backend_url,omitempty"` // Tailscale switch-back
 }
 
 type TransportStatus struct {

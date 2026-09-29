@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -190,10 +191,11 @@ func (w *WebhookService) SyncWatchers() {
 	targets := w.Targets()
 	peers := []shared.WatchdogPeer{}
 	for _, v := range w.store.ListVPS() {
-		if v.Status == shared.VPSPending || v.Host == "" {
+		host := watchdogHost(v)
+		if v.Status == shared.VPSPending || host == "" {
 			continue
 		}
-		peers = append(peers, shared.WatchdogPeer{ID: v.ID, Name: v.Name, Host: v.Host})
+		peers = append(peers, shared.WatchdogPeer{ID: v.ID, Name: v.Name, Host: host})
 	}
 	primaryID := ""
 	if primary != nil {
@@ -290,4 +292,19 @@ func stringNormalize(s string) string {
 	default:
 		return s
 	}
+}
+
+// watchdogHost is the address a fleet watcher pings. WireGuard servers have
+// no Tailscale IP, so the public address (or the handshake endpoint) is the
+// only thing that can answer from another VPS.
+func watchdogHost(v shared.VPS) string {
+	if v.IsWireGuard() {
+		if v.PublicIP != "" {
+			return v.PublicIP
+		}
+		if h, _, err := net.SplitHostPort(v.WGEndpoint); err == nil {
+			return h
+		}
+	}
+	return v.Host
 }

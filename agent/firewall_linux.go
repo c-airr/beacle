@@ -262,13 +262,16 @@ func (c *linuxCollector) protectedPorts() []int {
 	for _, p := range sshdSessionPorts() {
 		set[p] = true
 	}
-	// The agent talks to the backend over an outbound tunnel, so no INPUT
-	// rule can sever it — but the listen port stays guarded anyway. If the
-	// panel ever reaches the agent directly, that path must keep working.
-	if c.cfg != nil && c.cfg.ListenPort > 0 {
+	// WireGuard's UDP port is the only inbound the agent needs. Denying it
+	// from the panel would lock the box out the same way a closed SSH port
+	// would. Tailscale agents still guard the old listen port in case a
+	// leftover INPUT rule is the only thing keeping a direct probe working.
+	if c.cfg != nil && c.cfg.IsWireGuard() && c.cfg.WG != nil && c.cfg.WG.ListenPort > 0 {
+		set[c.cfg.WG.ListenPort] = true
+	} else if c.cfg != nil && c.cfg.ListenPort > 0 {
 		set[c.cfg.ListenPort] = true
 	} else {
-		set[8931] = true
+		set[shared.WGDefaultPort] = true
 	}
 	var out []int
 	for p := range set {
