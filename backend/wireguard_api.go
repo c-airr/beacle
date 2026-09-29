@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"time"
 
 	"beacle/shared"
 )
@@ -138,4 +139,105 @@ func (s *Server) writeWireGuardInstall(w http.ResponseWriter, entry *VPSEntry) {
 
 func (s *Server) handleWireGuardStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.wg.Status())
+}
+
+func (s *Server) handleWireGuardMigrate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "POST only")
+		return
+	}
+	id := r.PathValue("id")
+	entry := s.store.GetVPS(id)
+	if entry == nil {
+		writeErr(w, http.StatusNotFound, "vps not found")
+		return
+	}
+	if entry.VPS.IsWireGuard() {
+		writeErr(w, http.StatusBadRequest, "server already uses WireGuard")
+		return
+	}
+	var req struct {
+		PublicIP string `json:"public_ip"`
+		WGPort   int    `json:"wg_port"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	if req.PublicIP == "" {
+		req.PublicIP = entry.VPS.PublicIP
+	}
+	if req.PublicIP == "" {
+		writeErr(w, http.StatusBadRequest, "public_ip required")
+		return
+	}
+	endpoint, err := wireGuardEndpoint(req.PublicIP, req.WGPort)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	entry, err = s.wg.Rekey(id, endpoint)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	join, err := s.wg.JoinFor(entry)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	token := join.Encode()
+	body, _ := json.Marshal(shared.TransportSwitchRequest{
+		Transport: shared.TransportWireGuard,
+		Join:      token,
+	})
+	pushed := false
+	if _, code, err := s.agentHub.Request(id, http.MethodPost, "/api/transport/wireguard", body, 15*time.Second); err == nil && code >= 200 && code < 300 {
+		pushed = true
+	}
+	s.logAction(entry.VPS, "wg_migrate", "WireGuard migration started", true)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":              true,
+		"pushed":          pushed,
+		"install_command": wireGuardInstallCommand(join),
+		"endpoint":        endpoint,
+		"vps":             entry.VPS,
+	})
+}
+
+func (s *Server) handleWireGuardSwitchTailscale(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "POST only")
+		return
+	}
+	id := r.PathValue("id")
+	entry := s.store.GetVPS(id)
+	if entry == nil {
+		writeErr(w, http.StatusNotFound, "vps not found")
+		return
+	}
+	if !entry.HasWireGuardPeer() && !entry.VPS.IsWireGuard() {
+		writeErr(w, http.StatusBadRequest, "server is not on WireGuard")
+		return
+	}
+	panelURL := s.backendURL()
+	body, _ := json.Marshal(shared.TransportSwitchRequest{
+		Transport:  shared.TransportTailscale,
+		BackendURL: panelURL,
+	})
+	if _, code, err := s.agentHub.Request(id, http.MethodPost, "/api/transport/tailscale", body, 15*time.Second); err != nil {
+		writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		return
+	} else if code < 200 || code >= 300 {
+		writeErr(w, code, "agent refused switch")
+		return
+	}
+	entry = s.wg.Forget(id)
+	if entry == nil {
+		writeErr(w, http.StatusNotFound, "vps not found")
+		return
+	}
+	s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
+	s.logAction(entry.VPS, "wg_switch_back", "Switched back to Tailscale", true)
+	writeJSON(w, http.StatusOK, entry.VPS)
 }

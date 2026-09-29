@@ -19,6 +19,8 @@ type APIServer struct {
 	col   Collector
 	proxy *ProxyManager
 	upd   *Updater
+	// kickSession drops the panel WebSocket so transport changes take effect.
+	kickSession func()
 }
 
 func jsonOut(w http.ResponseWriter, code int, v any) {
@@ -59,6 +61,11 @@ func (s *APIServer) Routes() http.Handler {
 	}))
 
 	// system
+	mux.HandleFunc("POST /api/transport/wireguard", a(s.handleTransportWireGuard))
+	mux.HandleFunc("POST /api/transport/tailscale", a(s.handleTransportTailscale))
+	mux.HandleFunc("GET /api/transport/status", a(s.handleTransportStatus))
+	mux.HandleFunc("GET /api/system/public-ips", a(s.handlePublicIPs))
+
 	mux.HandleFunc("GET /api/system", a(func(w http.ResponseWriter, r *http.Request) {
 		m, err := s.col.Metrics()
 		if err != nil {

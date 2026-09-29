@@ -111,6 +111,15 @@ class ApiClient {
   Future<WgStatus> wireGuardStatus() async =>
       WgStatus.fromJson(await get('/api/wireguard/status') as Map<String, dynamic>);
 
+  Future<Map<String, dynamic>> migrateWireGuard(String vpsId, {String publicIp = '', int wgPort = 0}) async =>
+      (await post('/api/vps/$vpsId/wireguard/migrate', body: {
+        if (publicIp.isNotEmpty) 'public_ip': publicIp,
+        if (wgPort > 0) 'wg_port': wgPort,
+      })) as Map<String, dynamic>;
+
+  Future<Vps> switchBackTailscale(String vpsId) async =>
+      Vps.fromJson(await post('/api/vps/$vpsId/wireguard/switch-tailscale') as Map<String, dynamic>);
+
   Future<String> installCommand() async {
     final r = (await get('/api/install-command')) as Map;
     final backend = (r['backend_url'] as String? ?? '').trim();

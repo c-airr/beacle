@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../update/app_updater.dart';
 import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
+import '../widgets/wg_migrate_dialog.dart';
 import '../widgets/alerts_panel.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
@@ -37,6 +38,7 @@ class AppShellState extends State<AppShell> {
   final List<Alert> _toasts = [];
   StreamSubscription? _alertSub;
   final _serversKey = GlobalKey<ServersScreenState>();
+  bool _wgMigrateBannerDismissed = false;
 
   late final List<Widget> _screens;
 
@@ -110,6 +112,7 @@ class AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final wgBanner = _buildWgMigrateBanner(state);
 
     return ActivityScope(
       child: Scaffold(
@@ -124,6 +127,7 @@ class AppShellState extends State<AppShell> {
                   children: [
                     _buildTopBar(state),
                     if (state.availableUpdate != null) _buildUpdateBanner(state),
+                    if (wgBanner != null) wgBanner,
                     Expanded(child: IndexedStack(index: index, children: _screens)),
                   ],
                 ),
@@ -216,6 +220,51 @@ class AppShellState extends State<AppShell> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Vps? _tailscaleMigrateCandidate(AppState state) {
+    for (final v in state.vpsList) {
+      if (v.isTailscale && v.wgPublicKey.isEmpty && v.online) return v;
+    }
+    return null;
+  }
+
+  Widget? _buildWgMigrateBanner(AppState state) {
+    if (_wgMigrateBannerDismissed) return null;
+    final v = _tailscaleMigrateCandidate(state);
+    if (v == null) return null;
+    return Material(
+      color: BeacleColors.surface.withValues(alpha: 0.95),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: BeacleColors.accent.withValues(alpha: 0.06),
+          border: Border(bottom: BorderSide(color: BeacleColors.border.withValues(alpha: 0.5))),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.vpn_key_outlined, size: 14, color: BeacleColors.textDim),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.l.t('wgMigrateBanner'),
+                style: const TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton(
+              onPressed: () => showWireGuardMigrateDialog(context, v),
+              child: Text(context.l.t('wgMigrateStart'), style: const TextStyle(fontSize: 11)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              onPressed: () => setState(() => _wgMigrateBannerDismissed = true),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -73,6 +73,9 @@ type WSClient struct {
 	// this minute or whether it has to be kept here.
 	connectedMu sync.RWMutex
 	connected   bool
+
+	kickMu sync.Mutex
+	kick   context.CancelFunc
 }
 
 func NewWSClient(cfg *Config, api *APIServer, reporter *Reporter) *WSClient {
@@ -251,6 +254,7 @@ func (c *WSClient) Run() {
 	go c.sampleOffline(ctx)
 
 	for {
+		transport.expireWireGuardTrial(c.cfg)
 		registered, err := c.session()
 
 		var rejected *registerRejected
@@ -300,8 +304,32 @@ func withJitter(d time.Duration) time.Duration {
 }
 
 // session returns registered=true once register_ack was received (backoff should reset).
+func (c *WSClient) KickSession() {
+	c.kickMu.Lock()
+	k := c.kick
+	c.kickMu.Unlock()
+	if k != nil {
+		k()
+	}
+}
+
 func (c *WSClient) session() (registered bool, err error) {
-	dial, backendURL, err := transport.current(c.cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.kickMu.Lock()
+	c.kick = cancel
+	c.kickMu.Unlock()
+	defer cancel()
+
+	registered, err = c.runSession(ctx, false)
+	if err != nil && c.cfg.WGFallbackActive() {
+		log.Printf("wireguard: %v — trying Tailscale fallback until %s", err, c.cfg.FallbackUntil.UTC().Format(time.RFC3339))
+		return c.runSession(ctx, true)
+	}
+	return registered, err
+}
+
+func (c *WSClient) runSession(ctx context.Context, useFallback bool) (registered bool, err error) {
+	dial, backendURL, err := transport.endpoint(c.cfg, useFallback)
 	if err != nil {
 		return false, err
 	}
@@ -318,7 +346,7 @@ func (c *WSClient) session() (registered bool, err error) {
 		HandshakeTimeout: wsHandshakeTimeout,
 		NetDialContext:   dial,
 	}
-	conn, _, err := dialer.Dial(wsURL, hdr)
+	conn, _, err := dialer.DialContext(ctx, wsURL, hdr)
 	if err != nil {
 		return false, err
 	}
@@ -362,8 +390,6 @@ func (c *WSClient) session() (registered bool, err error) {
 	defer c.setConnected(false)
 
 	writeCh := make(chan []byte, 64)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// writeCh is deliberately never closed. It used to be, and closing a channel
 	// that several goroutines are still writing to is a panic waiting for the
@@ -389,7 +415,6 @@ func (c *WSClient) session() (registered bool, err error) {
 	go c.flushSpikes(sync)
 
 	err = <-errCh
-	cancel()
 	return registered, err
 }
 

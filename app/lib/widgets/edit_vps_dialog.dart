@@ -34,6 +34,7 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
   late final TextEditingController _disk =
       TextEditingController(text: _numOrEmpty(widget.vps.thresholds?.diskHigh));
   bool _saving = false;
+  bool _switchingBack = false;
 
   static String _numOrEmpty(double? v) =>
       v == null || v <= 0 ? '' : v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 1);
@@ -53,6 +54,37 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
     final t = c.text.trim().replaceAll(',', '.');
     if (t.isEmpty) return 0;
     return double.tryParse(t);
+  }
+
+  Future<void> _switchBack() async {
+    if (_switchingBack) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l.t('wgSwitchBack')),
+        content: Text(context.l.t('wgSwitchBackConfirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l.t('wgSwitchBack'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _switchingBack = true);
+    try {
+      context.read<AppState>().onUserAction();
+      await context.read<AppState>().api.switchBackTailscale(widget.vps.id);
+      await context.read<AppState>().refreshAll();
+      if (mounted) {
+        Navigator.pop(context);
+        showToast(context, context.l.t('serverUpdated'));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _switchingBack = false);
+        showToast(context, '$e', error: true);
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -117,6 +149,14 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
                 Expanded(child: _numField(context.l.t('thresholdDisk'), _disk)),
               ],
             ),
+            if (widget.vps.isWireGuard || widget.vps.wgPublicKey.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _switchingBack || _saving ? null : _switchBack,
+                icon: const Icon(Icons.swap_horiz, size: 16),
+                label: Text(_switchingBack ? context.l.t('runningEllipsis') : context.l.t('wgSwitchBack')),
+              ),
+            ],
           ],
         ),
       ),

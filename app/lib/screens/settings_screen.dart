@@ -57,6 +57,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   List<TailscaleDevice> tsDevices = [];
   bool tsLoading = false;
   String? tsError;
+  WgStatus? wgStatus;
+  bool wgLoading = false;
+  String? wgError;
   List<String> netChecks = [];
   bool netChecking = false;
   String? maintenanceStatus;
@@ -71,6 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     // Refresh. Loading once on init means the Tailscale section is already
     // populated by the time the user opens Settings.
     _loadTailscale();
+    _loadWireGuard();
     _tabs.addListener(_onTabChanged);
     // Seed the Updates tab with whatever the startup check already found, so
     // the Update button is not greyed out for a second check on first open.
@@ -83,6 +87,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     // list does not sit there for the whole session.
     if (_tabs.index == 2 && !tsLoading) {
       _loadTailscale();
+    }
+    if (_tabs.index == 2 && !wgLoading) {
+      _loadWireGuard();
     }
     if (_tabs.index == 3 && webhooks == null && !whLoading) {
       _loadWebhooks();
@@ -948,6 +955,30 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     }
   }
 
+  Future<void> _loadWireGuard() async {
+    setState(() {
+      wgLoading = true;
+      wgError = null;
+    });
+    try {
+      final st = await context.read<AppState>().api.wireGuardStatus();
+      if (mounted) {
+        setState(() {
+          wgStatus = st;
+          wgLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          wgError = '$e';
+          wgStatus = null;
+          wgLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _loadTailscale() async {
     setState(() {
       tsLoading = true;
@@ -1320,6 +1351,53 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   child: Text(maintenanceStatus!,
                       style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                 ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        PanelCard(
+          title: context.l.t('wgStatusTitle').toUpperCase(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _field(
+                'Tunnel',
+                wgLoading
+                    ? 'Checking…'
+                    : wgError != null
+                        ? 'Unavailable — $wgError'
+                        : wgStatus == null
+                            ? '—'
+                            : wgStatus!.running
+                                ? 'Running'
+                                : context.l.t('wgStatusOff'),
+                tone: wgError != null
+                    ? BeacleColors.err
+                    : wgStatus?.running == true
+                        ? BeacleColors.ok
+                        : BeacleColors.textDim,
+              ),
+              if (wgStatus != null && wgStatus!.publicKey.isNotEmpty)
+                _field('Panel public key', wgStatus!.publicKey, mono: true),
+              if (wgStatus != null && wgStatus!.error.isNotEmpty)
+                _field('Error', wgStatus!.error, tone: BeacleColors.err),
+              if (wgStatus != null && wgStatus!.peers.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                for (final p in wgStatus!.peers)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 170, bottom: 3),
+                    child: Text(
+                      '${p.name} · ${p.endpoint} · ${p.lastHandshake > 0 ? 'handshake ok' : 'no handshake'}',
+                      style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 12),
+              if (wgLoading)
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                SmallButton('Refresh', icon: Icons.refresh, onPressed: _loadWireGuard),
             ],
           ),
         ),

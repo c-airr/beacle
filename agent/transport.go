@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,8 +61,19 @@ var transport agentTransport
 // current returns how to reach the panel and where it is. Transport fields
 // of cfg are only read and written under t.mu.
 func (t *agentTransport) current(cfg *Config) (dialFunc, string, error) {
+	return t.endpoint(cfg, false)
+}
+
+func (t *agentTransport) endpoint(cfg *Config, useFallback bool) (dialFunc, string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if useFallback && cfg.WGFallbackActive() {
+		d := &net.Dialer{
+			Timeout:   wsHandshakeTimeout,
+			KeepAlive: 15 * time.Second,
+		}
+		return d.DialContext, cfg.FallbackBackendURL, nil
+	}
 	d, err := t.dialerLocked(cfg)
 	return d, cfg.BackendURL, err
 }
@@ -179,4 +192,78 @@ func applyJoin(cfg *Config, token string) error {
 	cfg.FallbackBackendURL = ""
 	cfg.FallbackUntil = time.Time{}
 	return nil
+}
+
+func (c *Config) WGFallbackActive() bool {
+	return c.IsWireGuard() && c.FallbackBackendURL != "" && !c.FallbackUntil.IsZero() &&
+		time.Now().Before(c.FallbackUntil)
+}
+
+// applySwitchToWireGuard moves a live Tailscale agent onto the tunnel while
+// keeping the old panel URL as a timed fallback.
+func applySwitchToWireGuard(cfg *Config, token string) error {
+	j, err := shared.DecodeWGJoin(token)
+	if err != nil {
+		return err
+	}
+	url := j.BackendURL()
+	if url == "" {
+		return errors.New("join token has no panel address")
+	}
+	if cfg.FallbackBackendURL == "" && cfg.BackendURL != "" && cfg.BackendURL != url {
+		cfg.FallbackBackendURL = cfg.BackendURL
+		cfg.FallbackUntil = time.Now().UTC().Add(shared.WGSwitchFallback)
+	}
+	cfg.Transport = shared.TransportWireGuard
+	cfg.WG = wgConfigFromJoin(j)
+	cfg.BackendURL = url
+	if j.VPSID != "" {
+		cfg.VPSID = j.VPSID
+	}
+	return nil
+}
+
+func applySwitchToTailscale(cfg *Config, backendURL string) error {
+	if strings.TrimSpace(backendURL) == "" {
+		return errors.New("backend_url required")
+	}
+	cfg.Transport = shared.TransportTailscale
+	cfg.BackendURL = strings.TrimSpace(backendURL)
+	cfg.WG = nil
+	cfg.FallbackBackendURL = ""
+	cfg.FallbackUntil = time.Time{}
+	return nil
+}
+
+func transportStatus(cfg *Config) shared.TransportStatus {
+	tr := cfg.Transport
+	if tr == "" {
+		tr = shared.TransportTailscale
+	}
+	st := shared.TransportStatus{Transport: tr}
+	if cfg.WGFallbackActive() {
+		st.Pending = shared.TransportWireGuard
+		st.FallbackUntil = cfg.FallbackUntil.UTC().Format(time.RFC3339)
+	}
+	return st
+}
+
+// expireWireGuardTrial reverts to Tailscale when the fallback window closes
+// without a successful register over WireGuard.
+func (t *agentTransport) expireWireGuardTrial(cfg *Config) {
+	_ = t.update(cfg, func(c *Config) bool {
+		if !c.IsWireGuard() || c.FallbackBackendURL == "" || c.FallbackUntil.IsZero() {
+			return false
+		}
+		if time.Now().Before(c.FallbackUntil) {
+			return false
+		}
+		c.BackendURL = c.FallbackBackendURL
+		c.Transport = shared.TransportTailscale
+		c.WG = nil
+		c.FallbackBackendURL = ""
+		c.FallbackUntil = time.Time{}
+		log.Printf("wireguard: trial expired without handshake, reverted to Tailscale")
+		return true
+	})
 }

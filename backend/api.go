@@ -558,6 +558,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/vps/{id}/wireguard/install", s.handleWireGuardInstall)
 	mux.HandleFunc("POST /api/vps/{id}/wireguard/regenerate", s.handleWireGuardRegenerate)
 	mux.HandleFunc("GET /api/wireguard/status", s.handleWireGuardStatus)
+	mux.HandleFunc("POST /api/vps/{id}/wireguard/migrate", s.handleWireGuardMigrate)
+	mux.HandleFunc("POST /api/vps/{id}/wireguard/switch-tailscale", s.handleWireGuardSwitchTailscale)
 	mux.HandleFunc("POST /api/shutdown", s.handleShutdown)
 
 	// ui
