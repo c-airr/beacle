@@ -8,8 +8,9 @@ import '../theme.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
 import '../widgets/edit_vps_dialog.dart';
-import '../widgets/os_updates.dart';
 import '../widgets/history_panel.dart';
+import '../widgets/os_updates.dart';
+import '../widgets/reboot_dialog.dart';
 
 /// Per-VPS host statistics: CPU (incl. cores), RAM, disk, network, system info.
 /// Processes and ports live in the Processes tab.
@@ -22,10 +23,10 @@ class ServersScreen extends StatefulWidget {
 }
 
 class ServersScreenState extends State<ServersScreen> {
+  String? selectedId;
+
   /// Lowercased tag filter for the sidebar list; null shows everything.
   String? tagFilter;
-
-  String? selectedId;
 
   void selectVps(String id) {
     context.read<AppState>().bumpActivity();
@@ -285,6 +286,12 @@ class _ServerStats extends StatelessWidget {
                 if (context.mounted) showToast(context, '$e', error: true);
               }
             }),
+            const SizedBox(width: 8),
+            SmallButton(context.l.t('reboot'), icon: Icons.restart_alt,
+                onPressed: vps.online ? () => showRebootDialog(context, vps, snap) : null),
+            const SizedBox(width: 8),
+            SmallButton(context.l.t('poweroff'), icon: Icons.power_settings_new_outlined,
+                onPressed: vps.online ? () => showPoweroffDialog(context, vps) : null),
             const SizedBox(width: 8),
             SmallButton('Delete', icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
               if (!await confirmDeleteVps(context, vps)) return;

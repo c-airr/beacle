@@ -27,9 +27,17 @@ func mergeSnapshot(store *Store, hub *Hub, alerts *AlertEngine, history *History
 		if agentVer != "" {
 			e.VPS.AgentVer = agentVer
 		}
-		if e.VPS.Status != shared.VPSPending {
-			e.VPS.Status = status
+		if e.VPS.Status == shared.VPSPending {
+			return
 		}
+		// Frames arriving in the seconds between "reboot issued" and the
+		// socket actually dropping must not flicker the status back to
+		// online — the marker owns the status until the agent is back.
+		if e.Restart != nil && e.Restart.Fresh() {
+			e.VPS.Status = e.Restart.MarkerStatus()
+			return
+		}
+		e.VPS.Status = status
 	})
 	if updated == nil {
 		return // deleted while the frame was in flight

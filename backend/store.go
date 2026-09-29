@@ -17,8 +17,31 @@ import (
 
 // VPSEntry is the persisted record for one VPS (registry + secret token).
 type VPSEntry struct {
-	VPS        shared.VPS `json:"vps"`
-	AgentToken string     `json:"agent_token"`
+	VPS        shared.VPS     `json:"vps"`
+	AgentToken string         `json:"agent_token"`
+	// Restart marks a user-initiated reboot/poweroff in flight. While fresh,
+	// the offline watcher shows restarting/powered_off and fires no alerts.
+	Restart *RestartMarker `json:"restart,omitempty"`
+}
+
+// RestartMarker is set when the user reboots or powers off through Beacle.
+type RestartMarker struct {
+	Reason  string    `json:"reason"` // "reboot" | "poweroff"
+	Restore bool      `json:"restore"`
+	Since   time.Time `json:"since"`
+}
+
+// MarkerStatus maps the marker to the VPS status shown while it holds.
+func (m *RestartMarker) MarkerStatus() shared.VPSStatus {
+	if m != nil && m.Reason == "poweroff" {
+		return shared.VPSPoweredOff
+	}
+	return shared.VPSRestarting
+}
+
+// Fresh reports whether the marker still explains a missing socket.
+func (m *RestartMarker) Fresh() bool {
+	return m != nil && time.Since(m.Since) < shared.RestartExpectSec*time.Second
 }
 
 type persistedState struct {
@@ -61,11 +84,19 @@ func NewStore(dataDir string) (*Store, error) {
 	// No agent socket survives a backend restart, so the persisted status is
 	// meaningless here: trusting it would show a server as online with no
 	// snapshot behind it until the offline watcher caught up. Every non-pending
-	// VPS starts offline and is flipped online by its first WebSocket frame.
+	// VPS starts offline and is flipped online by its first WebSocket frame —
+	// except a reboot/poweroff still in flight, whose marker survives so the
+	// first sweep does not cry outage for a machine that is coming back.
 	for _, e := range s.state.VPS {
-		if e.VPS.Status != shared.VPSPending {
-			e.VPS.Status = shared.VPSOffline
+		if e.VPS.Status == shared.VPSPending {
+			continue
 		}
+		if e.Restart != nil && e.Restart.Fresh() {
+			e.VPS.Status = e.Restart.MarkerStatus()
+			continue
+		}
+		e.Restart = nil
+		e.VPS.Status = shared.VPSOffline
 	}
 	return s, nil
 }
@@ -290,6 +321,42 @@ func (s *Store) UpdateVPS(id string, fn func(*VPSEntry)) *VPSEntry {
 	// concurrent frame from the same agent cannot tear it.
 	c := *e
 	return &c
+}
+
+// MarkRestart records a user-initiated reboot/poweroff and flips the status
+// so the panel shows it immediately, before the socket even drops.
+func (s *Store) MarkRestart(id, reason string, restore bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.state.VPS[id]
+	if !ok {
+		return
+	}
+	e.Restart = &RestartMarker{Reason: reason, Restore: restore, Since: time.Now().UTC()}
+	e.VPS.Status = e.Restart.MarkerStatus()
+	s.persistLocked()
+}
+
+// RestartMarker returns a copy of the in-flight marker, if any.
+func (s *Store) RestartMarker(id string) *RestartMarker {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if e, ok := s.state.VPS[id]; ok && e.Restart != nil {
+		c := *e.Restart
+		return &c
+	}
+	return nil
+}
+
+// ClearRestart drops the marker (reconnect, expiry, or a reboot that never
+// happened). The caller owns the status flip that goes with it.
+func (s *Store) ClearRestart(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e, ok := s.state.VPS[id]; ok {
+		e.Restart = nil
+		s.touchLocked()
+	}
 }
 
 func (s *Store) DeleteVPS(id string) bool {

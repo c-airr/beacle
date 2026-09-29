@@ -454,6 +454,25 @@ func (c *devCollector) FirewallDelete(req shared.FirewallDeleteRequest) (shared.
 	return shared.FirewallMutation{}, fmt.Errorf("rule %q no longer exists", req.ID)
 }
 
+func (c *devCollector) Reboot(restore bool) (shared.RebootResult, error) {
+	if !restore {
+		return shared.RebootResult{OK: true}, nil
+	}
+	devRestore = shared.RestoreResult{
+		Restored:   true,
+		RestoredAt: time.Now().UTC().Format(time.RFC3339),
+		Screens:    []shared.RestoreItemResult{{Name: "bot", OK: true}},
+		Nohup:      []shared.RestoreItemResult{{Name: "worker", OK: true}},
+	}
+	return shared.RebootResult{OK: true, ScreensQueued: 1, NohupQueued: 1}, nil
+}
+
+func (c *devCollector) Poweroff() error { return nil }
+
+var devRestore = shared.RestoreResult{}
+
+func (c *devCollector) RestoreStatus() (shared.RestoreResult, error) { return devRestore, nil }
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

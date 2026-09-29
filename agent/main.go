@@ -27,6 +27,9 @@ func main() {
 	proxy := NewProxyManager(cfg)
 	updater := NewUpdater(cfg)
 	reporter := NewReporter(cfg, col, proxy)
+	// Boot restore from a reboot-with-restore manifest. Backgrounded: it
+	// sleeps to let the system settle, and must not delay connecting.
+	go maybeRestoreSessions(col)
 	api := &APIServer{cfg: cfg, col: col, proxy: proxy, upd: updater}
 	// Automatic updates are parked — see AutoUpdateLoop in updater.go. The agent
 	// only replaces its own binary when someone presses Update.

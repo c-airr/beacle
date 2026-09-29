@@ -27,6 +27,7 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 
 	applyOnline := func(e *VPSEntry) {
 		e.VPS.Status = shared.VPSOnline
+		e.Restart = nil // a registering agent is back; any reboot is over
 		e.VPS.LastSeen = time.Now().UTC()
 		e.VPS.AgentVer = req.AgentVersion
 		// Blank on an agent too old to send one; leaving the stored value

@@ -430,6 +430,21 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
 	}
+	// A reboot/poweroff issued through the panel marks the VPS before the
+	// socket drops, so the offline watcher never sees an "outage" here.
+	if r.Method == http.MethodPost && code >= 200 && code < 300 &&
+		(rest == "system/reboot" || rest == "system/poweroff") {
+		reason := "poweroff"
+		restore := false
+		if rest == "system/reboot" {
+			reason = "reboot"
+			var req shared.RebootRequest
+			_ = json.Unmarshal(bodyBytes, &req)
+			restore = req.Restore
+		}
+		s.store.MarkRestart(entry.VPS.ID, reason, restore)
+		s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && code >= 200 && code < 300 {
 		s.agentHub.RequestRefresh(entry.VPS.ID)
 	}

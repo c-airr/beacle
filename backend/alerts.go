@@ -255,8 +255,38 @@ func (e *AlertEngine) WatchOffline() {
 			if v.Status == shared.VPSPending {
 				continue
 			}
+			marker := e.store.RestartMarker(v.ID)
+			markerFresh := marker != nil && marker.Fresh()
+			if marker != nil && !markerFresh {
+				// The box should have been back long ago — expire into a
+				// normal offline so a failed boot still raises an alert.
+				e.store.ClearRestart(v.ID)
+				marker = nil
+			}
 			live := e.agentHub != nil && e.agentHub.Connected(v.ID)
 			if live {
+				if markerFresh {
+					// A rebooted agent drops its socket within seconds. Still
+					// live this long after the marker means the reboot never
+					// happened — drop the marker and go back to online.
+					if time.Since(marker.Since) > shared.RestartLiveClearSec*time.Second {
+						e.store.ClearRestart(v.ID)
+						e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+							en.VPS.Status = shared.VPSOnline
+							en.VPS.LastSeen = time.Now().UTC()
+						})
+						e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+					} else if v.Status != marker.MarkerStatus() {
+						e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+							en.VPS.Status = marker.MarkerStatus()
+						})
+						e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+					}
+					e.mu.Lock()
+					e.clearReachability(v.ID)
+					e.mu.Unlock()
+					continue
+				}
 				// A snapshot/heartbeat often flips Status to online the moment
 				// the socket returns — before this tick runs. Clearing used to
 				// gate on "still Offline/AgentDown", so the alert stayed open
@@ -271,6 +301,16 @@ func (e *AlertEngine) WatchOffline() {
 				e.mu.Lock()
 				e.clearReachability(v.ID)
 				e.mu.Unlock()
+				continue
+			}
+			if markerFresh {
+				// Expected silence: show it, alert nothing.
+				if v.Status != marker.MarkerStatus() {
+					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+						en.VPS.Status = marker.MarkerStatus()
+					})
+					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+				}
 				continue
 			}
 			if v.Status != shared.VPSOffline && v.Status != shared.VPSAgentDown {

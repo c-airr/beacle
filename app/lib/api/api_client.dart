@@ -241,6 +241,14 @@ class ApiClient {
       FirewallMutation.fromJson(
           await post(_a(vpsId, 'firewall/delete'), body: {'id': id, 'force': force}));
 
+  Future<RebootResult> reboot(String vpsId, {bool restore = false}) async =>
+      RebootResult.fromJson(await post(_a(vpsId, 'system/reboot'), body: {'restore': restore}));
+
+  Future<void> poweroff(String vpsId) => post(_a(vpsId, 'system/poweroff'));
+
+  Future<RestoreResult> restoreStatus(String vpsId) async =>
+      RestoreResult.fromJson(await get(_a(vpsId, 'system/restore')));
+
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));
 

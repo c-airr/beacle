@@ -238,6 +238,31 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, res)
 	}))
+	mux.HandleFunc("POST /api/system/reboot", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.RebootRequest
+		_ = json.NewDecoder(r.Body).Decode(&req) // empty body = no restore
+		res, err := s.col.Reboot(req.Restore)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
+	mux.HandleFunc("POST /api/system/poweroff", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.col.Poweroff(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("GET /api/system/restore", a(func(w http.ResponseWriter, r *http.Request) {
+		res, err := s.col.RestoreStatus()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, res)
+	}))
 	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
 		pid, err := strconv.Atoi(r.PathValue("pid"))
 		if err != nil {

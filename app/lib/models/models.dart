@@ -631,6 +631,38 @@ class FirewallMutation {
         warning = _s(j['warning']);
 }
 
+class RebootResult {
+  final bool ok;
+  final int screensQueued, nohupQueued;
+  RebootResult.fromJson(Map<String, dynamic> j)
+      : ok = _b(j['ok']),
+        screensQueued = _i(j['screens_queued']),
+        nohupQueued = _i(j['nohup_queued']);
+}
+
+class RestoreItemResult {
+  final String name, error;
+  final bool ok;
+  RestoreItemResult.fromJson(Map<String, dynamic> j)
+      : name = _s(j['name']),
+        error = _s(j['error']),
+        ok = _b(j['ok']);
+}
+
+class RestoreResult {
+  final bool restored;
+  final String restoredAt;
+  final List<RestoreItemResult> screens, nohup;
+  RestoreResult.fromJson(Map<String, dynamic> j)
+      : restored = _b(j['restored']),
+        restoredAt = _s(j['restored_at']),
+        screens = _list(j['screens'], RestoreItemResult.fromJson),
+        nohup = _list(j['nohup'], RestoreItemResult.fromJson);
+  int get total => screens.length + nohup.length;
+  int get failed =>
+      screens.where((e) => !e.ok).length + nohup.where((e) => !e.ok).length;
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

@@ -30,6 +30,17 @@ const (
 	// Live sockets are never marked offline regardless of this value.
 	OfflineAfterSec  = 45
 	DefaultAgentPort = 8931
+
+	// RestartExpectSec: how long a user-initiated reboot/poweroff marker is
+	// believed. While it holds, the offline watcher shows restarting (or
+	// powered_off) and fires no alerts. Past it the box should have been
+	// back long ago, so the marker expires into a normal offline.
+	RestartExpectSec = 900
+	// RestartLiveClearSec: a rebooted agent drops its socket within seconds.
+	// If the socket is still live this long after the marker was set, the
+	// reboot never happened (or the host is already back without
+	// re-registering cleanly) and the marker is dropped.
+	RestartLiveClearSec = 120
 )
 
 // EffectiveThresholds resolves the firing/clearing thresholds for one server:

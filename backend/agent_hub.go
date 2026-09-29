@@ -201,10 +201,17 @@ func (h *AgentHub) disconnect(sess *agentSession) {
 	// must say so immediately instead of showing a server as online for the
 	// whole offline grace window with no data behind it. The offline *alert*
 	// still waits out shared.OfflineAfterSec, so short reconnects stay quiet.
+	// A reboot/poweroff in flight keeps its marker status instead of offline.
 	h.store.UpdateVPS(sess.vpsID, func(e *VPSEntry) {
-		if e.VPS.Status != shared.VPSPending {
-			e.VPS.Status = shared.VPSOffline
+		if e.VPS.Status == shared.VPSPending {
+			return
 		}
+		if e.Restart != nil && e.Restart.Fresh() {
+			e.VPS.Status = e.Restart.MarkerStatus()
+			return
+		}
+		e.Restart = nil
+		e.VPS.Status = shared.VPSOffline
 	})
 	log.Printf("agent ws disconnected: %s", sess.vpsID)
 	h.hub.Broadcast(shared.WSVPSList, h.store.ListVPS())
@@ -318,7 +325,9 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if sess.registered.Load() && sess.entry != nil {
 			h.store.UpdateVPS(sess.entry.VPS.ID, func(e *VPSEntry) {
 				e.VPS.LastSeen = time.Now().UTC()
-				if e.VPS.Status == shared.VPSOffline {
+				if e.Restart != nil && e.Restart.Fresh() {
+					e.VPS.Status = e.Restart.MarkerStatus()
+				} else if e.VPS.Status == shared.VPSOffline {
 					e.VPS.Status = shared.VPSOnline
 				}
 			})

@@ -418,6 +418,48 @@ type FirewallDryRunRequest struct {
 	ID     string            `json:"id,omitempty"`   // delete
 }
 
+// RebootRequest asks the agent to reboot, optionally snapshotting sessions.
+type RebootRequest struct {
+	Restore bool `json:"restore"`
+}
+
+// RebootResult confirms the reboot was scheduled.
+type RebootResult struct {
+	OK            bool `json:"ok"`
+	ScreensQueued int  `json:"screens_queued"`
+	NohupQueued   int  `json:"nohup_queued"`
+}
+
+// ScreenRestoreSpec is one screen session frozen into the restore manifest.
+type ScreenRestoreSpec struct {
+	Name    string `json:"name"`
+	Command string `json:"command"` // shell line rebuilt from the payload's argv; "" = idle
+	Dir     string `json:"dir"`
+	Idle    bool   `json:"idle"`
+}
+
+// RestoreManifest is written at reboot time and consumed at agent boot.
+type RestoreManifest struct {
+	Screens   []ScreenRestoreSpec `json:"screens"`
+	Nohup     []string            `json:"nohup"`
+	CreatedAt string              `json:"created_at"`
+}
+
+// RestoreItemResult is the per-session outcome of a boot restore.
+type RestoreItemResult struct {
+	Name  string `json:"name"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+// RestoreResult is the last boot restore (or {restored:false} when none ran).
+type RestoreResult struct {
+	Restored   bool                `json:"restored"`
+	RestoredAt string              `json:"restored_at,omitempty"`
+	Screens    []RestoreItemResult `json:"screens"`
+	Nohup      []RestoreItemResult `json:"nohup"`
+}
+
 // ---------------------------------------------------------------------------
 // Services (systemd + screen)
 // ---------------------------------------------------------------------------

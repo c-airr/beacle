@@ -54,6 +54,12 @@ type Collector interface {
 	FirewallDeny(spec shared.FirewallRuleSpec) (shared.FirewallMutation, error)
 	FirewallDelete(req shared.FirewallDeleteRequest) (shared.FirewallMutation, error)
 
+	// Reboot snapshots sessions into a manifest when asked and reboots the
+	// host; Poweroff halts it. RestoreStatus reports the last boot restore.
+	Reboot(restore bool) (shared.RebootResult, error)
+	Poweroff() error
+	RestoreStatus() (shared.RestoreResult, error)
+
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)

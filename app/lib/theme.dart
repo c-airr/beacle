@@ -28,6 +28,12 @@ class BeacleColors {
       // rather than gone — red here would read as "the server died".
       case 'agent_down':
         return warn;
+      // Deliberate transitions, not outages: restarting pulses white while
+      // the box is expected back, powered_off sits dim until it returns.
+      case 'restarting':
+        return accent;
+      case 'powered_off':
+        return textDim;
       case 'offline':
         return err;
       default:
