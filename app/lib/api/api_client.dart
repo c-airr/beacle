@@ -180,6 +180,17 @@ class ApiClient {
   Future<void> killProcess(String vpsId, int pid, String signal) =>
       post(_a(vpsId, 'system/processes/$pid/kill'), body: {'signal': signal});
 
+
+  Future<List<SystemLogFile>> systemLogFiles(String vpsId) async =>
+      ((await get(_a(vpsId, 'system/logs'))) as List? ?? [])
+          .map((e) => SystemLogFile.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+  Future<String> systemLogs(String vpsId, String id, {int tail = 400, String grep = ''}) async =>
+      ((await get(_a(vpsId,
+                  'system/logs/${Uri.encodeComponent(id)}?tail=$tail&grep=${Uri.encodeQueryComponent(grep)}')))
+              as Map)['logs'] as String? ??
+      '';
   Future<void> systemdAction(String vpsId, String unit, String action) =>
       post(_a(vpsId, 'services/systemd/$unit/$action'));
 

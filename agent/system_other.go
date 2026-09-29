@@ -260,6 +260,39 @@ func (c *devCollector) KillProcess(pid int, signal string) error {
 	}
 }
 
+func (c *devCollector) SystemLogFiles() ([]shared.SystemLogFile, error) {
+	return []shared.SystemLogFile{
+		{ID: "syslog", Label: "System log", Path: "/var/log/syslog"},
+		{ID: "auth", Label: "Auth log", Path: "/var/log/auth.log"},
+		{ID: "dmesg", Label: "Kernel ring buffer", Path: "dmesg"},
+		{ID: "nginx:access.log", Label: "Nginx / access.log", Path: "/var/log/nginx/access.log"},
+	}, nil
+}
+
+func (c *devCollector) SystemLogs(id string, tail int, grep string) (string, error) {
+	if tail <= 0 {
+		tail = 400
+	}
+	var sb strings.Builder
+	for i := 0; i < 30; i++ {
+		fmt.Fprintf(&sb, "%s host sim[%d]: simulated %s line %d\n",
+			time.Now().Add(-time.Duration(30-i)*time.Minute).Format(time.RFC3339), 1000+i, id, i+1)
+	}
+	out := sb.String()
+	if g := strings.TrimSpace(grep); g != "" {
+		var kept []string
+		for _, l := range strings.Split(out, "\n") {
+			if strings.Contains(strings.ToLower(l), strings.ToLower(g)) {
+				kept = append(kept, l)
+			}
+		}
+		out = strings.Join(kept, "\n")
+	}
+	return out, nil
+}
+
+var devUpdateJob = shared.OSUpdateJob{}
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

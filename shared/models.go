@@ -280,6 +280,15 @@ type KillProcessRequest struct {
 	Signal string `json:"signal"`
 }
 
+
+// SystemLogFile is one readable system log. The panel only ever sends the ID
+// back — paths never cross the wire from client to agent, so there is no
+// path traversal to defend against.
+type SystemLogFile struct {
+	ID    string `json:"id"`    // e.g. "syslog", "nginx-access"
+	Label string `json:"label"` // human name for the picker
+	Path  string `json:"path"`  // resolved source (file path or "dmesg")
+}
 // ---------------------------------------------------------------------------
 // Services (systemd + screen)
 // ---------------------------------------------------------------------------

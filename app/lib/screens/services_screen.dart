@@ -75,8 +75,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
   List<ProcessInfo> processes = [];
   bool loadingProcs = false;
   Timer? _procTimer;
+  Timer? _logTimer;
+  Timer? _logDebounce;
   Timer? _nohupTimer;
   int _refreshSec = 10;
+  /// System logs tab state. The global filter field doubles as the grep query.
+  List<SystemLogFile> logFiles = [];
+  String? logFileId;
+  String? _logHostId;
+  String logText = '';
+  bool loadingLogs = false;
+
 
   /// Keyed by VPS id: the nohup tab shows the whole fleet at once.
   Map<String, List<NohupJob>> nohupByVps = {};
@@ -228,12 +237,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   void dispose() {
     _procTimer?.cancel();
+    _logTimer?.cancel();
+    _logDebounce?.cancel();
     _nohupTimer?.cancel();
     super.dispose();
   }
 
-  /// Processes and nohup jobs are pulled on demand (neither rides the snapshot
-  /// stream), so both only poll while a tab that shows them is open. screen
+  /// Processes, nohup jobs and system logs are pulled on demand (none rides
+  /// the snapshot stream), so each only polls while its tab is open. screen
   /// needs no polling of its own — it arrives with the snapshots.
   void _syncProcessPolling() {
     final sec = context.read<AppState>().portsRefreshSeconds;
@@ -248,6 +259,75 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     if (tab != 4) {
       _nohupTimer?.cancel();
+    } else if (_nohupTimer == null) {
+      // Slower than processes: a detached job either runs or it does not, and
+      // this is one round trip per server in the fleet.
+      _nohupTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadNohup());
+    }
+
+    if (tab != 5) {
+      _logTimer?.cancel();
+      _logTimer = null;
+    } else if (_logTimer == null) {
+      _logTimer = Timer.periodic(const Duration(seconds: 5), (_) => _loadLogs(silent: true));
+    }
+  }
+
+  Future<void> _loadLogFiles() async {
+    final state = context.read<AppState>();
+    final id = selectedId;
+    if (id == null) return;
+    final vps = state.vpsList.where((v) => v.id == id).firstOrNull;
+    if (vps == null || !vps.online || state.isReportStale(vps)) {
+      if (mounted) setState(() => logFiles = []);
+      return;
+    }
+    if (mounted) setState(() => loadingLogs = true);
+    try {
+      final files = await state.api.systemLogFiles(id);
+      if (!mounted || selectedId != id) return;
+      setState(() {
+        logFiles = files;
+        loadingLogs = false;
+        if (logFileId == null || !files.any((f) => f.id == logFileId)) {
+          logFileId = files.isEmpty ? null : files.first.id;
+        }
+      });
+      if (logFileId != null) _loadLogs();
+    } catch (_) {
+      if (mounted && selectedId == id) {
+        setState(() {
+          logFiles = [];
+          loadingLogs = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadLogs({bool silent = false}) async {
+    final state = context.read<AppState>();
+    final id = selectedId;
+    final fileId = logFileId;
+    if (id == null || fileId == null || tab != 5) return;
+    if (!silent && mounted) setState(() => loadingLogs = true);
+    try {
+      final text = await state.api.systemLogs(id, fileId, tail: 500, grep: filter);
+      if (mounted && selectedId == id && logFileId == fileId) {
+        setState(() {
+          logText = text;
+          loadingLogs = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && selectedId == id) setState(() => loadingLogs = false);
+    }
+  }
+
+  void _debouncedLogReload() {
+    _logDebounce?.cancel();
+    _logDebounce = Timer(const Duration(milliseconds: 600), () => _loadLogs(silent: true));
+  }
+
       _nohupTimer = null;
       return;
     }
@@ -326,7 +406,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             value: v.id,
                             child: Row(children: [StatusDot(v.status, size: 7), const SizedBox(width: 8), Text(v.name)]))
                     ],
-                    onChanged: (v) => setState(() => selectedId = v),
+                    onChanged: (v) {
+                      setState(() => selectedId = v);
+                      if (tab == 5) _loadLogFiles();
+                    },
                   ),
                 ),
               const SizedBox(width: 16),
@@ -338,17 +421,25 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       0 => context.l.t('svcFilterAll'),
                       2 => context.l.t('svcFilterProcs'),
                       3 => context.l.t('svcFilterSessions'),
+                      5 => context.l.t('logsGrepHint'),
                       4 => context.l.t('svcFilterJobs'),
                       _ => context.l.t('svcFilterServices'),
                     },
                     prefixIcon: const Icon(Icons.search, size: 16),
                   ),
-                  onChanged: (v) => setState(() => filter = v.toLowerCase()),
+                  onChanged: (v) {
+                    setState(() => filter = v.toLowerCase());
+                    if (tab == 5) _debouncedLogReload();
+                  },
                 ),
               ),
-              if (_needsProcesses) ...[
+                  if (_needsProcesses || tab == 5) ...[
                 const SizedBox(width: 12),
-                if (loadingProcs)
+                if ((tab == 5
+                        ? loadingLogs
+                                : loadingProcs))
+                else if (tab == 5)
+                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadLogs)
                   const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 else
                   SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadProcesses),
@@ -367,12 +458,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   ButtonSegment(value: 2, label: Text('processes (${processes.length})', style: const TextStyle(fontSize: 12))),
                   // Fleet-wide counts, because these two tabs are fleet-wide.
                   ButtonSegment(value: 3, label: Text('screen ($_fleetScreenCount)', style: const TextStyle(fontSize: 12))),
+                  ButtonSegment(value: 5, label: Text('logs (${logFiles.length})', style: const TextStyle(fontSize: 12))),
                   ButtonSegment(value: 4, label: Text('nohup ($_fleetNohupCount)', style: const TextStyle(fontSize: 12))),
                 ],
                 selected: {tab},
                 onSelectionChanged: (s) {
                   setState(() => tab = s.first);
                   if ((s.first == 0 || s.first == 2) && processes.isEmpty) _loadProcesses();
+                  if (s.first == 5) _loadLogFiles();
                   if (s.first == 4) _loadNohup();
                 },
               ),
@@ -386,6 +479,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
             1 => _systemdList(state, vps, services),
             2 => _processList(state, vps),
             3 => _fleetScreenList(state, withAgent),
+            4 => _fleetNohupList(state, withAgent),
+            5 => _systemLogsList(state, vps),
             _ => _fleetNohupList(state, withAgent),
           },
         ),
@@ -873,6 +968,99 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
     _loadProcesses(silent: true);
   }
+  /// System logs for one host: a file picker plus the filter field above
+  /// doubling as a grep query. Polls while the tab is open.
+  Widget _systemLogsList(AppState state, Vps vps) {
+    if (!vps.online || state.isReportStale(vps)) {
+      return Center(
+        child: Text(
+          state.isReportStale(vps) ? context.l.t('svcStale') : context.l.t('svcWaiting'),
+          style: const TextStyle(color: BeacleColors.textDim),
+        ),
+      );
+    }
+    // Switching hosts with the tab open must re-list: available files differ
+    // per distro (syslog vs messages) and per installed proxy.
+    if (_logHostId != vps.id && !loadingLogs) {
+      _logHostId = vps.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadLogFiles();
+      });
+    }
+    if (loadingLogs && logFiles.isEmpty) {
+      return Center(
+        child: Text(context.l.t('svcLoading'), style: const TextStyle(color: BeacleColors.textDim)),
+      );
+    }
+    if (logFiles.isEmpty) {
+      return Center(
+        child: Text(context.l.t('logsNoFiles'), style: const TextStyle(color: BeacleColors.textDim)),
+      );
+    }
+    final current =
+        logFiles.where((f) => f.id == logFileId).firstOrNull ?? logFiles.first;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 6),
+          child: Row(
+            children: [
+              DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: current.id,
+                  dropdownColor: BeacleColors.surfaceHi,
+                  style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                  items: [
+                    for (final f in logFiles) DropdownMenuItem(value: f.id, child: Text(f.label)),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      logFileId = v;
+                      logText = '';
+                    });
+                    _loadLogs();
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(current.path,
+                    style: const TextStyle(
+                        fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(22, 10, 22, 14),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: BeacleColors.bg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: BeacleColors.border),
+            ),
+            child: SmoothSingleChildScrollView(
+              child: SelectableText(
+                logText.isEmpty ? context.l.t('logsEmpty') : logText,
+                style: TextStyle(
+                  fontFamily: 'Consolas',
+                  fontSize: 11,
+                  height: 1.45,
+                  color: logText.isEmpty ? BeacleColors.textDim : BeacleColors.text,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
 
   Future<void> _refreshScreens(AppState state, Vps vps) async {
     // The snapshot stream carries screen sessions, but after start/stop the

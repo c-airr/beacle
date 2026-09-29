@@ -443,6 +443,15 @@ class PruneResult {
         output = _s(j['output']);
 }
 
+/// One readable system log on a VPS. The UI only ever sends [id] back.
+class SystemLogFile {
+  final String id, label, path;
+  SystemLogFile.fromJson(Map<String, dynamic> j)
+      : id = _s(j['id']),
+        label = _s(j['label']),
+        path = _s(j['path']);
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

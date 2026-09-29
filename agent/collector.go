@@ -27,6 +27,11 @@ type Collector interface {
 	// refuses PID 1 and its own PID.
 	KillProcess(pid int, signal string) error
 
+	// SystemLogFiles lists readable system logs; SystemLogs tails one with
+	// an optional case-insensitive grep filter.
+	SystemLogFiles() ([]shared.SystemLogFile, error)
+	SystemLogs(id string, tail int, grep string) (string, error)
+
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)

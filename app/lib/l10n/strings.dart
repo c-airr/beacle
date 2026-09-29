@@ -173,6 +173,10 @@ const _en = <String, String>{
   'setStatus': 'Status',
   'setLanguage': 'Language',
   'setLanguageDetail': 'Interface language. Applied immediately.',
+  // system logs tab
+  'logsGrepHint': 'Grep… e.g. error',
+  'logsNoFiles': 'No readable system logs',
+  'logsEmpty': 'No matching lines',
   // servers: tags + thresholds
   'save': 'Save',
   'editServer': 'Edit server',
@@ -333,6 +337,10 @@ const _pl = <String, String>{
   'setStatus': 'Status',
   'setLanguage': 'Język',
   'setLanguageDetail': 'Język interfejsu. Zmiana działa od razu.',
+  // system logs tab
+  'logsGrepHint': 'Grep… np. error',
+  'logsNoFiles': 'Brak czytelnych logów systemowych',
+  'logsEmpty': 'Brak pasujących linii',
   // servers: tags + thresholds
   'save': 'Zapisz',
   'editServer': 'Edytuj serwer',

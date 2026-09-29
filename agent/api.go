@@ -96,6 +96,23 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, p)
 	}))
+	mux.HandleFunc("GET /api/system/logs", a(func(w http.ResponseWriter, r *http.Request) {
+		files, err := s.col.SystemLogFiles()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, files)
+	}))
+	mux.HandleFunc("GET /api/system/logs/{id}", a(func(w http.ResponseWriter, r *http.Request) {
+		tail, _ := strconv.Atoi(r.URL.Query().Get("tail"))
+		logs, err := s.col.SystemLogs(r.PathValue("id"), tail, r.URL.Query().Get("grep"))
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]string{"logs": logs})
+	}))
 	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
 		pid, err := strconv.Atoi(r.PathValue("pid"))
 		if err != nil {
