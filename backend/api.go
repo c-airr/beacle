@@ -197,6 +197,10 @@ func (s *Server) handleCreateVPS(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad json")
 		return
 	}
+	if req.Transport == shared.TransportWireGuard {
+		s.createWireGuardVPS(w, req)
+		return
+	}
 	if req.TailscaleName == "" && req.TailscaleIP == "" {
 		writeErr(w, http.StatusBadRequest, "tailscale_name or tailscale_ip required")
 		return
@@ -550,6 +554,10 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("POST /api/vps", s.handleCreateVPS)
 	mux.HandleFunc("GET /api/tailscale/devices", s.handleTailscaleDevices)
+	mux.HandleFunc("POST /api/connectivity/probe", s.handleConnectivityProbe)
+	mux.HandleFunc("GET /api/vps/{id}/wireguard/install", s.handleWireGuardInstall)
+	mux.HandleFunc("POST /api/vps/{id}/wireguard/regenerate", s.handleWireGuardRegenerate)
+	mux.HandleFunc("GET /api/wireguard/status", s.handleWireGuardStatus)
 	mux.HandleFunc("POST /api/shutdown", s.handleShutdown)
 
 	// ui

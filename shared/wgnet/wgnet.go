@@ -70,7 +70,15 @@ func Up(cfg Config) (*Tunnel, error) {
 	bind := &udpBind{}
 	logger := &device.Logger{
 		Verbosef: device.DiscardLogf,
-		Errorf:   func(format string, args ...any) { log.Printf("wireguard: "+format, args...) },
+		Errorf: func(format string, args ...any) {
+			msg := fmt.Sprintf(format, args...)
+			// The agent side never knows the panel's address: it waits to be
+			// handshaken, and every packet queued until then says so.
+			if strings.Contains(msg, "no known endpoint for peer") {
+				return
+			}
+			log.Printf("wireguard: %s", msg)
+		},
 	}
 	dev := device.NewDevice(tunDev, bind, logger)
 	uapi := fmt.Sprintf("private_key=%s\nlisten_port=%d\n", cfg.PrivateKey.Hex(), cfg.ListenPort)

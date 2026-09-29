@@ -29,6 +29,9 @@ type WireGuardService struct {
 	priv  shared.WGKey
 	pub   shared.WGKey
 
+	// createMu serializes tunnel IP allocation with the store write.
+	createMu sync.Mutex
+
 	mu      sync.Mutex
 	tun     *wgnet.Tunnel
 	http    *http.Server
@@ -192,8 +195,97 @@ func (w *WireGuardService) RemovePeer(publicKey string) {
 	}
 }
 
-// AllocateTunnelIP picks the lowest free address in the tunnel subnet.
-func (w *WireGuardService) AllocateTunnelIP() (string, error) {
+// CreateServer registers a new WireGuard server at endpoint (ip:port) with
+// fresh keys and installs its peer.
+func (w *WireGuardService) CreateServer(name, endpoint string) (*VPSEntry, error) {
+	w.createMu.Lock()
+	defer w.createMu.Unlock()
+	tip, err := w.allocateTunnelIP()
+	if err != nil {
+		return nil, err
+	}
+	priv, pub, psk, err := newAgentKeys()
+	if err != nil {
+		return nil, err
+	}
+	entry := w.store.CreateWireGuardVPS(name, endpoint, tip, pub, priv, psk)
+	if err := w.SyncPeer(entry); err != nil {
+		log.Printf("wireguard: peer %s: %v", entry.VPS.Name, err)
+	}
+	return entry, nil
+}
+
+// Rekey issues a new agent key and PSK for a server. The old key stops
+// working immediately; the server needs the new install command. endpoint
+// is optional (migration sets it on a Tailscale server).
+func (w *WireGuardService) Rekey(id, endpoint string) (*VPSEntry, error) {
+	w.createMu.Lock()
+	defer w.createMu.Unlock()
+	cur := w.store.GetVPS(id)
+	if cur == nil {
+		return nil, errors.New("vps not found")
+	}
+	tip := cur.VPS.WGTunnelIP
+	if tip == "" {
+		var err error
+		if tip, err = w.allocateTunnelIP(); err != nil {
+			return nil, err
+		}
+	}
+	priv, pub, psk, err := newAgentKeys()
+	if err != nil {
+		return nil, err
+	}
+	oldPub := cur.VPS.WGPublicKey
+	entry := w.store.UpdateVPSNow(id, func(e *VPSEntry) {
+		e.VPS.WGTunnelIP = tip
+		e.VPS.WGPublicKey = pub.String()
+		if endpoint != "" {
+			e.VPS.WGEndpoint = endpoint
+		}
+		e.WGPresharedKey = psk.String()
+		e.WGAgentKey = priv.String()
+	})
+	if entry == nil {
+		return nil, errors.New("vps not found")
+	}
+	if oldPub != "" {
+		w.RemovePeer(oldPub)
+	}
+	if err := w.SyncPeer(entry); err != nil {
+		return entry, err
+	}
+	return entry, nil
+}
+
+// Forget drops a server's tunnel keys and peer (switching back to Tailscale).
+func (w *WireGuardService) Forget(id string) *VPSEntry {
+	cur := w.store.GetVPS(id)
+	if cur == nil {
+		return nil
+	}
+	w.RemovePeer(cur.VPS.WGPublicKey)
+	return w.store.UpdateVPSNow(id, func(e *VPSEntry) {
+		e.VPS.WGPublicKey, e.VPS.WGTunnelIP, e.VPS.WGEndpoint = "", "", ""
+		e.WGPresharedKey, e.WGAgentKey = "", ""
+		if e.VPS.IsWireGuard() {
+			e.VPS.Transport = shared.TransportTailscale
+		}
+	})
+}
+
+func newAgentKeys() (priv, pub, psk shared.WGKey, err error) {
+	if priv, err = shared.GenerateWGPrivateKey(); err != nil {
+		return
+	}
+	if pub, err = priv.PublicKey(); err != nil {
+		return
+	}
+	psk, err = shared.GenerateWGPresharedKey()
+	return
+}
+
+func (w *WireGuardService) allocateTunnelIP() (string, error) {
 	used := map[string]bool{shared.WGBackendTunnelIP: true}
 	for _, e := range w.store.ListEntries() {
 		if e.VPS.WGTunnelIP != "" {
