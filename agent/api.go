@@ -263,6 +263,38 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, res)
 	}))
+	mux.HandleFunc("POST /api/watchdog/config", a(func(w http.ResponseWriter, r *http.Request) {
+		var cfg shared.WatchdogConfig
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		if err := s.col.SetWatchdogConfig(cfg); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("POST /api/watchdog/send", a(func(w http.ResponseWriter, r *http.Request) {
+		var msg shared.WebhookMessage
+		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		if err := s.col.SendWatchdogMessage(msg); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("GET /api/watchdog/status", a(func(w http.ResponseWriter, r *http.Request) {
+		st, err := s.col.WatchdogStatus()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, st)
+	}))
 	mux.HandleFunc("POST /api/system/processes/{pid}/kill", a(func(w http.ResponseWriter, r *http.Request) {
 		pid, err := strconv.Atoi(r.PathValue("pid"))
 		if err != nil {

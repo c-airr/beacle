@@ -60,6 +60,12 @@ type Collector interface {
 	Poweroff() error
 	RestoreStatus() (shared.RestoreResult, error)
 
+	// Watchdog: fleet supervision from the inside while the backend tunnel
+	// is down. Config is pushed by the backend and persisted locally.
+	SetWatchdogConfig(cfg shared.WatchdogConfig) error
+	SendWatchdogMessage(msg shared.WebhookMessage) error
+	WatchdogStatus() (shared.WatchdogStatus, error)
+
 	SystemdUnits() ([]shared.SystemdUnit, error)
 	SystemdAction(unit, action string) (string, error)
 	SystemdLogs(unit string, lines int) (string, error)

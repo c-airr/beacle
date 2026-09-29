@@ -22,6 +22,7 @@ type Server struct {
 	agentHub  *AgentHub
 	alerts    *AlertEngine
 	history   *History
+	webhooks  *WebhookService
 	baseURL   string // public URL of this backend, used in install commands
 	dataDir   string
 	startedAt time.Time
@@ -492,6 +493,50 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
+// Webhooks: destinations, election, delivery test
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleGetWebhooks(w http.ResponseWriter, r *http.Request) {
+	primary, secondary := s.webhooks.Elect()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"targets":   s.webhooks.Targets(),
+		"primary":   primary,
+		"secondary": secondary,
+	})
+}
+
+func (s *Server) handlePutWebhooks(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Targets []shared.WebhookTarget `json:"targets"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	if req.Targets == nil {
+		req.Targets = []shared.WebhookTarget{}
+	}
+	if err := s.webhooks.SetTargets(req.Targets); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleTestWebhooks(w http.ResponseWriter, r *http.Request) {
+	via, err := s.webhooks.SendTest()
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if via == "" {
+		writeErr(w, http.StatusBadRequest, "no webhook targets configured")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "via": via})
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -515,6 +560,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/alerts", s.handleAlerts)
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.handleResolveAlert)
+	mux.HandleFunc("GET /api/webhooks", s.handleGetWebhooks)
+	mux.HandleFunc("PUT /api/webhooks", s.handlePutWebhooks)
+	mux.HandleFunc("POST /api/webhooks/test", s.handleTestWebhooks)
 	mux.HandleFunc("GET /api/actions", s.handleActions)
 	mux.HandleFunc("/api/links", s.handleLinks)
 	mux.HandleFunc("DELETE /api/links/{id}", s.handleDeleteLink)

@@ -20,6 +20,7 @@ import (
 
 type linuxCollector struct {
 	mu sync.Mutex
+	cfg *Config
 	// CPU is sampled by cpuMon on its own ticker — see cpu_monitor_linux.go.
 	// The fields that used to live here (cpuAll / cpuCores) moved with it.
 	cpuMon    *cpuMonitor
@@ -123,6 +124,7 @@ func (c *linuxCollector) procCPUDeltas() map[int]float64 {
 
 func newCollector(cfg *Config) Collector {
 	return &linuxCollector{
+		cfg:     cfg,
 		cpuMon:  newCPUMonitor(),
 		prevNet: map[string][2]uint64{},
 		docker:  newDockerClient(),

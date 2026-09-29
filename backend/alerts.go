@@ -29,6 +29,9 @@ type AlertEngine struct {
 
 	// startedAt gates the first sweep. See WatchOffline.
 	startedAt time.Time
+	// notify hands fired alerts to the webhook delivery queue. Set by main;
+	// nil-safe so tests and old call paths never notice.
+	notify func(shared.WebhookMessage)
 }
 
 type reachProbe struct {
@@ -93,6 +96,10 @@ func (e *AlertEngine) hostReachable(id, host string) bool {
 
 func (e *AlertEngine) SetAgentHub(h *AgentHub) { e.agentHub = h }
 
+// SetNotifier wires alert delivery (webhooks via watcher agents). The queue
+// is buffered and the enqueue never blocks, so firing stays synchronous.
+func (e *AlertEngine) SetNotifier(n func(shared.WebhookMessage)) { e.notify = n }
+
 func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertSeverity, key, msg string) {
 	id := vps.ID + "|" + string(t) + "|" + key
 	if e.active[id] {
@@ -103,6 +110,36 @@ func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertS
 		VPSID: vps.ID, VPSName: vps.Name, Type: t, Severity: sev, Message: msg, Key: key,
 	})
 	e.hub.Broadcast(shared.WSAlert, a)
+	if e.notify != nil {
+		e.notify(shared.WebhookMessage{
+			Title:    fmt.Sprintf("[%s] %s: %s", sev, vps.Name, alertTitle(t)),
+			Body:     msg,
+			Severity: string(sev),
+		})
+	}
+}
+
+func alertTitle(t shared.AlertType) string {
+	switch t {
+	case shared.AlertCPUHigh:
+		return "CPU high"
+	case shared.AlertMemHigh:
+		return "RAM high"
+	case shared.AlertDiskHigh:
+		return "disk high"
+	case shared.AlertServiceDown:
+		return "service down"
+	case shared.AlertDockerCrash:
+		return "container crashed"
+	case shared.AlertProxyError:
+		return "proxy error"
+	case shared.AlertAgentOffline:
+		return "VPS offline"
+	case shared.AlertAgentDown:
+		return "agent down"
+	default:
+		return string(t)
+	}
 }
 
 // clear marks the condition as no longer holding — and resolves the alerts it

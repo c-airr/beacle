@@ -35,5 +35,7 @@ func main() {
 	// only replaces its own binary when someone presses Update.
 	// go updater.AutoUpdateLoop()
 	ws := NewWSClient(cfg, api, reporter)
+	// Fleet watchdog: idle unless this agent is an elected watcher.
+	go runWatchdog(cfg, ws)
 	ws.Run()
 }

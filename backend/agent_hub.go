@@ -239,6 +239,9 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		ack.PowerMode = srv.agentPowerMode()
 		h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSRegisterAck, RegisterAck: &ack})
 		h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSPowerMode, Mode: ack.PowerMode})
+		// A (re)connected agent changes the watcher election — sync now
+		// instead of waiting for the next timer tick.
+		go srv.webhooks.SyncWatchers()
 
 	case shared.AgentWSMetrics:
 		if !sess.registered.Load() || sess.entry == nil || msg.Metrics == nil {

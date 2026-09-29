@@ -473,6 +473,41 @@ var devRestore = shared.RestoreResult{}
 
 func (c *devCollector) RestoreStatus() (shared.RestoreResult, error) { return devRestore, nil }
 
+var devWatchdog = shared.WatchdogConfig{}
+
+func (c *devCollector) SetWatchdogConfig(wc shared.WatchdogConfig) error {
+	devWatchdog = wc
+	return nil
+}
+
+func (c *devCollector) SendWatchdogMessage(msg shared.WebhookMessage) error {
+	if len(devWatchdog.Webhooks) == 0 {
+		return fmt.Errorf("no webhooks configured")
+	}
+	var firstErr error
+	sent := 0
+	for _, t := range devWatchdog.Webhooks {
+		if err := shared.SendWebhook(t, msg); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		sent++
+	}
+	if sent == 0 {
+		return firstErr
+	}
+	return nil
+}
+
+func (c *devCollector) WatchdogStatus() (shared.WatchdogStatus, error) {
+	return shared.WatchdogStatus{
+		Enabled: devWatchdog.Enabled, Role: devWatchdog.Role,
+		Peers: len(devWatchdog.Peers), Webhooks: len(devWatchdog.Webhooks),
+	}, nil
+}
+
 func (c *devCollector) SystemdUnits() ([]shared.SystemdUnit, error) {
 	return []shared.SystemdUnit{
 		{Name: "caddy.service", Description: "Caddy web server", LoadState: "loaded", ActiveState: "active", SubState: "running", Enabled: "enabled"},

@@ -663,6 +663,38 @@ class RestoreResult {
       screens.where((e) => !e.ok).length + nohup.where((e) => !e.ok).length;
 }
 
+/// One notification destination: Discord webhook URL, ntfy topic URL, or a
+/// Telegram bot token plus chat id.
+class WebhookTarget {
+  String id, kind, url, chatId;
+  WebhookTarget({this.id = '', this.kind = 'discord', this.url = '', this.chatId = ''});
+  WebhookTarget.fromJson(Map<String, dynamic> j)
+      : id = _s(j['id']),
+        kind = _s(j['kind']),
+        url = _s(j['url']),
+        chatId = _s(j['chat_id']);
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'url': url,
+        'chat_id': chatId,
+      };
+}
+
+/// Webhook destinations plus the currently elected fleet watchers.
+class WebhooksConfig {
+  final List<WebhookTarget> targets;
+  final Vps? primary, secondary;
+  WebhooksConfig.fromJson(Map<String, dynamic> j)
+      : targets = _list(j['targets'], WebhookTarget.fromJson),
+        primary = j['primary'] is Map<String, dynamic>
+            ? Vps.fromJson(j['primary'] as Map<String, dynamic>)
+            : null,
+        secondary = j['secondary'] is Map<String, dynamic>
+            ? Vps.fromJson(j['secondary'] as Map<String, dynamic>)
+            : null;
+}
+
 /// A command started detached with nohup. No terminal to reattach to, so the
 /// agent remembers it — otherwise there would be no way to stop it later.
 class NohupJob {

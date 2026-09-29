@@ -42,8 +42,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   bool agentPickerBusy = false;
   bool agentUpdatingAll = false;
 
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
   bool? autostartOn;
+
+  // Notifications tab
+  WebhooksConfig? webhooks;
+  List<WebhookTarget> whEdit = [];
+  bool whLoading = false;
+  bool whSaving = false;
+  bool whTesting = false;
+  String? whStatus;
 
   // Status tab
   List<TailscaleDevice> tsDevices = [];
@@ -76,6 +84,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     if (_tabs.index == 2 && !tsLoading) {
       _loadTailscale();
     }
+    if (_tabs.index == 3 && webhooks == null && !whLoading) {
+      _loadWebhooks();
+    }
   }
 
   @override
@@ -105,6 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               Tab(text: context.l.t('setGeneral')),
               Tab(text: context.l.t('setUpdates')),
               Tab(text: context.l.t('setStatus')),
+              Tab(text: context.l.t('setNotify')),
             ],
           ),
         ),
@@ -115,6 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               _generalTab(state),
               _updatesTab(state),
               _statusTab(state),
+              _notifyTab(state),
             ],
           ),
         ),
@@ -1008,6 +1021,251 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         netChecking = false;
       });
     }
+  }
+
+  Future<void> _loadWebhooks() async {
+    setState(() {
+      whLoading = true;
+      whStatus = null;
+    });
+    try {
+      final w = await context.read<AppState>().api.getWebhooks();
+      if (!mounted) return;
+      setState(() {
+        webhooks = w;
+        whEdit = w.targets
+            .map((t) => WebhookTarget(id: t.id, kind: t.kind, url: t.url, chatId: t.chatId))
+            .toList();
+        whLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        whLoading = false;
+        whStatus = '$e';
+      });
+    }
+  }
+
+  Future<void> _saveWebhooks() async {
+    setState(() {
+      whSaving = true;
+      whStatus = null;
+    });
+    try {
+      context.read<AppState>().onUserAction();
+      await context.read<AppState>().api.setWebhooks(whEdit);
+      await _loadWebhooks();
+      if (!mounted) return;
+      setState(() {
+        whSaving = false;
+        whStatus = context.l.t('whSaved');
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        whSaving = false;
+        whStatus = '$e';
+      });
+    }
+  }
+
+  Future<void> _testWebhooks() async {
+    setState(() {
+      whTesting = true;
+      whStatus = null;
+    });
+    try {
+      final via = await context.read<AppState>().api.testWebhooks();
+      if (!mounted) return;
+      setState(() {
+        whTesting = false;
+        whStatus = context.l.f('whTestSent', {'via': via});
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        whTesting = false;
+        whStatus = '$e';
+      });
+    }
+  }
+
+  Widget _notifyTab(AppState state) {
+    return SmoothListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        PanelCard(
+          title: context.l.t('whSenders'),
+          trailing: SmallButton(context.l.t('refresh'),
+              icon: Icons.refresh, onPressed: whLoading ? null : _loadWebhooks),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.l.t('whExplainer'),
+                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+              const SizedBox(height: 10),
+              if (whLoading && webhooks == null)
+                const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              else if (webhooks?.primary == null)
+                Text(context.l.t('whNoWatchers'),
+                    style: const TextStyle(fontSize: 12, color: BeacleColors.warn))
+              else ...[
+                _field(context.l.t('whPrimary'), webhooks!.primary!.name,
+                    tone: BeacleColors.ok),
+                if (webhooks!.secondary != null)
+                  _field(context.l.t('whSecondary'), webhooks!.secondary!.name,
+                      tone: BeacleColors.text),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        PanelCard(
+          title: context.l.t('whTargets'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (whEdit.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(context.l.t('whEmpty'),
+                      style:
+                          const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                ),
+              for (var i = 0; i < whEdit.length; i++) _webhookEditor(i),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SmallButton('+ Discord',
+                      icon: Icons.add,
+                      onPressed: () => setState(() =>
+                          whEdit.add(WebhookTarget(kind: 'discord')))),
+                  SmallButton('+ ntfy',
+                      icon: Icons.add,
+                      onPressed: () =>
+                          setState(() => whEdit.add(WebhookTarget(kind: 'ntfy')))),
+                  SmallButton('+ Telegram',
+                      icon: Icons.add,
+                      onPressed: () => setState(
+                          () => whEdit.add(WebhookTarget(kind: 'telegram')))),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SmallButton(context.l.t('save'),
+                      icon: Icons.check,
+                      onPressed: whSaving ? null : _saveWebhooks),
+                  SmallButton(context.l.t('whTest'),
+                      icon: Icons.send_outlined,
+                      onPressed:
+                          (whTesting || whEdit.isEmpty) ? null : _testWebhooks),
+                ],
+              ),
+              if (whStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(whStatus!,
+                      style:
+                          const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _webhookEditor(int i) {
+    final t = whEdit[i];
+    final isTelegram = t.kind == 'telegram';
+    return Container(
+      key: ValueKey('${t.id}-$i'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: BeacleColors.bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: BeacleColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: t.kind,
+                dropdownColor: BeacleColors.surfaceHi,
+                style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                items: const [
+                  DropdownMenuItem(value: 'discord', child: Text('Discord')),
+                  DropdownMenuItem(value: 'ntfy', child: Text('ntfy')),
+                  DropdownMenuItem(value: 'telegram', child: Text('Telegram')),
+                ],
+                onChanged: (v) => setState(() => t.kind = v ?? 'discord'),
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 17),
+              tooltip: context.l.t('delete'),
+              color: BeacleColors.err,
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => whEdit.removeAt(i)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+              isTelegram
+                  ? context.l.t('whTelegramToken')
+                  : t.kind == 'ntfy'
+                      ? context.l.t('whNtfyUrl')
+                      : context.l.t('whDiscordUrl'),
+              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+          const SizedBox(height: 4),
+          TextFormField(
+            key: ValueKey('${t.id}-$i-url'),
+            initialValue: t.url,
+            onChanged: (v) => t.url = v.trim(),
+            obscureText: isTelegram,
+            decoration: InputDecoration(
+              hintText: isTelegram
+                  ? '123456:ABC-DEF…'
+                  : t.kind == 'ntfy'
+                      ? 'https://ntfy.sh/beacle-alerts'
+                      : 'https://discord.com/api/webhooks/…',
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            ),
+            style: const TextStyle(fontSize: 12, fontFamily: 'Consolas'),
+          ),
+          if (isTelegram) ...[
+            const SizedBox(height: 8),
+            Text(context.l.t('whChatId'),
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            const SizedBox(height: 4),
+            TextFormField(
+              key: ValueKey('${t.id}-$i-chat'),
+              initialValue: t.chatId,
+              onChanged: (v) => t.chatId = v.trim(),
+              decoration: const InputDecoration(
+                hintText: '123456789',
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              ),
+              style: const TextStyle(fontSize: 12, fontFamily: 'Consolas'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _statusTab(AppState state) {

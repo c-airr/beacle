@@ -26,6 +26,7 @@ func main() {
 	alerts := NewAlertEngine(store, hub)
 	agentHub := NewAgentHub(store, hub, alerts, history, spikes)
 	alerts.SetAgentHub(agentHub)
+	webhooks := NewWebhookService(*dataDir, store, agentHub, history)
 
 	base := *baseURL
 	if base == "" {
@@ -43,12 +44,14 @@ func main() {
 		agentHub:  agentHub,
 		alerts:    alerts,
 		history:   history,
+		webhooks:  webhooks,
 		spikes:    spikes,
 		baseURL:   base,
 		dataDir:   *dataDir,
 		startedAt: time.Now(),
 		uptime:    NewUptimeLog(*dataDir),
 	}
+	alerts.SetNotifier(webhooks.Enqueue)
 
 	go srv.uptime.Run()
 	go store.FlushLoop()
@@ -56,6 +59,8 @@ func main() {
 	go spikes.RunTrim()
 	go alerts.WatchOffline()
 	go srv.LinkMonitor()
+	go webhooks.Run()
+	go webhooks.RunSyncLoop()
 
 	log.Printf("beacle backend listening on %s (agents via Tailscale: %s)", *addr, base)
 	if err := http.ListenAndServe(*addr, withCORS(srv.Routes())); err != nil {
