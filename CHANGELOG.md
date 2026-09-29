@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 — 2026-09-29
+## 2.0.0 (unreleased)
 
 Admin release: firewall, updates, cron, reboot-and-restore, system logs,
 webhooks, tags and per-server thresholds.
