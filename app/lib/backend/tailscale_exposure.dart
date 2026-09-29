@@ -5,13 +5,19 @@ import 'package:flutter/foundation.dart';
 /// Port the Go backend listens on (must match backend/main.go default).
 const int backendPort = 9930;
 
+/// Agents-only loopback listener (backend -agent-loopback). `serve` must
+/// point here and never at [backendPort] on loopback, which is the full
+/// panel API.
+const int agentLoopbackPort = 9931;
+
 /// Ensures the backend is reachable from the tailnet.
 ///
-/// The backend already binds 0.0.0.0, so on a machine whose firewall allows
-/// inbound $backendPort the tailnet address works on its own. `tailscale serve`
-/// is the fallback for the machines where it does not: it needs no admin
-/// rights, but it makes tailscaled own the tailnet address and proxy every
-/// byte to 127.0.0.1 — an extra hop that can fail independently of the backend.
+/// The backend listens on the tailnet address itself (agents-only), so on a
+/// machine whose firewall allows inbound $backendPort that works on its own.
+/// `tailscale serve` is the fallback for the machines where it does not: it
+/// needs no admin rights, but it makes tailscaled own the tailnet address and
+/// proxy every byte to loopback — an extra hop that can fail independently of
+/// the backend.
 ///
 /// So: only claim the address when the direct path is not already working.
 Future<void> ensureBackendTailnetExposure({String? backendExe}) async {
@@ -19,7 +25,8 @@ Future<void> ensureBackendTailnetExposure({String? backendExe}) async {
 
   // An existing mapping would answer our probe itself, so a machine that once
   // needed `serve` would keep the extra hop forever. Drop it first, then find
-  // out whether the plain listener is enough.
+  // out whether the plain listener is enough. This also retires pre-2.0
+  // mappings, which forwarded the tailnet port to the full panel API.
   if (await _servesOurPort()) {
     debugPrint('beacle: releasing existing tailscale serve to test the direct path');
     await _serveOff();
@@ -36,7 +43,7 @@ Future<void> ensureBackendTailnetExposure({String? backendExe}) async {
     // app spawning a console process is already one visible window too many.
     final r = await Process.run(
       'tailscale',
-      ['serve', '--bg', '--tcp=$backendPort', 'tcp://127.0.0.1:$backendPort'],
+      ['serve', '--bg', '--tcp=$backendPort', 'tcp://127.0.0.1:$agentLoopbackPort'],
     );
     if (r.exitCode == 0) {
       debugPrint('beacle: tailscale serve running on TCP $backendPort');

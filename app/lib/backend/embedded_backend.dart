@@ -10,9 +10,9 @@ import 'tailscale_exposure.dart';
 
 /// Health payload of a backend already listening on the port.
 class _BackendProbe {
-  final int pid, agents;
+  final int pid, agents, apiLevel;
   final String dataDir;
-  const _BackendProbe(this.pid, this.agents, this.dataDir);
+  const _BackendProbe(this.pid, this.agents, this.dataDir, this.apiLevel);
 
   /// Windows paths differ in case and separators between runs — compare loosely.
   bool servesDataDir(String dir) {
@@ -20,6 +20,9 @@ class _BackendProbe {
     return dataDir.isNotEmpty && norm(dataDir) == norm(dir);
   }
 }
+
+/// /api/health api_level of a backend whose panel API is loopback-only.
+const int _minBackendApiLevel = 2;
 
 /// Starts the bundled Go backend with the desktop app; shuts down on exit.
 class EmbeddedBackend {
@@ -51,7 +54,11 @@ class EmbeddedBackend {
     // WebSocket, so killing and replacing it would knock the whole fleet
     // offline for a full agent reconnect right as the panel opens. Adopt it.
     final running = await _probe();
-    if (running != null && running.servesDataDir(BeaclePaths.dataDir)) {
+    // A backend from before the loopback split still has the whole panel API
+    // on every interface; adopting it would keep that open until a reboot.
+    if (running != null &&
+        running.servesDataDir(BeaclePaths.dataDir) &&
+        running.apiLevel >= _minBackendApiLevel) {
       _adopted = true;
       debugPrint(
         'beacle: adopting running backend pid ${running.pid} (${running.agents} agents connected)',
@@ -61,7 +68,7 @@ class EmbeddedBackend {
       return;
     }
     if (running != null) {
-      debugPrint('beacle: backend on :9930 uses ${running.dataDir}, replacing it');
+      debugPrint('beacle: backend on :9930 (${running.dataDir}, api ${running.apiLevel}) is not ours to keep, replacing it');
     }
 
     await _stopStaleBackend();
@@ -75,8 +82,10 @@ class EmbeddedBackend {
     BeaclePaths.ensureDirs();
     _seedAgentBinaries(bin.parent.path);
 
-    // Bind on all interfaces so Tailscale agents can reach us directly.
-    final listenAddr = '0.0.0.0:9930';
+    // The panel API stays on loopback: it can run commands on every server.
+    // Agents get their own listeners (tailnet IP, WireGuard tunnel) that
+    // serve nothing but their socket.
+    final listenAddr = '127.0.0.1:9930';
     final args = ['-addr', listenAddr, '-data', BeaclePaths.dataDir];
 
     debugPrint('beacle: starting backend on $listenAddr (${BeaclePaths.dataDir})');
@@ -238,6 +247,7 @@ class EmbeddedBackend {
         (j['pid'] as num?)?.toInt() ?? 0,
         (j['agents'] as num?)?.toInt() ?? 0,
         j['data_dir'] as String? ?? '',
+        (j['api_level'] as num?)?.toInt() ?? 0,
       );
     } catch (_) {
       return null;

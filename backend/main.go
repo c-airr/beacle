@@ -4,15 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 )
 
 func main() {
 	var (
-		addr    = flag.String("addr", "0.0.0.0:9930", "listen address (0.0.0.0 for Tailscale agents)")
-		baseURL = flag.String("base-url", "", "Tailscale URL of this backend for install commands")
-		dataDir = flag.String("data", "./data", "data directory")
+		addr = flag.String("addr", "127.0.0.1:9930", "panel API listen address; keep it on loopback — it runs commands on every server")
+		// The agent listeners serve only /agent/ws and the install mirror.
+		agentLoopback = flag.String("agent-loopback", "127.0.0.1:9931", "agents-only loopback listener (target for `tailscale serve`); empty disables")
+		agentTailnet  = flag.Bool("agent-tailnet", true, "agents-only listener on this machine's Tailscale IP, same port as -addr")
+		baseURL       = flag.String("base-url", "", "Tailscale URL of this backend for install commands")
+		dataDir       = flag.String("data", "./data", "data directory")
 	)
 	flag.Parse()
 
@@ -37,7 +42,8 @@ func main() {
 		if ip := tailscaleSelfIPv4(); ip != "" {
 			base = fmt.Sprintf("http://%s:9930", ip)
 		} else {
-			base = fmt.Sprintf("http://127.0.0.1%s", *addr)
+			_, port, _ := net.SplitHostPort(*addr)
+			base = fmt.Sprintf("http://127.0.0.1:%s", port)
 			log.Printf("beacle: tailscale not available, install commands use %s", base)
 		}
 	}
@@ -69,6 +75,22 @@ func main() {
 	go srv.LinkMonitor()
 	go webhooks.Run()
 	go webhooks.RunSyncLoop()
+
+	if isLoopbackAddr(*addr) {
+		agents := srv.AgentRoutes()
+		if *agentLoopback != "" {
+			go serveAgents(*agentLoopback, agents)
+		}
+		if *agentTailnet {
+			_, port, _ := net.SplitHostPort(*addr)
+			p, _ := strconv.Atoi(port)
+			go serveAgentsOnTailnet(p, agents)
+		}
+	} else {
+		// An explicit public bind (headless deployments behind their own
+		// proxy) already carries /agent/ws; a second listener would collide.
+		log.Printf("beacle: panel API is exposed on %s — anyone who reaches it can run commands on your servers", *addr)
+	}
 
 	log.Printf("beacle backend listening on %s (agents via Tailscale: %s)", *addr, base)
 	if err := http.ListenAndServe(*addr, withCORS(srv.Routes())); err != nil {

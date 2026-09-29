@@ -590,6 +590,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
 		"service":    "beacle-backend",
+		// 2: panel API on loopback, agents on their own listeners.
+		"api_level":  2,
 		"pid":        os.Getpid(),
 		"data_dir":   dataDir,
 		"agents":     s.agentHub.ConnectedCount(),
