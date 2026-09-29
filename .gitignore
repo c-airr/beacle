@@ -28,3 +28,4 @@ release/linux/LINUX_TARBALL_MISSING.txt
 release/agent/beacle-agent*
 release/agent/VERSION
 claude.md
+HANDOFF.md
