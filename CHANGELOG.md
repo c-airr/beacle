@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.0.0 — 2026-09-29
+
+Admin release: firewall, updates, cron, reboot-and-restore, system logs,
+webhooks, tags and per-server thresholds.
+
+### Added
+
+- **Tags and per-server thresholds** — group servers with tags and filter by
+  them; override CPU/RAM/disk alert thresholds per server.
+- **System log viewer** — syslog, auth.log, dmesg and proxy logs with live
+  grep filtering.
+- **OS updates** — pending APT/DNF updates with a security count, one-click
+  background upgrade, reboot-required flag.
+- **Cron and timers** — view crontabs and systemd timers, add and edit cron
+  entries without memorizing the syntax.
+- **Firewall manager** — UFW, firewalld and iptables behind one panel
+  (nftables-only hosts get a read-only listing), with an SSH guard that
+  refuses to lock you out and a dry-run of every change.
+- **Reboot and restore** — reboot/poweroff from the panel with automatic
+  screen and nohup session restore afterwards; no false offline alerts
+  while the box is gone.
+- **Alert webhooks** — Discord, ntfy.sh and Telegram notifications sent by
+  the two most stable servers, so they arrive even with the desktop off.
+
 ## 1.2.0 — 2026-09-28
 
 Docker grows up, processes can be killed, and the panel speaks Polish.

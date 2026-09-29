@@ -98,6 +98,32 @@ New in 1.2:
 - `POST /api/system/processes/{pid}/kill` with `{"signal": "term"|"kill"}` —
   SIGTERM/SIGKILL. The agent refuses PID 1 and its own PID.
 
+### Agent command routes (2.0)
+
+- `GET /api/system/logs` — readable system logs (id/label/path). `GET
+  /api/system/logs/{id}?tail=&grep=` — tail with case-insensitive grep.
+- `GET /api/system/updates` — pending APT/DNF updates + reboot-required.
+  `POST /api/system/updates/apply` — background `upgrade -y`.
+  `GET /api/system/updates/status` — running/last job with output tail.
+- `GET /api/system/cron` — root crontab (editable) + system cron files +
+  systemd timers. `POST /api/system/cron` with a `CronEntrySpec`, `PUT
+  /api/system/cron/{id}`, `DELETE /api/system/cron/{id}` — root crontab only.
+- `GET /api/firewall/status` — backend (ufw/firewalld/iptables/nftables),
+  rules, guarded ports, listeners. `POST /api/firewall/dry-run` previews a
+  mutation. `POST /api/firewall/allow|deny` with a `FirewallRuleSpec`,
+  `POST /api/firewall/delete` with `{"id","force"}`. The agent refuses to
+  deny guarded ports (SSH + agent) to the world; deleting an allow that
+  covers them needs `force`.
+- `POST /api/system/reboot` with `{"restore": bool}` — snapshots screens +
+  running nohups into `/var/lib/beacle/restore.json` when asked, then
+  reboots. `POST /api/system/poweroff` — halts. `GET /api/system/restore` —
+  last boot-restore result. The backend marks the VPS restarting/powered_off
+  so no offline alert fires; the marker expires after 15 min.
+- `POST /api/watchdog/config` — watchdog config pushed by the backend
+  (persisted as `watchdog.json`, mode 0600). `POST /api/watchdog/send` with
+  a `WebhookMessage` — immediate delivery to all targets. `GET
+  /api/watchdog/status` — enabled/role/counts (never secret URLs).
+
 ## UI → Backend
 
 REST under `/api/*`, live stream at `GET /ws` (JSON `WSMessage` frames).
@@ -105,6 +131,13 @@ The backend proxies any `/api/vps/{id}/agent/*` request to the matching
 agent over WebSocket, so the UI never talks to agents directly.
 
 **Power save:** `POST /api/ui/power-mode` with `{"mode":"active"|"eco"|"sleep"}`.
+
+**Webhooks (2.0):** `GET /api/webhooks` — targets plus the elected
+primary/secondary watchers. `PUT /api/webhooks` with `{"targets": [...]}` —
+Discord (`kind`, webhook `url`), ntfy (topic `url`), Telegram (`url` = bot
+token, `chat_id`). `POST /api/webhooks/test` — test message down the real
+path, answers `{"via": ...}`. VPS statuses `restarting` and `powered_off`
+ride the normal `vps_list` stream.
 The desktop app sends `eco` when idle, `sleep` when minimized/background.
 WebSockets stay connected; backend only sets agent power mode.
 
