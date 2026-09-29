@@ -6,7 +6,8 @@ import (
 	"beacle/shared"
 )
 
-// vpsInstallCommand — curl install_agent.sh from GitHub Latest; backend URL is only agent config.
+// vpsInstallCommand is the Tailscale one-liner. WireGuard installs use
+// wireGuardInstallCommand (the same GitHub script with --wg <token>).
 func vpsInstallCommand(backendURL string) string {
 	return fmt.Sprintf("curl -fsSL %s | sudo bash -s -- %s", shared.AgentGitHubInstallURL(), backendURL)
 }
@@ -56,6 +57,8 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 ExecStart=/opt/beacle-agent/beacle-agent -config /opt/beacle-agent/config.json
+Environment=GOMEMLIMIT=32MiB
+Environment=GOGC=50
 Restart=always
 RestartSec=3
 User=root
