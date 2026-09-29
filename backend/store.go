@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,6 +23,12 @@ type VPSEntry struct {
 	// Restart marks a user-initiated reboot/poweroff in flight. While fresh,
 	// the offline watcher shows restarting/powered_off and fires no alerts.
 	Restart *RestartMarker `json:"restart,omitempty"`
+	// WGPresharedKey is the per-server PSK layered on the WireGuard handshake.
+	WGPresharedKey string `json:"wg_psk,omitempty"`
+	// WGAgentKey is the agent's private key, kept only until its first
+	// handshake so the install command can be shown again. After that the
+	// panel can no longer produce a working command — only a new key can.
+	WGAgentKey string `json:"wg_agent_key,omitempty"`
 }
 
 // RestartMarker is set when the user reboots or powers off through Beacle.
@@ -193,12 +200,91 @@ func (s *Store) CreateVPS(name, tailscaleName, tailscaleIP string) *VPSEntry {
 	return &c
 }
 
+// CreateWireGuardVPS adds a server reached over Beacle's own tunnel. The
+// entry is keyed by its WireGuard identity; the agent registers into it only
+// through that tunnel.
+func (s *Store) CreateWireGuardVPS(name, endpoint, tunnelIP string, agentPub, agentPriv, psk shared.WGKey) *VPSEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	host := endpoint
+	if ap, err := netip.ParseAddrPort(endpoint); err == nil {
+		host = ap.Addr().String()
+	}
+	entry := &VPSEntry{
+		VPS: shared.VPS{
+			ID:          newID(),
+			Name:        name,
+			Host:        host,
+			Transport:   shared.TransportWireGuard,
+			WGEndpoint:  endpoint,
+			WGTunnelIP:  tunnelIP,
+			WGPublicKey: agentPub.String(),
+			Weight:      1,
+			Status:      shared.VPSPending,
+			AgentPort:   shared.DefaultAgentPort,
+			CreatedAt:   time.Now().UTC(),
+			LastSeen:    time.Now().UTC(),
+		},
+		WGPresharedKey: psk.String(),
+		WGAgentKey:     agentPriv.String(),
+	}
+	s.state.VPS[entry.VPS.ID] = entry
+	s.persistLocked()
+	c := *entry
+	return &c
+}
+
+// UpdateVPSNow is UpdateVPS for changes that must not wait for the deferred
+// flush: key material, transport switches.
+func (s *Store) UpdateVPSNow(id string, fn func(*VPSEntry)) *VPSEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.state.VPS[id]
+	if !ok {
+		return nil
+	}
+	fn(e)
+	s.persistLocked()
+	c := *e
+	return &c
+}
+
+// ListEntries returns copies of every entry, secrets included. Backend-only.
+func (s *Store) ListEntries() []VPSEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]VPSEntry, 0, len(s.state.VPS))
+	for _, e := range s.state.VPS {
+		out = append(out, *e)
+	}
+	return out
+}
+
+// HasWireGuardPeer reports whether the entry holds tunnel keys — either it is
+// a WireGuard server, or a Tailscale one trialling the switch.
+func (e *VPSEntry) HasWireGuardPeer() bool {
+	return e.VPS.WGPublicKey != "" && e.VPS.WGTunnelIP != ""
+}
+
+// FindByTunnelIP maps a WireGuard source address to its server.
+func (s *Store) FindByTunnelIP(ip string) *VPSEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, e := range s.state.VPS {
+		if e.HasWireGuardPeer() && e.VPS.WGTunnelIP == ip {
+			c := *e
+			return &c
+		}
+	}
+	return nil
+}
+
 // FindPendingByTailscale matches a pre-added VPS waiting for its agent.
 func (s *Store) FindPendingByTailscale(name, ip string) *VPSEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, e := range s.state.VPS {
-		if e.AgentToken != "" {
+		if e.AgentToken != "" || e.VPS.IsWireGuard() {
 			continue
 		}
 		if name != "" && e.VPS.TailscaleName == name {
@@ -219,6 +305,11 @@ func (s *Store) FindByTailscale(name, ip string) *VPSEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, e := range s.state.VPS {
+		if e.VPS.IsWireGuard() {
+			// Its identity is the tunnel key; a Tailscale-side match on the
+			// public IP must not hand it to whoever asks.
+			continue
+		}
 		if name != "" && e.VPS.TailscaleName == name {
 			c := *e
 			return &c

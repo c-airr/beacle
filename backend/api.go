@@ -23,6 +23,7 @@ type Server struct {
 	alerts    *AlertEngine
 	history   *History
 	webhooks  *WebhookService
+	wg        *WireGuardService
 	baseURL   string // public URL of this backend, used in install commands
 	dataDir   string
 	startedAt time.Time
@@ -101,6 +102,7 @@ func (s *Server) handleVPSByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, snap)
 	case http.MethodDelete:
 		s.store.DeleteVPS(id)
+		s.wg.RemovePeer(entry.VPS.WGPublicKey)
 		if s.history != nil {
 			s.history.Forget(id)
 			s.spikes.Forget(id)

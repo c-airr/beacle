@@ -27,6 +27,10 @@ func main() {
 	agentHub := NewAgentHub(store, hub, alerts, history, spikes)
 	alerts.SetAgentHub(agentHub)
 	webhooks := NewWebhookService(*dataDir, store, agentHub, history)
+	wg, err := NewWireGuardService(*dataDir, store)
+	if err != nil {
+		log.Fatalf("wireguard: %v", err)
+	}
 
 	base := *baseURL
 	if base == "" {
@@ -45,6 +49,7 @@ func main() {
 		alerts:    alerts,
 		history:   history,
 		webhooks:  webhooks,
+		wg:        wg,
 		spikes:    spikes,
 		baseURL:   base,
 		dataDir:   *dataDir,
@@ -52,6 +57,9 @@ func main() {
 		uptime:    NewUptimeLog(*dataDir),
 	}
 	alerts.SetNotifier(webhooks.Enqueue)
+	wg.Start(func(w http.ResponseWriter, r *http.Request, e *VPSEntry) {
+		agentHub.ServeAgentWSPinned(w, r, srv, e)
+	})
 
 	go srv.uptime.Run()
 	go store.FlushLoop()

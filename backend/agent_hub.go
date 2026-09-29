@@ -52,6 +52,9 @@ type agentSession struct {
 	remoteIP   string
 	token      string
 	tokenEntry *VPSEntry
+	// pinnedID is set for sockets that arrived through the WireGuard tunnel:
+	// the peer key decided the server, and registration may not pick another.
+	pinnedID string
 }
 
 func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine, history *History, spikes *Spikes) *AgentHub {
@@ -68,6 +71,16 @@ func NewAgentHub(store *Store, hub *Hub, alerts *AlertEngine, history *History, 
 
 // ServeAgentWS upgrades the connection; registration happens over the first WS frame.
 func (h *AgentHub) ServeAgentWS(w http.ResponseWriter, r *http.Request, srv *Server) {
+	h.serveAgentWS(w, r, srv, "")
+}
+
+// ServeAgentWSPinned serves a socket whose server is already known from its
+// WireGuard peer.
+func (h *AgentHub) ServeAgentWSPinned(w http.ResponseWriter, r *http.Request, srv *Server, entry *VPSEntry) {
+	h.serveAgentWS(w, r, srv, entry.VPS.ID)
+}
+
+func (h *AgentHub) serveAgentWS(w http.ResponseWriter, r *http.Request, srv *Server, pinnedID string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("agent ws upgrade: %v", err)
@@ -76,7 +89,7 @@ func (h *AgentHub) ServeAgentWS(w http.ResponseWriter, r *http.Request, srv *Ser
 
 	var tokenEntry *VPSEntry
 	tok := bearer(r)
-	if tok != "" {
+	if tok != "" && pinnedID == "" {
 		tokenEntry = h.store.FindByToken(tok)
 	}
 
@@ -87,6 +100,7 @@ func (h *AgentHub) ServeAgentWS(w http.ResponseWriter, r *http.Request, srv *Ser
 		remoteIP:   agentRemoteIP(r),
 		token:      tok,
 		tokenEntry: tokenEntry,
+		pinnedID:   pinnedID,
 	}
 
 	go h.writeLoop(sess)
@@ -223,7 +237,16 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		if msg.Register == nil {
 			return
 		}
-		entry, ack, err := srv.registerAgent(*msg.Register, sess.remoteIP, sess.token, sess.tokenEntry)
+		var (
+			entry *VPSEntry
+			ack   shared.RegisterResponse
+			err   error
+		)
+		if sess.pinnedID != "" {
+			entry, ack, err = srv.registerPinnedAgent(*msg.Register, sess.pinnedID)
+		} else {
+			entry, ack, err = srv.registerAgent(*msg.Register, sess.remoteIP, sess.token, sess.tokenEntry)
+		}
 		if err != nil {
 			log.Printf("agent register failed: %v", err)
 			h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSError, Error: err.Error()})

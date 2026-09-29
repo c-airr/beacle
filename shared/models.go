@@ -864,9 +864,17 @@ const (
 type VPS struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
-	Host          string    `json:"host"` // Tailscale IPv4
+	Host          string    `json:"host"` // Tailscale IPv4, or the public IP on WireGuard
 	TailscaleName string    `json:"tailscale_name"`
 	PublicIP      string    `json:"public_ip,omitempty"`
+	// Transport is how the agent reaches the panel: TransportTailscale (also
+	// when blank, for servers added before 2.0) or TransportWireGuard.
+	Transport string `json:"transport,omitempty"`
+	// WGEndpoint is the public ip:port the backend handshakes with. Kept apart
+	// from PublicIP, which is whatever egress address the agent reports.
+	WGEndpoint  string `json:"wg_endpoint,omitempty"`
+	WGTunnelIP  string `json:"wg_tunnel_ip,omitempty"`
+	WGPublicKey string `json:"wg_public_key,omitempty"`
 	Latitude      float64   `json:"latitude"`
 	Longitude     float64   `json:"longitude"`
 	Location      string    `json:"location"`
@@ -890,12 +898,20 @@ type VPS struct {
 	LastSeen  time.Time `json:"last_seen"`
 }
 
-// CreateVPSRequest adds a server from the Tailscale device list (onboarding).
+// CreateVPSRequest adds a server: from the Tailscale device list, or by public
+// address when Transport is TransportWireGuard.
 type CreateVPSRequest struct {
 	Name          string `json:"name"`
 	TailscaleName string `json:"tailscale_name"`
 	TailscaleIP   string `json:"tailscale_ip"`
+	Transport     string `json:"transport,omitempty"`
+	PublicIP      string `json:"public_ip,omitempty"`
+	WGPort        int    `json:"wg_port,omitempty"`
 }
+
+// IsWireGuard reports whether the agent talks to the panel over Beacle's own
+// tunnel rather than Tailscale.
+func (v *VPS) IsWireGuard() bool { return v.Transport == TransportWireGuard }
 
 // VPSThresholds overrides global alert thresholds for one server. Each value
 // is a percent (0-100); 0 or negative means "use the global threshold".
