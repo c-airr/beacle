@@ -8,6 +8,7 @@ import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../update/app_updater.dart';
+import '../user_config.dart';
 import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/wg_migrate_dialog.dart';
@@ -38,7 +39,9 @@ class AppShellState extends State<AppShell> {
   final List<Alert> _toasts = [];
   StreamSubscription? _alertSub;
   final _serversKey = GlobalKey<ServersScreenState>();
-  bool _wgMigrateBannerDismissed = false;
+  // Persisted in settings.json so closing the banner survives a restart.
+  static const _wgBannerDismissKey = 'wg_migrate_banner_dismissed';
+  late bool _wgMigrateBannerDismissed;
 
   late final List<Widget> _screens;
 
@@ -59,6 +62,7 @@ class AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _wgMigrateBannerDismissed = UserSettings.load().raw[_wgBannerDismissKey] == true;
     _screens = [
       const OverviewScreen(),
       const MapScreen(),
@@ -261,7 +265,12 @@ class AppShellState extends State<AppShell> {
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 16),
-              onPressed: () => setState(() => _wgMigrateBannerDismissed = true),
+              onPressed: () {
+                setState(() => _wgMigrateBannerDismissed = true);
+                final s = UserSettings.load();
+                s.raw[_wgBannerDismissKey] = true;
+                s.save();
+              },
             ),
           ],
         ),
