@@ -480,11 +480,6 @@ func (s *Server) logAction(v shared.VPS, action, detail string, ok bool) {
 // Installer + agent binary distribution
 // ---------------------------------------------------------------------------
 
-func (s *Server) handleInstallScript(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	_, _ = w.Write([]byte(installScript(s.backendURL())))
-}
-
 func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErr(w, http.StatusMethodNotAllowed, "POST only")
