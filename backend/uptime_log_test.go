@@ -76,7 +76,12 @@ func TestDowntimeBeforeTheFirstRunIsReported(t *testing.T) {
 func TestRunsSurviveARestartOfTheBackend(t *testing.T) {
 	dir := t.TempDir()
 	u := NewUptimeLog(dir)
-	u.runs = []uptimeRun{{From: at(0, 0), To: at(2, 0)}}
+	// Relative to now: absolute fixtures (2026-09-01) fall outside the
+	// 14-day retain window once the calendar moves on, and the reopen
+	// would look empty even though persist wrote them.
+	from := time.Now().UTC().Add(-3 * time.Hour)
+	to := from.Add(2 * time.Hour)
+	u.runs = []uptimeRun{{From: from, To: to}}
 	u.persist()
 
 	reopened := NewUptimeLog(dir)

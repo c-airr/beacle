@@ -29,3 +29,5 @@ release/agent/beacle-agent*
 release/agent/VERSION
 claude.md
 HANDOFF.md
+WORKLOG.md
+output.txt
