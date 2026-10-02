@@ -14,7 +14,9 @@ import (
 const uiWSWriteTimeout = 10 * time.Second
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // desktop app, local use
+	// The desktop app sends no Origin; a browser always does (see
+	// rejectBrowsers, which already stops it before the upgrade).
+	CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == "" },
 }
 
 // Hub fans out WSMessage frames to all connected UI clients.

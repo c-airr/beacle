@@ -94,21 +94,33 @@ func main() {
 	}
 
 	log.Printf("beacle backend listening on %s (agents via Tailscale: %s)", *addr, base)
-	if err := http.ListenAndServe(*addr, withCORS(srv.Routes())); err != nil {
+	if err := http.ListenAndServe(*addr, rejectBrowsers(srv.Routes())); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// withCORS allows the Flutter desktop app (and dev tools) to call the API.
-func withCORS(next http.Handler) http.Handler {
+// rejectBrowsers keeps web pages away from the panel API. Loopback is not a
+// boundary for a browser: any site the user visits can fetch
+// http://127.0.0.1:9930, and with permissive CORS it could list the servers
+// and then reboot them, rewrite firewall rules or open a root shell. The
+// desktop app talks over dart:io, which sends neither header checked here;
+// browsers always send at least one of them on a cross-site request.
+func rejectBrowsers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+		if fromBrowser(r) {
+			writeErr(w, http.StatusForbidden, "browser requests are not accepted")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func fromBrowser(r *http.Request) bool {
+	if r.Header.Get("Origin") != "" {
+		return true
+	}
+	// Sent by browsers on every request, including plain <img>/<form>
+	// navigations that carry no Origin; "none" means the user typed the URL.
+	site := r.Header.Get("Sec-Fetch-Site")
+	return site != "" && site != "none"
 }
