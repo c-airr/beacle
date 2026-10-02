@@ -184,8 +184,10 @@ Do **not** upload app or agent binaries by hand. The workflow builds them on `wi
 
 - **Plugin system** — extend Beacle with custom panels and data frames without forking core
 - **Architecture refresh** — cleaner separation for long-term maintenance
-- **No Tailscale requirement (in progress)** — WireGuard transport ships in 2.0;
-  SSH + file explorer still on the roadmap
+- **No Tailscale requirement** — WireGuard transport ships in 2.0
+- **SSH terminal and file explorer** — ship in 2.0, through the agent (no SSH
+  keys, no open port 22); each opens fullscreen, in a split view or in its
+  own window
 - UI refresh and improved navigation
 - Performance and UX improvements across the board
 
