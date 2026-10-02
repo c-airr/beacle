@@ -139,6 +139,25 @@ New in 1.2:
   (persisted as `watchdog.json`, mode 0600). `POST /api/watchdog/send` with
   a `WebhookMessage` — immediate delivery to all targets. `GET
   /api/watchdog/status` — enabled/role/counts (never secret URLs).
+- File explorer (wire paths are absolute POSIX paths; errors are 400 bad
+  path, 403 protected/disabled, 404 missing, 409 conflict):
+  - `GET /api/fs/dir?path=&hidden=1` — `FSListing` with mtime, owner,
+    symlink target and a per-file `version`.
+  - `GET /api/fs/read?path=&offset=&limit=` — one chunk (default 256 KiB,
+    max 1 MiB), base64 `data`, `eof`, `binary` guess on offset 0.
+  - `PUT /api/fs/write` with `{"path","content","version"}` — atomic text
+    save keeping mode/owner. Empty `version` = create only; a stale
+    `version` is 409, so a file edited on the server is never clobbered.
+  - `POST /api/fs/upload` with `{"path","offset","data","final","overwrite"}`
+    — chunks land in `<path>.beacle-part`, `final` renames into place. A
+    wrong offset is 409 with `received` = where to resume.
+  - `POST /api/fs/mkdir` `{"path"}`, `POST /api/fs/rename`
+    `{"from","to","overwrite"}`, `POST /api/fs/delete` `{"path","recursive"}`.
+    `/`, top-level directories and the agent's own files cannot be deleted
+    or renamed.
+  - `"disable_files": true` in the agent's `config.json` turns all of this
+    off (403).
+  - `GET /api/fs/list` stays as the screen launcher's picker (no dotfiles).
 
 ## UI → Backend
 

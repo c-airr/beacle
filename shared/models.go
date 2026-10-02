@@ -493,13 +493,73 @@ type ScreenSession struct {
 }
 
 // FSEntry is one item of a remote directory listing, used by the picker that
-// builds a screen command.
+// builds a screen command and by the file explorer (which also fills the
+// optional fields).
 type FSEntry struct {
 	Name  string `json:"name"`
 	Path  string `json:"path"`
 	IsDir bool   `json:"is_dir"`
 	Size  uint64 `json:"size"`
 	Mode  string `json:"mode"`
+
+	ModTime time.Time `json:"mtime,omitempty"`
+	Owner   string    `json:"owner,omitempty"`
+	// Link is the target when the entry is a symlink; IsDir then describes
+	// what it points at.
+	Link string `json:"link,omitempty"`
+	// Version changes whenever the file does. The editor sends it back on
+	// save so a file changed on the server in the meantime is not clobbered.
+	Version string `json:"version,omitempty"`
+}
+
+// FSReadResponse is one chunk of a file. Data is base64 because command
+// bodies travel as JSON.
+type FSReadResponse struct {
+	Path    string `json:"path"`
+	Size    int64  `json:"size"`
+	Version string `json:"version"`
+	Offset  int64  `json:"offset"`
+	Data    string `json:"data"`
+	EOF     bool   `json:"eof"`
+	// Binary is a guess from the start of the file (NUL bytes or invalid
+	// UTF-8), set only for chunks read from offset 0.
+	Binary bool `json:"binary,omitempty"`
+}
+
+// FSWriteRequest replaces a text file. An empty Version means "create, and
+// fail if it already exists".
+type FSWriteRequest struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Version string `json:"version,omitempty"`
+}
+
+// FSUploadRequest appends one base64 chunk to an upload. Chunks go to a
+// side file and only Final moves it into place, so a dropped upload never
+// leaves a half-written file under the real name.
+type FSUploadRequest struct {
+	Path      string `json:"path"`
+	Offset    int64  `json:"offset"`
+	Data      string `json:"data"`
+	Final     bool   `json:"final,omitempty"`
+	Overwrite bool   `json:"overwrite,omitempty"`
+}
+
+type FSUploadResponse struct {
+	Received int64    `json:"received"`
+	Entry    *FSEntry `json:"entry,omitempty"` // set once Final lands
+}
+
+type FSPathRequest struct {
+	Path string `json:"path"`
+	// Recursive allows deleting a non-empty directory.
+	Recursive bool `json:"recursive,omitempty"`
+}
+
+type FSRenameRequest struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Overwrite bool   `json:"overwrite,omitempty"`
 }
 
 // FSListing is the answer to "what is in this directory".

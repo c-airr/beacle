@@ -37,6 +37,11 @@ type Config struct {
 	FallbackBackendURL string    `json:"fallback_backend_url,omitempty"`
 	FallbackUntil      time.Time `json:"fallback_until,omitempty"`
 
+	// Opt-outs for hosts where the panel should not touch files or open a
+	// root shell. Only settable by editing config.json on the server.
+	DisableFiles    bool `json:"disable_files,omitempty"`
+	DisableTerminal bool `json:"disable_terminal,omitempty"`
+
 	path string // where this config was loaded from
 }
 

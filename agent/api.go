@@ -19,6 +19,7 @@ type APIServer struct {
 	col   Collector
 	proxy *ProxyManager
 	upd   *Updater
+	files *FileManager
 	// kickSession drops the panel WebSocket so transport changes take effect.
 	kickSession func()
 }
@@ -43,6 +44,25 @@ func (s *APIServer) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// filesOn refuses explorer routes on servers whose config opts out.
+func (s *APIServer) filesOn(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.DisableFiles || s.files == nil {
+			jsonErr(w, http.StatusForbidden, "file access is disabled on this server")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func fsOut(w http.ResponseWriter, v any, err error) {
+	if err != nil {
+		jsonErr(w, fsStatus(err), err.Error())
+		return
+	}
+	jsonOut(w, 200, v)
 }
 
 func (s *APIServer) Routes() http.Handler {
@@ -556,6 +576,69 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, listing)
 	}))
+
+	// file explorer
+	mux.HandleFunc("GET /api/fs/dir", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		listing, err := s.files.List(q.Get("path"), q.Get("hidden") == "1")
+		fsOut(w, listing, err)
+	})))
+	mux.HandleFunc("GET /api/fs/read", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		offset, _ := strconv.ParseInt(q.Get("offset"), 10, 64)
+		limit, _ := strconv.ParseInt(q.Get("limit"), 10, 64)
+		res, err := s.files.Read(q.Get("path"), offset, limit)
+		fsOut(w, res, err)
+	})))
+	mux.HandleFunc("PUT /api/fs/write", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FSWriteRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		e, err := s.files.Write(req)
+		fsOut(w, e, err)
+	})))
+	mux.HandleFunc("POST /api/fs/upload", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FSUploadRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		res, err := s.files.Upload(req)
+		if err != nil && res.Received > 0 {
+			// Offset mismatch: say where to resume.
+			jsonOut(w, fsStatus(err), map[string]any{"error": err.Error(), "received": res.Received})
+			return
+		}
+		fsOut(w, res, err)
+	})))
+	mux.HandleFunc("POST /api/fs/mkdir", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FSPathRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		e, err := s.files.Mkdir(req.Path)
+		fsOut(w, e, err)
+	})))
+	mux.HandleFunc("POST /api/fs/rename", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FSRenameRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		e, err := s.files.Rename(req)
+		fsOut(w, e, err)
+	})))
+	mux.HandleFunc("POST /api/fs/delete", a(s.filesOn(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.FSPathRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		fsOut(w, map[string]bool{"ok": true}, s.files.Delete(req))
+	})))
 
 	// reverse proxy
 	mux.HandleFunc("GET /api/proxy", a(func(w http.ResponseWriter, r *http.Request) {
