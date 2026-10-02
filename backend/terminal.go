@@ -35,7 +35,7 @@ func (t *termSub) end() { t.once.Do(func() { close(t.ended) }) }
 
 var (
 	errAgentOffline = errors.New("agent offline (no websocket)")
-	errAgentTooOld  = errors.New("this server's agent is older than 2.0 and has no terminal — update it in Settings → Agents")
+	errAgentTooOld  = errors.New("this server's agent is older than 2.0 and has no terminal — use \"Update agent\" on the server's page or Settings → Updates")
 )
 
 // termNoAnswer is how long a freshly opened shell may stay silent before the
@@ -214,7 +214,7 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-silent.C:
 			_ = writeFrame(shared.TerminalFrame{Op: shared.TermError,
-				Error: "the agent did not answer — update it in Settings → Agents"})
+				Error: "the agent did not answer — use \"Update agent\" on the server's page or Settings → Updates"})
 			return
 		case f := <-t.out:
 			silent.Stop()
