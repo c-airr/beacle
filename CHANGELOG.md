@@ -1,26 +1,5 @@
 # Changelog
 
-## 2.0.1 (unreleased)
-
-### Added
-
-- **WireGuard port opens itself** — when a server is installed with
-  WireGuard or switched to it from the panel, the agent allows UDP 51931 in
-  the server's own firewall, whichever it uses: ufw, firewalld or iptables
-  (inserted ahead of Oracle Cloud's default REJECT and saved). A provider
-  firewall outside the server (Oracle security list, AWS security group,
-  Hetzner Cloud Firewall) still has to be opened by hand.
-- **Test releases** — a tag or release title with "test" (also beta, rc,
-  alpha), e.g. `2.0.1-test1`, is published as a pre-release. The app's
-  auto-update, GitHub's Latest and the agents' default update skip it; the
-  agent version picker lists it as TEST BUILD so it can be put on one server
-  on purpose.
-
-### Fixed
-
-- Firewall tab failed with "iptables: exit status 2" on servers using plain
-  iptables.
-
 ## 2.0.0 — 2026-10-03
 
 SSH terminal and file explorer, a built-in WireGuard transport so servers no
@@ -33,6 +12,20 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Added
 
+- **WireGuard port opens itself** — when a server is installed with
+  WireGuard or switched to it from the panel, the agent allows UDP 51931 in
+  the server's own firewall, whichever it uses: ufw, firewalld or iptables
+  (inserted ahead of Oracle Cloud's default REJECT and saved). A provider
+  firewall outside the server (Oracle security list, AWS security group,
+  Hetzner Cloud Firewall) still has to be opened by hand.
+- **Reinstall** — "Install a specific version" (app) and the agent version
+  picker offer the installed version as a reinstall, to pick up a build
+  republished under the same version.
+- **Test releases** — a tag or release title with "test" (also beta, rc,
+  alpha), e.g. `2.0.1-test1`, is published as a pre-release. The app's
+  auto-update, GitHub's Latest and the agents' default update skip it; the
+  agent version picker lists it as TEST BUILD so it can be put on one server
+  on purpose.
 - **SSH terminal** — a root shell on any server, in tabs, from the new SSH
   entry in the bottom-left corner or "Connect with SSH" on a server's page.
   It runs through the Beacle agent, so no SSH keys or open port 22 are
@@ -67,6 +60,11 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
   while the box is gone.
 - **Alert webhooks** — Discord, ntfy.sh and Telegram notifications sent by
   the two most stable servers, so they arrive even with the desktop off.
+
+### Fixed
+
+- Firewall tab failed with "iptables: exit status 2" on servers using plain
+  iptables.
 
 ## 1.2.0 — 2026-09-28
 

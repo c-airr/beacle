@@ -790,7 +790,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     style: TextStyle(fontSize: 11, color: r.prerelease ? BeacleColors.warn : BeacleColors.textDim),
                   ),
                   trailing: r.version != null && r.version == v.agentVersion
-                      ? const Text('current', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      ? const Text('installed · reinstall', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
                       : null,
                   onTap: () => Navigator.of(ctx).pop(r),
                 ),
@@ -805,8 +805,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         v.agentVersion.isNotEmpty &&
         AppUpdater.compareVersions(chosen.version!, v.agentVersion) < 0;
     final label = chosen.version != null ? 'v${chosen.version}' : chosen.tag;
+    final reinstall = chosen.version != null && chosen.version == v.agentVersion;
     final ok = await _confirmInstall(
-      title: 'Install $label on ${v.name}?',
+      title: reinstall ? 'Reinstall $label on ${v.name}?' : 'Install $label on ${v.name}?',
       message: 'The agent will download the binary from the "$label" release and restart.'
           '${chosen.prerelease ? '\n\nThis is a TEST build — it may be unstable. Try it on one server first.' : ''}',
       downgrade: downgrade,
@@ -855,8 +856,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  // A release can be rebuilt under the same tag, so the
+                  // running version is a reinstall, not a dead end.
                   trailing: r.version == appVersion
-                      ? const Text('current', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      ? const Text('installed · reinstall', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
                       : null,
                   onTap: () => Navigator.of(ctx).pop(r),
                 ),
@@ -867,14 +870,15 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       ),
     );
     if (chosen == null || !mounted) return;
-    if (chosen.version == appVersion) {
-      showToast(context, 'v$appVersion is already installed.');
-      return;
-    }
+    final reinstall = chosen.version == appVersion;
     final downgrade = AppUpdater.compareVersions(chosen.version, appVersion) < 0;
     final ok = await _confirmInstall(
-      title: 'Install v${chosen.version}?',
-      message: 'The release will be downloaded and staged; apply it with "Apply and restart".',
+      title: reinstall ? 'Reinstall v${chosen.version}?' : 'Install v${chosen.version}?',
+      message: reinstall
+          ? 'v${chosen.version} is installed. It will be downloaded again from GitHub and replace this '
+              'installation — this picks up a build republished under the same version. '
+              'Apply it with "Apply and restart".'
+          : 'The release will be downloaded and staged; apply it with "Apply and restart".',
       downgrade: downgrade,
       downgradeMessage: 'You are on v$appVersion. Installing v${chosen.version} is a DOWNGRADE.',
     );

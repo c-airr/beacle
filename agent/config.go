@@ -9,7 +9,7 @@ import (
 	"beacle/shared"
 )
 
-const AgentVersion = "2.0.1"
+const AgentVersion = "2.0.0"
 
 // Config is written by the installer with just the backend URL. VPSID and
 // Token start empty - the agent auto-registers on first start and persists
