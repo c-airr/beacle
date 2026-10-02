@@ -84,7 +84,11 @@ class AppShellState extends State<AppShell> {
     (Icons.folder_outlined, 'navFiles'),
   ];
 
-  String _label(BuildContext context, int i) => context.l.t(items[i].$2);
+  /// Localization key of tab [i]: the main list first, then the tools.
+  @visibleForTesting
+  static String labelKey(int i) => i < items.length ? items[i].$2 : toolItems[i - items.length].$2;
+
+  String _label(BuildContext context, int i) => context.l.t(labelKey(i));
 
   int get _firstTool => items.length;
 

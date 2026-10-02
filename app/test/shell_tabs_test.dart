@@ -39,4 +39,13 @@ void main() {
       expect([for (final i in AppShellState.items) i.$2], isNot(contains(t)));
     }
   });
+  test('every tab index has a title, tools included', () {
+    // The top bar titles the current tab. Opening SSH (index 8) used to read
+    // items[8] and crash with a RangeError.
+    final total = AppShellState.items.length + AppShellState.toolItems.length;
+    for (var i = 0; i < total; i++) {
+      expect(AppShellState.labelKey(i), isNotEmpty);
+    }
+    expect(AppShellState.labelKey(AppShellState.items.length), 'navSsh');
+  });
 }
