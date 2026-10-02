@@ -396,8 +396,14 @@ class AppShellState extends State<AppShell> {
     return null;
   }
 
+  /// The "move to WireGuard" nudge is off until its flow is reworked: it
+  /// invited every user to switch, including servers behind the panel's own
+  /// NAT where the tunnel cannot work. The switch stays in a server's
+  /// settings for anyone who wants it.
+  static const _offerWgMigration = false;
+
   Widget? _buildWgMigrateBanner(AppState state) {
-    if (_wgMigrateBannerDismissed) return null;
+    if (!_offerWgMigration || _wgMigrateBannerDismissed) return null;
     final v = _tailscaleMigrateCandidate(state);
     if (v == null) return null;
     return Material(
