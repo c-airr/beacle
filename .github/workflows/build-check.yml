@@ -1,0 +1,86 @@
+# Compiles and tests everything on every push to main, without publishing.
+#
+# The release workflow is the only other place the app is built, and it runs
+# on a tag — so a broken macOS or Linux runner (native code nobody can build
+# on a Windows dev box) used to surface only while cutting a release. This
+# catches it on the push that broke it.
+
+name: Build check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - "backend/**"
+      - "shared/**"
+      - "app/**"
+      - ".github/workflows/build-check.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.44.7"
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+      - name: Test shared, backend, agent (race detector)
+        run: |
+          for m in shared backend agent; do
+            (cd "$m" && go vet ./... && go test -race ./...)
+          done
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - name: Analyze and test
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: ubuntu-latest
+            target: linux
+          - os: macos-latest
+            target: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - name: Install Flutter Linux build deps
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev
+      - name: Build ${{ matrix.target }} app
+        working-directory: app
+        run: flutter build ${{ matrix.target }} --debug
