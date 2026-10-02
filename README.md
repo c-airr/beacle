@@ -154,6 +154,12 @@ gh attestation verify ./beacle-setup-2.0.0.exe --repo c-airr/beacle
 git tag 2.0.0
 git push origin 2.0.0
 # or: Actions → Release → Run workflow → tag 2.0.0
+
+# A build to try out first: "test" in the tag makes it a pre-release that no
+# one gets automatically. Install it by hand; Settings → Updates lists its
+# agent as TEST BUILD for one server.
+git tag 2.0.1-test1
+git push origin 2.0.1-test1
 ```
 
 Do **not** upload app or agent binaries by hand. The workflow builds them on `windows-latest`, `ubuntu-latest` and `macos-latest`, attaches SLSA provenance attestations, and publishes the GitHub Release.

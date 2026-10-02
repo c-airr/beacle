@@ -10,6 +10,11 @@
   (inserted ahead of Oracle Cloud's default REJECT and saved). A provider
   firewall outside the server (Oracle security list, AWS security group,
   Hetzner Cloud Firewall) still has to be opened by hand.
+- **Test releases** — a tag or release title with "test" (also beta, rc,
+  alpha), e.g. `2.0.1-test1`, is published as a pre-release. The app's
+  auto-update, GitHub's Latest and the agents' default update skip it; the
+  agent version picker lists it as TEST BUILD so it can be put on one server
+  on purpose.
 
 ### Fixed
 

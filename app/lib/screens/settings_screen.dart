@@ -785,9 +785,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   title: Text(r.version != null ? 'v${r.version}' : r.tag,
                       style: const TextStyle(fontSize: 13)),
                   subtitle: Text(
-                    '${r.tag}${r.prerelease ? ' · pre-release' : ''}'
+                    '${r.tag}${r.prerelease ? ' · TEST BUILD' : ''}'
                     '${r.publishedAt != null ? ' · ${r.publishedAt!.toLocal().toString().substring(0, 16)}' : ''}',
-                    style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                    style: TextStyle(fontSize: 11, color: r.prerelease ? BeacleColors.warn : BeacleColors.textDim),
                   ),
                   trailing: r.version != null && r.version == v.agentVersion
                       ? const Text('current', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
@@ -807,7 +807,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     final label = chosen.version != null ? 'v${chosen.version}' : chosen.tag;
     final ok = await _confirmInstall(
       title: 'Install $label on ${v.name}?',
-      message: 'The agent will download the binary from the "$label" release and restart.',
+      message: 'The agent will download the binary from the "$label" release and restart.'
+          '${chosen.prerelease ? '\n\nThis is a TEST build — it may be unstable. Try it on one server first.' : ''}',
       downgrade: downgrade,
       downgradeMessage:
           '${v.name} is running v${v.agentVersion}. Installing $label is a DOWNGRADE.',

@@ -35,7 +35,17 @@ class AppUpdater {
   static String get _installDir => File(Platform.resolvedExecutable).parent.path;
   static Directory get _versionsDir => Directory('$_installDir\\versions');
 
-  /// Every release, newest first, drafts and prereleases dropped. One call
+  /// A build that is still being tried out: a GitHub pre-release, or
+  /// "test", "beta", "rc" or "alpha" in its tag or title. The release
+  /// workflow marks such tags as pre-release; the title check covers one
+  /// published or renamed by hand. Never offered as an update.
+  static bool isTestRelease(Map<String, dynamic> r) {
+    if (r['prerelease'] == true) return true;
+    final text = '${r['tag_name'] ?? ''} ${r['name'] ?? ''}'.toLowerCase();
+    return RegExp(r'(^|[^a-z])(test|beta|rc|alpha)').hasMatch(text);
+  }
+
+  /// Every release, newest first, drafts and test builds dropped. One call
   /// answers both "is there something newer" and "what is below me", so the
   /// Check and Rollback buttons can never disagree about what is on GitHub.
   static Future<List<UpdateInfo>> releases() async {
@@ -53,7 +63,7 @@ class AppUpdater {
             : 'linux';
     final out = <UpdateInfo>[];
     for (final r in (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>()) {
-      if (r['draft'] == true || r['prerelease'] == true) continue;
+      if (r['draft'] == true || isTestRelease(r)) continue;
       final tag = (r['tag_name'] as String? ?? '').replaceFirst('v', '');
       if (tag.isEmpty) continue;
       for (final a in ((r['assets'] as List?) ?? []).cast<Map<String, dynamic>>()) {

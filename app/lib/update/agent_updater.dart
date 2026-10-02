@@ -59,6 +59,9 @@ class AgentUpdater {
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) return null;
     final rel = jsonDecode(resp.body) as Map<String, dynamic>;
+    // A test build published by hand without the pre-release flag would
+    // become Latest; never nag a fleet onto it.
+    if (AppUpdater.isTestRelease(rel)) return null;
     final tag = rel['tag_name'] as String? ?? '';
     return AgentReleaseInfo(
       tag: tag,
@@ -109,11 +112,12 @@ class AgentUpdater {
     if (resp.statusCode != 200) return [];
     final out = <AgentReleaseInfo>[];
     for (final r in (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>()) {
-      // Pre-releases are working builds, not versions anyone should be
-      // installing on a server. They stayed listed here while the app's own
-      // updater already skipped them, so the agent version picker offered
-      // agentbeta and BETA alongside real releases.
-      if (r['draft'] == true || r['prerelease'] == true) continue;
+      if (r['draft'] == true) continue;
+      // Test builds are listed (marked) so one can be put on a single server
+      // on purpose — that is how a test release gets tried. Rolling channel
+      // tags like agentbeta or BETA are not versions and stay hidden.
+      final test = AppUpdater.isTestRelease(r);
+      if (test && _versionFromTag(r['tag_name'] as String? ?? '') == null) continue;
       final assets = (r['assets'] as List?) ?? [];
       final hasAgent = assets.any((a) =>
           ((a as Map<String, dynamic>)['name'] as String? ?? '').startsWith('beacle-agent-'));
@@ -124,7 +128,7 @@ class AgentUpdater {
         tag: tag,
         version: _versionFromTag(tag),
         publishedAt: DateTime.tryParse(r['published_at'] as String? ?? ''),
-        prerelease: r['prerelease'] == true,
+        prerelease: test,
       ));
     }
     return out;

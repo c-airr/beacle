@@ -53,7 +53,11 @@ jobs:
           version="${raw#v}"
           echo "tag=$raw" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ "$version" == *beta* || "$version" == *rc* || "$version" == *alpha* ]]; then
+          # Test builds (e.g. 2.0.1-test1) ship as pre-release: GitHub's Latest,
+          # the app's auto-update and the agents' default update all skip
+          # them, so nobody lands on a build that is still being tried out.
+          lower="${version,,}"
+          if [[ "$lower" == *test* || "$lower" == *beta* || "$lower" == *rc* || "$lower" == *alpha* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
