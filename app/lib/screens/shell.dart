@@ -15,6 +15,7 @@ import '../widgets/wg_migrate_dialog.dart';
 import '../widgets/alerts_panel.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
+import 'files_screen.dart';
 import 'map/map_screen.dart';
 import 'overview_screen.dart';
 import 'proxy_screen.dart';
@@ -52,6 +53,7 @@ class AppShellState extends State<AppShell> {
     (Icons.dns_outlined, 'navServers'),
     (Icons.view_in_ar_outlined, 'navDocker'),
     (Icons.miscellaneous_services_outlined, 'navServices'),
+    (Icons.folder_outlined, 'navFiles'),
     (Icons.alt_route_outlined, 'navProxy'),
     (Icons.notifications_outlined, 'navAlerts'),
     (Icons.tune_outlined, 'navSettings'),
@@ -69,6 +71,7 @@ class AppShellState extends State<AppShell> {
       ServersScreen(key: _serversKey),
       const DockerScreen(),
       const ServicesScreen(),
+      const FilesScreen(),
       const ProxyScreen(),
       const AlertsScreen(),
       const SettingsScreen(),
@@ -97,7 +100,7 @@ class AppShellState extends State<AppShell> {
   // Tab indices, kept next to _items so reordering the sidebar cannot silently
   // send a shortcut to the wrong screen.
   static const _tabServers = 2;
-  static const _tabAlerts = 6;
+  static const _tabAlerts = 7;
 
   void goToServer(String vpsId) {
     context.read<AppState>().bumpActivity();

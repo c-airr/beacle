@@ -14,7 +14,7 @@ void main() {
     final keys = [for (final item in AppShellState.items) item.$2];
 
     expect(keys.indexOf('navServers'), 2, reason: 'goToServer jumps to index 2');
-    expect(keys.indexOf('navAlerts'), 6, reason: 'goToAlerts and the badge use index 6');
+    expect(keys.indexOf('navAlerts'), 7, reason: 'goToAlerts and the badge use index 7');
   });
 
   test('every tab key is unique', () {

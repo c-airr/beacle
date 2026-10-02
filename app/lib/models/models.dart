@@ -716,12 +716,43 @@ class FsEntry {
   final String name, path, mode;
   final bool isDir;
   final int size;
+
+  /// Explorer-only fields; the screen picker's listing leaves them empty.
+  final DateTime? modTime;
+  final String owner;
+
+  /// Symlink target, empty for anything else.
+  final String link;
+
+  /// Opaque file state, sent back on save so a file edited on the server in
+  /// the meantime is not overwritten.
+  final String version;
+
   FsEntry.fromJson(Map<String, dynamic> j)
       : name = _s(j['name']),
         path = _s(j['path']),
         mode = _s(j['mode']),
         isDir = _b(j['is_dir']),
-        size = _i(j['size']);
+        size = _i(j['size']),
+        modTime = j['mtime'] == null ? null : DateTime.tryParse(j['mtime'] as String),
+        owner = _s(j['owner']),
+        link = _s(j['link']),
+        version = _s(j['version']);
+}
+
+/// One chunk of a remote file; [data] is base64 on the wire.
+class FsChunk {
+  final String path, version, data;
+  final int size, offset;
+  final bool eof, binary;
+  FsChunk.fromJson(Map<String, dynamic> j)
+      : path = _s(j['path']),
+        version = _s(j['version']),
+        data = _s(j['data']),
+        size = _i(j['size']),
+        offset = _i(j['offset']),
+        eof = _b(j['eof']),
+        binary = _b(j['binary']);
 }
 
 class FsListing {

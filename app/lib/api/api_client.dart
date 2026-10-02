@@ -30,7 +30,11 @@ class TailscaleDevice {
 class ApiException implements Exception {
   final String message;
   final int status;
-  ApiException(this.message, this.status);
+
+  /// Decoded error body, for callers that need more than the message
+  /// (an upload resuming from `received`).
+  final Object? body;
+  ApiException(this.message, this.status, [this.body]);
   @override
   String toString() => message;
 }
@@ -59,7 +63,7 @@ class ApiClient {
     }
     if (resp.statusCode >= 400) {
       final msg = decoded is Map ? (decoded['error'] ?? resp.body) : resp.body;
-      throw ApiException('$msg', resp.statusCode);
+      throw ApiException('$msg', resp.statusCode, decoded);
     }
     return decoded;
   }
@@ -362,6 +366,53 @@ class ApiClient {
 
   Future<FsListing> listDir(String vpsId, String path) async =>
       FsListing.fromJson(await get(_a(vpsId, 'fs/list?path=${Uri.encodeQueryComponent(path)}')));
+
+  // --- file explorer. Chunks are up to 1 MiB, so they get a longer budget
+  // than the default; the backend allows a minute per call.
+  static const _fsTimeout = Duration(seconds: 70);
+
+  Future<FsListing> fsDir(String vpsId, String path, {bool hidden = false}) async =>
+      FsListing.fromJson(await get(
+          _a(vpsId, 'fs/dir?path=${Uri.encodeQueryComponent(path)}${hidden ? '&hidden=1' : ''}')));
+
+  Future<FsChunk> fsRead(String vpsId, String path, {int offset = 0, int limit = 1 << 20}) async =>
+      FsChunk.fromJson(await _req('GET',
+          _a(vpsId, 'fs/read?path=${Uri.encodeQueryComponent(path)}&offset=$offset&limit=$limit'),
+          timeout: _fsTimeout) as Map<String, dynamic>);
+
+  /// Saves a text file. An empty [version] creates it and fails if it exists.
+  Future<FsEntry> fsWrite(String vpsId, String path, String content, {String version = ''}) async =>
+      FsEntry.fromJson(await _req('PUT', _a(vpsId, 'fs/write'),
+          body: {'path': path, 'content': content, 'version': version},
+          timeout: _fsTimeout) as Map<String, dynamic>);
+
+  /// Sends one upload chunk; returns the bytes received so far and, after the
+  /// final chunk, the new entry.
+  Future<(int, FsEntry?)> fsUpload(String vpsId, String path, int offset, String base64Data,
+      {bool finalChunk = false, bool overwrite = false}) async {
+    final r = await _req('POST', _a(vpsId, 'fs/upload'),
+        body: {
+          'path': path,
+          'offset': offset,
+          'data': base64Data,
+          'final': finalChunk,
+          'overwrite': overwrite,
+        },
+        timeout: _fsTimeout) as Map<String, dynamic>;
+    final e = r['entry'];
+    return ((r['received'] as num?)?.toInt() ?? 0, e == null ? null : FsEntry.fromJson(e as Map<String, dynamic>));
+  }
+
+  Future<FsEntry> fsMkdir(String vpsId, String path) async =>
+      FsEntry.fromJson(await post(_a(vpsId, 'fs/mkdir'), body: {'path': path}));
+
+  Future<FsEntry> fsRename(String vpsId, String from, String to, {bool overwrite = false}) async =>
+      FsEntry.fromJson(
+          await post(_a(vpsId, 'fs/rename'), body: {'from': from, 'to': to, 'overwrite': overwrite}));
+
+  Future<void> fsDelete(String vpsId, String path, {bool recursive = false}) => _req(
+      'POST', _a(vpsId, 'fs/delete'),
+      body: {'path': path, 'recursive': recursive}, timeout: const Duration(minutes: 3));
 
   Future<ProxyState> proxyState(String vpsId) async =>
       ProxyState.fromJson(await get(_a(vpsId, 'proxy')));
