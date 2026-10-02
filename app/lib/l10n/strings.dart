@@ -67,8 +67,8 @@ const _en = <String, String>{
   'obWelcomeTitle': 'Welcome',
   'obWelcomeBody':
       'Beacle is a local panel for managing your VPS infrastructure — monitoring, Docker, systemd, and reverse proxy — over your Tailscale network.',
-  'obSshTitle': 'SSH display',
-  'obSshBody': 'Choose how SSH sessions will open in a future release. SSH is not available yet.',
+  'obSshTitle': 'How SSH and Files open',
+  'obSshBody': 'Separate window: a window of its own, e.g. on a second screen. Split view: slides out on the right and the app window grows to make room. Fullscreen: takes the main area next to the menu. You can change this later in Settings.',
   'obSshSeparate': 'Separate window',
   'obSshSplit': 'Split view',
   'obSshFullscreen': 'Fullscreen',
@@ -327,6 +327,9 @@ const _en = <String, String>{
   // ssh
   'navSsh': 'SSH',
   'sshConnectButton': 'Connect with SSH',
+  'setSshMode': 'SSH opens in',
+  'setFilesMode': 'Files open in',
+  'setModeDetail': 'Separate window, split view (the window grows to the right) or the main area.',
   'sshNewSession': 'New session',
   'sshReconnect': 'Reconnect',
   'sshPickTitle': 'Open a shell',
@@ -409,8 +412,8 @@ const _pl = <String, String>{
   'obWelcomeTitle': 'Witaj',
   'obWelcomeBody':
       'Beacle to lokalny panel do zarządzania infrastrukturą VPS — monitoring, Docker, systemd i reverse proxy — przez Twoją sieć Tailscale.',
-  'obSshTitle': 'Wyświetlanie SSH',
-  'obSshBody': 'Wybierz, jak będą otwierać się sesje SSH w przyszłej wersji. SSH nie jest jeszcze dostępne.',
+  'obSshTitle': 'Jak otwierać SSH i Pliki',
+  'obSshBody': 'Osobne okno: własne okno, np. na drugim monitorze. Widok dzielony: wysuwa się z prawej, a okno aplikacji powiększa się, żeby zrobić miejsce. Pełny ekran: zajmuje główny obszar obok menu. Zmienisz to później w Ustawieniach.',
   'obSshSeparate': 'Osobne okno',
   'obSshSplit': 'Widok dzielony',
   'obSshFullscreen': 'Pełny ekran',
@@ -669,6 +672,9 @@ const _pl = <String, String>{
   // ssh
   'navSsh': 'SSH',
   'sshConnectButton': 'Połącz przez SSH',
+  'setSshMode': 'SSH otwiera się w',
+  'setFilesMode': 'Pliki otwierają się w',
+  'setModeDetail': 'Osobne okno, widok dzielony (okno powiększa się w prawo) albo główny obszar.',
   'sshNewSession': 'Nowa sesja',
   'sshReconnect': 'Połącz ponownie',
   'sshPickTitle': 'Otwórz terminal',

@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'paths.dart';
 
-/// SSH display mode — reserved for future SSH module (not implemented).
+/// How the SSH and Files tools open: in their own OS window, sliding out to
+/// the right of the current screen (the window grows to make room), or in the
+/// main content area. Chosen separately for each tool.
 enum SshDisplayMode { separateWindow, splitView, fullscreen }
 
 extension SshDisplayModeWire on SshDisplayMode {
@@ -22,17 +24,31 @@ extension SshDisplayModeWire on SshDisplayMode {
 class UserConfig {
   bool onboardingComplete;
   SshDisplayMode sshDisplayMode;
+  SshDisplayMode filesDisplayMode;
 
-  UserConfig({this.onboardingComplete = false, this.sshDisplayMode = SshDisplayMode.separateWindow});
+  UserConfig({
+    this.onboardingComplete = false,
+    this.sshDisplayMode = SshDisplayMode.separateWindow,
+    this.filesDisplayMode = SshDisplayMode.separateWindow,
+  });
 
-  factory UserConfig.fromJson(Map<String, dynamic> j) => UserConfig(
-        onboardingComplete: j['onboarding_complete'] == true,
-        sshDisplayMode: SshDisplayModeWire.fromWire(j['ssh_display_mode'] as String?),
-      );
+  factory UserConfig.fromJson(Map<String, dynamic> j) {
+    final ssh = SshDisplayModeWire.fromWire(j['ssh_display_mode'] as String?);
+    return UserConfig(
+      onboardingComplete: j['onboarding_complete'] == true,
+      sshDisplayMode: ssh,
+      // Configs from before the file explorer only have the SSH choice made
+      // during setup; it carries over until Files gets its own.
+      filesDisplayMode: j.containsKey('files_display_mode')
+          ? SshDisplayModeWire.fromWire(j['files_display_mode'] as String?)
+          : ssh,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'onboarding_complete': onboardingComplete,
         'ssh_display_mode': sshDisplayMode.wire,
+        'files_display_mode': filesDisplayMode.wire,
       };
 }
 

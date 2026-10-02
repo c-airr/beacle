@@ -17,6 +17,7 @@ import '../theme.dart';
 import '../tray.dart';
 import '../update/agent_updater.dart';
 import '../update/app_updater.dart';
+import '../user_config.dart';
 import '../widgets/common.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -169,6 +170,22 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 options: const {'en': 'English', 'pl': 'Polski'},
                 onChanged: (v) => state.setLanguage(AppLanguageWire.fromWire(v)),
               ),
+              const Divider(height: 24),
+              _choice(
+                label: context.l.t('setSshMode'),
+                detail: context.l.t('setModeDetail'),
+                value: state.sshMode.wire,
+                options: _modeOptions(context),
+                onChanged: (v) => state.setDisplayModes(ssh: SshDisplayModeWire.fromWire(v)),
+              ),
+              const Divider(height: 24),
+              _choice(
+                label: context.l.t('setFilesMode'),
+                detail: context.l.t('setModeDetail'),
+                value: state.filesMode.wire,
+                options: _modeOptions(context),
+                onChanged: (v) => state.setDisplayModes(files: SshDisplayModeWire.fromWire(v)),
+              ),
             ],
           ),
         ),
@@ -262,6 +279,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   /// A setting with a fixed set of answers. Disabled options still show what
   /// the choice is, which is the honest version of "coming soon".
+  Map<String, String> _modeOptions(BuildContext context) => {
+        SshDisplayMode.separateWindow.wire: context.l.t('obSshSeparate'),
+        SshDisplayMode.splitView.wire: context.l.t('obSshSplit'),
+        SshDisplayMode.fullscreen.wire: context.l.t('obSshFullscreen'),
+      };
+
   Widget _choice({
     required String label,
     required String detail,

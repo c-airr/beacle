@@ -80,6 +80,22 @@ class AppState extends ChangeNotifier {
     startMinimised = _settings.raw['start_minimised'] == true;
     closeBehaviour = _settings.raw['close_behaviour'] as String? ?? 'tray';
     language = AppLanguageWire.fromWire(_settings.raw['language'] as String?);
+    final cfg = UserConfigStore.load();
+    sshMode = cfg.sshDisplayMode;
+    filesMode = cfg.filesDisplayMode;
+  }
+
+  /// How the SSH and Files tools open; picked during setup, changeable in
+  /// Settings. Stored in config.json next to the setup flag.
+  SshDisplayMode sshMode = SshDisplayMode.separateWindow;
+  SshDisplayMode filesMode = SshDisplayMode.separateWindow;
+
+  void setDisplayModes({SshDisplayMode? ssh, SshDisplayMode? files}) {
+    final cfg = UserConfigStore.load();
+    if (ssh != null) sshMode = cfg.sshDisplayMode = ssh;
+    if (files != null) filesMode = cfg.filesDisplayMode = files;
+    UserConfigStore.save(cfg);
+    notifyListeners();
   }
 
   /// Interface language. English by default; the onboarding wizard asks on

@@ -22,6 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int step = 0;
   AppLanguage lang = AppLanguage.en;
   SshDisplayMode sshMode = SshDisplayMode.separateWindow;
+  SshDisplayMode filesMode = SshDisplayMode.separateWindow;
   final List<SavedServer> _servers = [];
   bool _finishing = false;
   String? _error;
@@ -31,6 +32,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.initState();
     // A reinstall keeps settings.json — respect a language chosen earlier.
     lang = AppLanguageWire.fromWire(UserSettings.load().raw['language'] as String?);
+    // Same for the SSH/Files choice from an earlier setup.
+    final prev = UserConfigStore.load();
+    sshMode = prev.sshDisplayMode;
+    filesMode = prev.filesDisplayMode;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<AppState>().setLanguage(lang);
     });
@@ -48,7 +53,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _finishing = true;
       _error = null;
     });
-    final cfg = UserConfig(onboardingComplete: true, sshDisplayMode: sshMode);
+    final cfg = UserConfig(onboardingComplete: true, sshDisplayMode: sshMode, filesDisplayMode: filesMode);
     UserConfigStore.save(cfg);
     final store = ServersStore(_servers.toList());
     store.save();
@@ -177,9 +182,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
         ),
         const SizedBox(height: 16),
-        _modeTile(context.l.t('obSshSeparate'), SshDisplayMode.separateWindow),
-        _modeTile(context.l.t('obSshSplit'), SshDisplayMode.splitView),
-        _modeTile(context.l.t('obSshFullscreen'), SshDisplayMode.fullscreen),
+        _modeGroup(context.l.t('navSsh'), Icons.terminal, sshMode, (m) => setState(() => sshMode = m)),
+        const SizedBox(height: 14),
+        _modeGroup(context.l.t('navFiles'), Icons.folder_outlined, filesMode, (m) => setState(() => filesMode = m)),
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -193,13 +198,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _modeTile(String label, SshDisplayMode mode) {
-    final selected = sshMode == mode;
+  Widget _modeGroup(String title, IconData icon, SshDisplayMode value, ValueChanged<SshDisplayMode> onPick) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon, size: 14, color: BeacleColors.textDim),
+          const SizedBox(width: 6),
+          Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
+        ]),
+        const SizedBox(height: 4),
+        _modeTile(context.l.t('obSshSeparate'), SshDisplayMode.separateWindow, value, onPick),
+        _modeTile(context.l.t('obSshSplit'), SshDisplayMode.splitView, value, onPick),
+        _modeTile(context.l.t('obSshFullscreen'), SshDisplayMode.fullscreen, value, onPick),
+      ],
+    );
+  }
+
+  Widget _modeTile(String label, SshDisplayMode mode, SshDisplayMode value, ValueChanged<SshDisplayMode> onPick) {
+    final selected = value == mode;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => setState(() => sshMode = mode),
+        onTap: () => onPick(mode),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
