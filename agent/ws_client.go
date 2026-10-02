@@ -403,9 +403,14 @@ func (c *WSClient) runSession(ctx context.Context, useFallback bool) (registered
 	sync := NewSyncEngine(c.cfg, c.reporter, writeCh)
 	sync.SetPowerMode(powerMode)
 
+	// Shells live exactly as long as this connection: a dropped panel hangs
+	// them all up.
+	term := NewTerminalManager(ctx, writeCh, c.cfg.DisableTerminal)
+	defer term.CloseAll()
+
 	errCh := make(chan error, 4)
 	go c.writePump(ctx, writeCh, writeText, writeControl, errCh)
-	go func() { errCh <- c.readLoop(ctx, conn, writeCh, sync) }()
+	go func() { errCh <- c.readLoop(ctx, conn, writeCh, sync, term) }()
 	go sync.Run(ctx)
 
 	// Hand over the gap before anything else fills the pipe, so a panel opened
@@ -492,7 +497,7 @@ func (c *WSClient) writePump(
 	}
 }
 
-func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn, writeCh chan<- []byte, sync *SyncEngine) error {
+func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn, writeCh chan<- []byte, sync *SyncEngine, term *TerminalManager) error {
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
@@ -545,6 +550,10 @@ func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn, writeCh c
 			sync.SetPowerMode(mode)
 		case shared.AgentWSRefresh:
 			sync.RequestRefresh()
+		case shared.AgentWSTerminal:
+			if msg.Terminal != nil {
+				term.Handle(*msg.Terminal)
+			}
 		case shared.AgentWSHeartbeat:
 			// One-way keepalive from older peers — do not echo.
 		case shared.AgentWSCommandResult, shared.AgentWSRegisterAck,

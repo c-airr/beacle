@@ -49,7 +49,22 @@ once at startup (and reconnects automatically). All traffic is JSON
 | `command_result`    | agent → backend | `result`       | correlated by `request_id` |
 | `log_stream`        | either          | (reserved)     | future plugins |
 | `file_transfer`     | either          | (reserved)     | future plugins |
+| `terminal`          | either          | `terminal`     | interactive shell frames (2.0), see below |
 | `error`             | backend → agent | `error`        | registration failed |
+
+### Terminal (2.0)
+
+`terminal` frames carry a `TerminalFrame` `{session, op, data, cols, rows,
+code, error}`; `data` is base64. The panel picks `session`.
+
+- panel → agent: `open` (cols/rows), `data` (keystrokes), `resize`, `close`.
+- agent → panel: `data` (output), `exit` (`code`), `error`.
+
+The agent runs root's login shell on a PTY (`TERM=xterm-256color`, clean
+environment). At most 4 sessions, closed after 30 min without input, and all
+hung up (SIGHUP to the session, SIGKILL 3 s later) when the panel WebSocket
+drops. `"disable_terminal": true` in `config.json` answers every `open` with
+`error`.
 
 ### Power modes (agent-side intervals)
 

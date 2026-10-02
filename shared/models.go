@@ -847,12 +847,37 @@ const (
 	AgentWSRefresh         AgentWSMessageType = "refresh"
 	AgentWSLogStream       AgentWSMessageType = "log_stream"
 	AgentWSFileTransfer    AgentWSMessageType = "file_transfer"
+	AgentWSTerminal        AgentWSMessageType = "terminal"
 	AgentWSError           AgentWSMessageType = "error"
 )
 
 // AgentWSMessage is the envelope on GET /agent/ws. The agent maintains an
 // outbound WebSocket; the backend pushes commands and receives snapshots/results
 // on that single connection — no inbound connections to the agent.
+// Terminal frame ops. Panel → agent: open, data (keystrokes), resize, close.
+// Agent → panel: data (output), exit, error.
+const (
+	TermOpen   = "open"
+	TermData   = "data"
+	TermResize = "resize"
+	TermClose  = "close"
+	TermExit   = "exit"
+	TermError  = "error"
+)
+
+// TerminalFrame is one message of an interactive shell session. Session is
+// chosen by the panel; Data is base64 because a keystroke or a screen of
+// output is arbitrary bytes, not necessarily valid UTF-8 at a frame edge.
+type TerminalFrame struct {
+	Session string `json:"session"`
+	Op      string `json:"op"`
+	Data    string `json:"data,omitempty"`
+	Cols    int    `json:"cols,omitempty"`
+	Rows    int    `json:"rows,omitempty"`
+	Code    int    `json:"code,omitempty"`  // exit status for "exit"
+	Error   string `json:"error,omitempty"` // for "error"
+}
+
 type AgentWSMessage struct {
 	Type     AgentWSMessageType `json:"type"`
 	Mode     PowerMode          `json:"mode,omitempty"`
@@ -863,6 +888,9 @@ type AgentWSMessage struct {
 	RegisterAck *RegisterResponse   `json:"register_ack,omitempty"`
 	Command     *AgentCommand       `json:"command,omitempty"`
 	Result      *AgentCommandResult `json:"result,omitempty"`
+
+	// Terminal carries one frame of an interactive shell, both ways.
+	Terminal *TerminalFrame `json:"terminal,omitempty"`
 
 	// Spikes carries process snapshots taken when a metric departed from what
 	// the machine normally does. Delivered on reconnect and after the fact,
