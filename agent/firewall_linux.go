@@ -651,31 +651,14 @@ func iptablesStatus(st *shared.FirewallStatus) error {
 	if out, err := runCmd(3*time.Second, "iptables", "--version"); err == nil && strings.Contains(out, "nf_tables") {
 		st.BackendDetail = "iptables over nf_tables"
 	}
-	out, err := runCmd(15*time.Second, "iptables", "-S", "INPUT", "--line-numbers")
+	// -S takes no --line-numbers (that is -L's flag; asking for it made
+	// iptables exit 2 and the whole tab fail). Rule numbers are positions.
+	out, err := runCmd(15*time.Second, "iptables", "-S", "INPUT")
 	if err != nil {
 		return fmt.Errorf("iptables: %v", err)
 	}
 	st.Enabled = true // no daemon to be down; the chain is the firewall
-	for _, l := range strings.Split(out, "\n") {
-		l = strings.TrimSpace(l)
-		if strings.HasPrefix(l, "-P INPUT") {
-			switch {
-			case strings.Contains(l, "DROP"), strings.Contains(l, "REJECT"):
-				st.DefaultIncoming = "deny"
-			case strings.Contains(l, "ACCEPT"):
-				st.DefaultIncoming = "allow"
-			}
-			continue
-		}
-		if !strings.HasPrefix(l, "-A INPUT ") && !strings.HasPrefix(l, "-I INPUT ") {
-			continue
-		}
-		r, ok := parseIptablesLine(l)
-		if !ok {
-			continue
-		}
-		st.Rules = append(st.Rules, r)
-	}
+	st.Rules, st.DefaultIncoming = parseIptablesRules(out)
 	if _, err := exec.LookPath("netfilter-persistent"); err != nil {
 		if _, err := exec.LookPath("iptables-save"); err == nil {
 			st.Note = "IPv4 only. Rules do not survive reboot — install iptables-persistent (netfilter-persistent save)."
@@ -687,21 +670,34 @@ func iptablesStatus(st *shared.FirewallStatus) error {
 	return nil
 }
 
-func parseIptablesLine(line string) (shared.FirewallRule, bool) {
-	r := shared.FirewallRule{Proto: "any", Raw: line}
+// parseIptablesRules reads `iptables -S INPUT`. Each rule's ID is its
+// 1-based position in the chain, which is what `iptables -D INPUT N` takes.
+func parseIptablesRules(out string) (rules []shared.FirewallRule, defaultIncoming string) {
+	n := 0
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimSpace(l)
+		if strings.HasPrefix(l, "-P INPUT") {
+			switch {
+			case strings.Contains(l, "DROP"), strings.Contains(l, "REJECT"):
+				defaultIncoming = "deny"
+			case strings.Contains(l, "ACCEPT"):
+				defaultIncoming = "allow"
+			}
+			continue
+		}
+		if !strings.HasPrefix(l, "-A INPUT ") {
+			continue
+		}
+		n++
+		rules = append(rules, parseIptablesLine(l, n))
+	}
+	return rules, defaultIncoming
+}
+
+func parseIptablesLine(line string, id int) shared.FirewallRule {
+	r := shared.FirewallRule{ID: strconv.Itoa(id), Proto: "any", Raw: line}
 	fields := strings.Fields(line)
-	// -A INPUT <num> ... / -I INPUT ...
-	if len(fields) < 4 || (fields[0] != "-A" && fields[0] != "-I") || fields[1] != "INPUT" {
-		return r, false
-	}
-	i := 2
-	if n, err := strconv.Atoi(fields[2]); err == nil {
-		r.ID = strconv.Itoa(n)
-		i = 3
-	} else {
-		return r, false
-	}
-	for ; i < len(fields); i++ {
+	for i := 2; i < len(fields); i++ {
 		switch fields[i] {
 		case "-p":
 			if i+1 < len(fields) {
@@ -740,7 +736,7 @@ func parseIptablesLine(line string) (shared.FirewallRule, bool) {
 	if r.Action == "" {
 		r.Action = "other"
 	}
-	return r, true
+	return r
 }
 
 func iptablesArgs(spec shared.FirewallRuleSpec, allow bool) []string {
