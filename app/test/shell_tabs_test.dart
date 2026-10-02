@@ -34,7 +34,7 @@ void main() {
     // The update banner jumps to items.length - 1 for Settings.
     expect(AppShellState.items.last.$2, 'navSettings');
     final tools = [for (final item in AppShellState.toolItems) item.$2];
-    expect(tools, contains('navFiles'));
+    expect(tools, ['navSsh', 'navFiles'], reason: 'SSH on top, Files below it');
     for (final t in tools) {
       expect([for (final i in AppShellState.items) i.$2], isNot(contains(t)));
     }

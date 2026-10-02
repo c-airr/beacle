@@ -16,6 +16,7 @@ import '../widgets/alerts_panel.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
 import 'files_screen.dart';
+import 'terminal_screen.dart';
 import 'map/map_screen.dart';
 import 'overview_screen.dart';
 import 'proxy_screen.dart';
@@ -40,6 +41,7 @@ class AppShellState extends State<AppShell> {
   final List<Alert> _toasts = [];
   StreamSubscription? _alertSub;
   final _serversKey = GlobalKey<ServersScreenState>();
+  final _terminalKey = GlobalKey<TerminalScreenState>();
   // Persisted in settings.json so closing the banner survives a restart.
   static const _wgBannerDismissKey = 'wg_migrate_banner_dismissed';
   late bool _wgMigrateBannerDismissed;
@@ -63,6 +65,7 @@ class AppShellState extends State<AppShell> {
   /// screens follow the main ones in [_screens].
   @visibleForTesting
   static const toolItems = [
+    (Icons.terminal, 'navSsh'),
     (Icons.folder_outlined, 'navFiles'),
   ];
 
@@ -84,6 +87,7 @@ class AppShellState extends State<AppShell> {
       const AlertsScreen(),
       const SettingsScreen(),
       // toolItems, same order
+      TerminalScreen(key: _terminalKey),
       const FilesScreen(),
     ];
     final state = context.read<AppState>();
@@ -119,6 +123,15 @@ class AppShellState extends State<AppShell> {
       index = _tabServers;
     });
     _serversKey.currentState?.selectVps(vpsId);
+  }
+
+  /// Opens a shell on [vpsId] in the SSH tab and switches to it.
+  void openTerminal(String vpsId) {
+    setState(() {
+      focusedVpsId = null;
+      index = _firstTool + toolItems.indexWhere((t) => t.$2 == 'navSsh');
+    });
+    _terminalKey.currentState?.open(vpsId);
   }
 
   void goToAlerts() {

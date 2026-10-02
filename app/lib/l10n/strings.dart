@@ -324,6 +324,15 @@ const _en = <String, String>{
   'allTags': 'All',
   'customThresholds': 'custom thresholds',
   'serverUpdated': 'Server updated',
+  // ssh
+  'navSsh': 'SSH',
+  'sshConnectButton': 'Connect with SSH',
+  'sshNewSession': 'New session',
+  'sshReconnect': 'Reconnect',
+  'sshPickTitle': 'Open a shell',
+  'sshPickBody': 'Pick a server. The shell runs as root through the Beacle agent — no SSH keys or open port 22 needed.',
+  'sshHint': 'Ctrl+Shift+C copies, Ctrl+Shift+V pastes. Closing a tab ends the shell on the server.',
+  'sshHintMac': 'Cmd+C copies, Cmd+V pastes. Closing a tab ends the shell on the server.',
   // files
   'navFiles': 'Files',
   'ok': 'OK',
@@ -657,6 +666,15 @@ const _pl = <String, String>{
   'allTags': 'Wszystkie',
   'customThresholds': 'własne progi',
   'serverUpdated': 'Zapisano serwer',
+  // ssh
+  'navSsh': 'SSH',
+  'sshConnectButton': 'Połącz przez SSH',
+  'sshNewSession': 'Nowa sesja',
+  'sshReconnect': 'Połącz ponownie',
+  'sshPickTitle': 'Otwórz terminal',
+  'sshPickBody': 'Wybierz serwer. Shell działa jako root przez agenta Beacle — bez kluczy SSH i bez otwartego portu 22.',
+  'sshHint': 'Ctrl+Shift+C kopiuje, Ctrl+Shift+V wkleja. Zamknięcie karty kończy shell na serwerze.',
+  'sshHintMac': 'Cmd+C kopiuje, Cmd+V wkleja. Zamknięcie karty kończy shell na serwerze.',
   // files
   'navFiles': 'Pliki',
   'ok': 'OK',

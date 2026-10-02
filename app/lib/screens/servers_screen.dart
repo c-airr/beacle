@@ -11,6 +11,7 @@ import '../widgets/edit_vps_dialog.dart';
 import '../widgets/history_panel.dart';
 import '../widgets/os_updates.dart';
 import '../widgets/reboot_dialog.dart';
+import 'shell.dart';
 
 /// Per-VPS host statistics: CPU (incl. cores), RAM, disk, network, system info.
 /// Processes and ports live in the Processes tab.
@@ -267,6 +268,10 @@ class _ServerStats extends StatelessWidget {
             const SizedBox(width: 12),
             Text('updated ${fmtAgo(vps.lastSeen)}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const Spacer(),
+            SmallButton(context.l.t('sshConnectButton'),
+                icon: Icons.terminal,
+                onPressed: vps.online ? () => AppShell.of(context).openTerminal(vps.id) : null),
+            const SizedBox(width: 8),
             SmallButton('Update agent', icon: Icons.system_update_alt, onPressed: () async {
               try {
                 final r = await state.api.agentUpdate(vps.id);

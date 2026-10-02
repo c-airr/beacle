@@ -7,12 +7,21 @@ webhooks, tags and per-server thresholds.
 
 ### Added
 
+- **SSH terminal** — a root shell on any server, in tabs, from the new SSH
+  entry in the bottom-left corner or "Connect with SSH" on a server's page.
+  It runs through the Beacle agent, so no SSH keys or open port 22 are
+  needed and it works the same over Tailscale and WireGuard. Closing a tab
+  ends the shell; shells also end when the panel disconnects or after 30
+  minutes without input. Opt out per server with `"disable_terminal": true`.
 - **File explorer** — browse any server's filesystem, edit config files in
   place (saves are atomic, keep owner and permissions, and refuse to clobber
   a file someone changed on the server meanwhile), download and upload with
   progress and resume, new folder / rename / delete. `/`, top-level system
   directories and the agent's own files cannot be deleted. Works the same
   over Tailscale and WireGuard; opt out per server with `"disable_files": true`.
+- **Panel API refuses browsers** — the local API used to answer any web page
+  (`Access-Control-Allow-Origin: *`), so a site open in your browser could
+  drive your servers. Requests from browsers are now rejected.
 - **WireGuard transport** — optional built-in tunnel so VPS hosts do not need
   Tailscale; connectivity probe, add-server flow, Tailscale→WireGuard migration
   with timed fallback, and switch-back from server settings.
