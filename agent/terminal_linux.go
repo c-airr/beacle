@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"os/user"
 	"syscall"
 	"time"
 
@@ -30,12 +31,23 @@ func loginShell() string {
 	return "/bin/sh"
 }
 
+// shellUser is who the shell runs as — the agent's own user (root under the
+// shipped unit) — and where it starts.
+func shellUser() (name, home string) {
+	name, home = "root", "/"
+	if u, err := user.Current(); err == nil {
+		name = u.Username
+		if f, err := os.Open(u.HomeDir); err == nil {
+			f.Close()
+			home = u.HomeDir
+		}
+	}
+	return name, home
+}
+
 func startPTY(cols, rows int) (ptyProcess, error) {
 	shell := loginShell()
-	home := "/root"
-	if _, err := os.Stat(home); err != nil {
-		home = "/"
-	}
+	name, home := shellUser()
 	cmd := exec.Command(shell, "-l")
 	cmd.Dir = home
 	// A clean login environment: the agent's own GOMEMLIMIT/GOGC must not
@@ -44,8 +56,8 @@ func startPTY(cols, rows int) (ptyProcess, error) {
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"HOME=" + home,
-		"USER=root",
-		"LOGNAME=root",
+		"USER=" + name,
+		"LOGNAME=" + name,
 		"SHELL=" + shell,
 		"LANG=C.UTF-8",
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
