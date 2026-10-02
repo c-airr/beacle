@@ -32,6 +32,7 @@ type AgentHub struct {
 	mu      sync.Mutex
 	agents  map[string]*agentSession // vpsID -> session
 	pending map[string]chan shared.AgentCommandResult
+	terms   map[string]*termSub // terminal session id -> app stream
 
 	store   *Store
 	hub     *Hub
@@ -331,6 +332,9 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		mergeSnapshot(h.store, h.hub, h.alerts, h.history, sess.entry, msg.AgentVer, func(snap *shared.VPSSnapshot) {
 			snap.Proxy = *msg.Proxy
 		})
+
+	case shared.AgentWSTerminal:
+		h.handleTerminalFrame(sess, msg.Terminal)
 
 	case shared.AgentWSCommandResult:
 		if msg.Result == nil {

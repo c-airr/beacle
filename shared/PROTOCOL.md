@@ -180,6 +180,12 @@ REST under `/api/*`, live stream at `GET /ws` (JSON `WSMessage` frames).
 The backend proxies any `/api/vps/{id}/agent/*` request to the matching
 agent over WebSocket, so the UI never talks to agents directly.
 
+**Terminal (2.0):** `GET /api/vps/{id}/terminal?cols=&rows=` upgrades to a
+WebSocket carrying `TerminalFrame` JSON both ways (app sends `data`,
+`resize`, `close`; receives `data`, `exit`, `error`). One socket = one shell;
+closing it hangs the shell up. Requests with an `Origin` header (browsers)
+are refused, here and on the whole panel API.
+
 **Power save:** `POST /api/ui/power-mode` with `{"mode":"active"|"eco"|"sleep"}`.
 
 **Webhooks (2.0):** `GET /api/webhooks` — targets plus the elected

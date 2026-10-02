@@ -598,6 +598,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/install-command", s.handleInstallCommand)
 	mux.HandleFunc("GET /api/vps/{id}/history", s.handleVPSHistory)
 	mux.HandleFunc("/api/vps/{id}/agent/{rest...}", s.handleAgentProxy)
+	mux.HandleFunc("GET /api/vps/{id}/terminal", s.handleTerminalWS)
 	mux.HandleFunc("POST /api/ui/power-mode", s.handleUIPowerMode)
 	mux.HandleFunc("GET /api/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/alerts", s.handleAlerts)
