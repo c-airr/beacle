@@ -131,3 +131,15 @@ func TestShellExitForgetsTheSession(t *testing.T) {
 	default:
 	}
 }
+
+func TestOldAgentsAreToldToUpdateInsteadOfHanging(t *testing.T) {
+	for v, want := range map[string]bool{
+		"1.2.0": false, "1.1": false, "0.9.1": false,
+		"2.0.0": true, "v2.1.3": true, "10.0.0": true,
+		"": true, "dev": true,
+	} {
+		if got := agentHasTerminal(v); got != want {
+			t.Errorf("agentHasTerminal(%q) = %v, want %v", v, got, want)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,7 +33,28 @@ type termSub struct {
 
 func (t *termSub) end() { t.once.Do(func() { close(t.ended) }) }
 
-var errAgentOffline = errors.New("agent offline (no websocket)")
+var (
+	errAgentOffline = errors.New("agent offline (no websocket)")
+	errAgentTooOld  = errors.New("this server's agent is older than 2.0 and has no terminal — update it in Settings → Agents")
+)
+
+// termNoAnswer is how long a freshly opened shell may stay silent before the
+// app is told something is wrong. A login shell prints its prompt in
+// milliseconds; silence means an agent that dropped the frame.
+const termNoAnswer = 15 * time.Second
+
+// agentHasTerminal reports whether an agent of version v speaks terminal
+// frames (2.0+). Agents before that ignore them silently, which would leave
+// the app staring at an empty screen. An unknown version gets the benefit of
+// the doubt; the no-answer timeout covers it.
+func agentHasTerminal(v string) bool {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	if v == "" {
+		return true
+	}
+	major, err := strconv.Atoi(strings.SplitN(v, ".", 2)[0])
+	return err != nil || major >= 2
+}
 
 // OpenTerminal starts a shell on the agent and returns the stream of its
 // frames.
@@ -156,6 +178,10 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 		return conn.WriteJSON(f)
 	}
 
+	if !agentHasTerminal(entry.VPS.AgentVer) {
+		_ = writeFrame(shared.TerminalFrame{Op: shared.TermError, Error: errAgentTooOld.Error()})
+		return
+	}
 	t, err := s.agentHub.OpenTerminal(entry.VPS.ID, queryInt(r, "cols", 80), queryInt(r, "rows", 24))
 	if err != nil {
 		_ = writeFrame(shared.TerminalFrame{Op: shared.TermError, Error: err.Error()})
@@ -182,9 +208,16 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Agent → app, until the shell ends or the app goes away.
+	silent := time.NewTimer(termNoAnswer)
+	defer silent.Stop()
 	for {
 		select {
+		case <-silent.C:
+			_ = writeFrame(shared.TerminalFrame{Op: shared.TermError,
+				Error: "the agent did not answer — update it in Settings → Agents"})
+			return
 		case f := <-t.out:
+			silent.Stop()
 			if writeFrame(f) != nil {
 				return
 			}
