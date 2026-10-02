@@ -431,7 +431,12 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 		timeout = 3 * time.Minute
 	case strings.HasSuffix(path, "/exec"):
 		timeout = 45 * time.Second
+	case rest == "fs/delete":
+		timeout = 3 * time.Minute // recursive deletes of big trees
+	case strings.HasPrefix(rest, "fs/"):
+		timeout = time.Minute // 1 MiB chunks over a slow uplink
 	}
+	isFS := strings.HasPrefix(rest, "fs/")
 	respBody, code, err := s.agentHub.Request(entry.VPS.ID, r.Method, path, bodyBytes, timeout)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
@@ -452,16 +457,46 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 		s.store.MarkRestart(entry.VPS.ID, reason, restore)
 		s.hub.Broadcast(shared.WSVPSList, s.store.ListVPS())
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && code >= 200 && code < 300 {
+	// File operations change nothing a snapshot shows; refreshing on every
+	// upload chunk would resend docker/systemd state a hundred times a file.
+	if !isFS && r.Method != http.MethodGet && r.Method != http.MethodHead && code >= 200 && code < 300 {
 		s.agentHub.RequestRefresh(entry.VPS.ID)
 	}
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && !(rest == "fs/upload" && !finalUpload(bodyBytes)) {
 		ok := code >= 200 && code < 300
-		s.logAction(entry.VPS, r.Method+" "+path, string(truncate(respBody, 200)), ok)
+		detail := string(truncate(respBody, 200))
+		if isFS && ok {
+			detail = fsTarget(bodyBytes) // which file, not the echoed entry
+		}
+		s.logAction(entry.VPS, r.Method+" "+path, detail, ok)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_, _ = w.Write(respBody)
+}
+
+// fsTarget names the file an fs/* request touched, for the action log.
+func fsTarget(body []byte) string {
+	var req struct {
+		Path string `json:"path"`
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	_ = json.Unmarshal(body, &req)
+	if req.From != "" {
+		return req.From + " -> " + req.To
+	}
+	return req.Path
+}
+
+// finalUpload reports whether an fs/upload body is the last chunk, the only
+// one worth an entry in the action log.
+func finalUpload(body []byte) bool {
+	var req struct {
+		Final bool `json:"final"`
+	}
+	_ = json.Unmarshal(body, &req)
+	return req.Final
 }
 
 func truncate(b []byte, n int) []byte {
