@@ -2,6 +2,20 @@
 
 ## 2.1.0 (unreleased)
 
+### Added
+
+- **WireGuard port opens itself** — when a server is installed with
+  WireGuard or switched to it from the panel, the agent allows UDP 51931 in
+  the server's own firewall, whichever it uses: ufw, firewalld or iptables
+  (inserted ahead of Oracle Cloud's default REJECT and saved). A provider
+  firewall outside the server (Oracle security list, AWS security group,
+  Hetzner Cloud Firewall) still has to be opened by hand.
+
+### Fixed
+
+- Firewall tab failed with "iptables: exit status 2" on servers using plain
+  iptables.
+
 ## 2.0.0 — 2026-10-03
 
 SSH terminal and file explorer, a built-in WireGuard transport so servers no

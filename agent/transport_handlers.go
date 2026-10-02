@@ -29,6 +29,9 @@ func (s *APIServer) handleTransportWireGuard(w http.ResponseWriter, r *http.Requ
 		jsonErr(w, http.StatusBadRequest, switchErr.Error())
 		return
 	}
+	// Before reconnecting: the panel starts sending to this port right away,
+	// and this path runs no install script that could have opened it.
+	ensureWireGuardPort(s.cfg)
 	if s.kickSession != nil {
 		s.kickSession()
 	}

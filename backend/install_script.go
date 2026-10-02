@@ -182,7 +182,9 @@ systemctl restart beacle-agent
 
 if [ "$MODE" = wireguard ]; then
   echo "[beacle] agent running — waiting for the panel on udp/$WG_PORT"
-  echo "[beacle] if your provider has its own firewall (security group), allow UDP $WG_PORT there too"
+  echo "[beacle] the agent opens udp/$WG_PORT in this server's firewall (ufw, firewalld or iptables)"
+  echo "[beacle] a provider firewall outside the server still needs it by hand:"
+  echo "[beacle]   Oracle Cloud: VCN security list, AWS: security group, Hetzner: Cloud Firewall"
 else
   echo "[beacle] agent running — configured backend $BACKEND_URL"
 fi
