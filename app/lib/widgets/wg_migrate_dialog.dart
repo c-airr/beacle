@@ -52,7 +52,7 @@ class _WgMigrateDialogState extends State<_WgMigrateDialog> {
     final api = context.read<AppState>().api;
     try {
       final probe = await api.probeConnectivity(host);
-      if (!probe.wireGuardOk) {
+      if (!probe.wireguardOk) {
         throw Exception(context.l.f('methodUnavailable', {
           'reason': probe.reason.isNotEmpty ? probe.reason : probe.ipClass,
         }));

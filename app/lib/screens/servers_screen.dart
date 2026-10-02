@@ -229,8 +229,6 @@ class _PendingView extends StatelessWidget {
                   style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
                 ),
                 const SizedBox(height: 10),
-            OsUpdatesBanner(vps: v),
-            const SizedBox(height: 10),
                 const AddVpsCommand(),
               ],
               const SizedBox(height: 16),
@@ -305,6 +303,8 @@ class _ServerStats extends StatelessWidget {
           'Exact host statistics — CPU cores, memory, disks, network.',
           style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
         ),
+        const SizedBox(height: 12),
+        OsUpdatesBanner(vps: vps),
         const SizedBox(height: 16),
         // Equal-height summary tiles
         IntrinsicHeight(
