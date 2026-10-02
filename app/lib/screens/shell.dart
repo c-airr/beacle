@@ -53,13 +53,22 @@ class AppShellState extends State<AppShell> {
     (Icons.dns_outlined, 'navServers'),
     (Icons.view_in_ar_outlined, 'navDocker'),
     (Icons.miscellaneous_services_outlined, 'navServices'),
-    (Icons.folder_outlined, 'navFiles'),
     (Icons.alt_route_outlined, 'navProxy'),
     (Icons.notifications_outlined, 'navAlerts'),
     (Icons.tune_outlined, 'navSettings'),
   ];
 
+  /// Remote tools, kept apart in the bottom-left corner of the sidebar so they
+  /// read as "work on a server" rather than another overview screen. Their
+  /// screens follow the main ones in [_screens].
+  @visibleForTesting
+  static const toolItems = [
+    (Icons.folder_outlined, 'navFiles'),
+  ];
+
   String _label(BuildContext context, int i) => context.l.t(items[i].$2);
+
+  int get _firstTool => items.length;
 
   @override
   void initState() {
@@ -71,10 +80,11 @@ class AppShellState extends State<AppShell> {
       ServersScreen(key: _serversKey),
       const DockerScreen(),
       const ServicesScreen(),
-      const FilesScreen(),
       const ProxyScreen(),
       const AlertsScreen(),
       const SettingsScreen(),
+      // toolItems, same order
+      const FilesScreen(),
     ];
     final state = context.read<AppState>();
     _alertSub = state.alertStream.stream.listen((a) {
@@ -100,7 +110,7 @@ class AppShellState extends State<AppShell> {
   // Tab indices, kept next to _items so reordering the sidebar cannot silently
   // send a shortcut to the wrong screen.
   static const _tabServers = 2;
-  static const _tabAlerts = 7;
+  static const _tabAlerts = 6;
 
   void goToServer(String vpsId) {
     context.read<AppState>().bumpActivity();
@@ -201,6 +211,26 @@ class AppShellState extends State<AppShell> {
               ),
             ),
           const Spacer(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Divider(height: 1, color: BeacleColors.border.withValues(alpha: 0.8)),
+          ),
+          for (var t = 0; t < toolItems.length; t++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+              child: _NavItem(
+                icon: toolItems[t].$1,
+                label: context.l.t(toolItems[t].$2),
+                selected: index == _firstTool + t,
+                onTap: () {
+                  context.read<AppState>().bumpActivity();
+                  setState(() {
+                    focusedVpsId = null;
+                    index = _firstTool + t;
+                  });
+                },
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Row(

@@ -14,11 +14,14 @@ void main() {
     final keys = [for (final item in AppShellState.items) item.$2];
 
     expect(keys.indexOf('navServers'), 2, reason: 'goToServer jumps to index 2');
-    expect(keys.indexOf('navAlerts'), 7, reason: 'goToAlerts and the badge use index 7');
+    expect(keys.indexOf('navAlerts'), 6, reason: 'goToAlerts and the badge use index 6');
   });
 
   test('every tab key is unique', () {
-    final keys = [for (final item in AppShellState.items) item.$2];
+    final keys = [
+      for (final item in AppShellState.items) item.$2,
+      for (final item in AppShellState.toolItems) item.$2,
+    ];
     expect(keys.toSet().length, keys.length);
   });
 
@@ -26,5 +29,14 @@ void main() {
     final keys = [for (final item in AppShellState.items) item.$2];
     expect(keys, contains('navServices'));
     expect(keys, isNot(contains('navProcesses')));
+  });
+  test('Settings closes the main list; remote tools sit apart below it', () {
+    // The update banner jumps to items.length - 1 for Settings.
+    expect(AppShellState.items.last.$2, 'navSettings');
+    final tools = [for (final item in AppShellState.toolItems) item.$2];
+    expect(tools, contains('navFiles'));
+    for (final t in tools) {
+      expect([for (final i in AppShellState.items) i.$2], isNot(contains(t)));
+    }
   });
 }
