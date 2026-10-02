@@ -1,9 +1,14 @@
 # Changelog
 
-## 2.0.0 (unreleased)
+## 2.0.0 — 2026-10-03
 
-Admin release: firewall, updates, cron, reboot-and-restore, system logs,
-webhooks, tags and per-server thresholds.
+SSH terminal and file explorer, a built-in WireGuard transport so servers no
+longer need Tailscale, and admin tools: firewall, OS updates, cron,
+reboot-and-restore, system logs, webhooks, tags and per-server thresholds.
+
+**After updating the app, update your agents** (Settings → Updates, or
+"Update agent" on a server's page). The terminal, the file explorer and the
+other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Added
 
