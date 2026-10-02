@@ -63,6 +63,13 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
+- A server switched to WireGuard whose tunnel could not come up (e.g. one
+  behind the panel's own router) took the Tailscale fallback as success,
+  dropped it, and went offline for good at the next panel restart. Only a
+  connection through the tunnel confirms the switch now, and "Switch back
+  to Tailscale" works even while the agent is offline.
+- The "move to WireGuard" banner is gone for now; the switch is still in
+  each server's settings.
 - Firewall tab failed with "iptables: exit status 2" on servers using plain
   iptables.
 

@@ -225,12 +225,18 @@ func (s *Server) handleWireGuardSwitchTailscale(w http.ResponseWriter, r *http.R
 		Transport:  shared.TransportTailscale,
 		BackendURL: panelURL,
 	})
-	if _, code, err := s.agentHub.Request(id, http.MethodPost, "/api/transport/tailscale", body, 15*time.Second); err != nil {
-		writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
-		return
-	} else if code < 200 || code >= 300 {
-		writeErr(w, code, "agent refused switch")
-		return
+	// An agent stranded on a dead tunnel cannot be reached to be told — and
+	// while the registry still says WireGuard, it is refused over Tailscale
+	// too. So when it is offline, forget the tunnel here anyway: the agent
+	// reverts on its own when its trial window closes, or on a reinstall.
+	if s.agentHub.Connected(id) {
+		if _, code, err := s.agentHub.Request(id, http.MethodPost, "/api/transport/tailscale", body, 15*time.Second); err != nil {
+			writeErr(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+			return
+		} else if code < 200 || code >= 300 {
+			writeErr(w, code, "agent refused switch")
+			return
+		}
 	}
 	entry = s.wg.Forget(id)
 	if entry == nil {

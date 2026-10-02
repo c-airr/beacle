@@ -377,7 +377,7 @@ func (c *WSClient) runSession(ctx context.Context, useFallback bool) (registered
 		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 	})
 
-	powerMode, err := c.handshake(conn, writeText)
+	powerMode, err := c.handshake(conn, writeText, c.cfg.IsWireGuard() && !useFallback)
 	if err != nil {
 		return false, err
 	}
@@ -423,7 +423,7 @@ func (c *WSClient) runSession(ctx context.Context, useFallback bool) (registered
 	return registered, err
 }
 
-func (c *WSClient) handshake(conn *websocket.Conn, writeText func([]byte) error) (shared.PowerMode, error) {
+func (c *WSClient) handshake(conn *websocket.Conn, writeText func([]byte) error, viaTunnel bool) (shared.PowerMode, error) {
 	reg, err := json.Marshal(shared.AgentWSMessage{
 		Type:     shared.AgentWSRegister,
 		Register: ptr(c.reporter.RegisterRequest()),
@@ -450,7 +450,7 @@ func (c *WSClient) handshake(conn *websocket.Conn, writeText func([]byte) error)
 			if msg.RegisterAck == nil {
 				return "", fmt.Errorf("empty register_ack")
 			}
-			c.reporter.ApplyRegisterAck(*msg.RegisterAck)
+			c.reporter.ApplyRegisterAck(*msg.RegisterAck, viaTunnel)
 			mode := msg.RegisterAck.PowerMode
 			if mode == "" {
 				mode = shared.PowerModeActive
