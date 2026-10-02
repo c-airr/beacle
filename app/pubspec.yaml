@@ -12,7 +12,8 @@ dependencies:
   provider: ^6.1.2
   http: ^1.2.2
   web_socket_channel: ^3.0.1
-  file_selector: ^1.0.3
+  # Pure Dart (no plugin): native dialogs via FFI, see lib/native_dialogs.dart.
+  ffi: ^2.1.3
 
 dev_dependencies:
   flutter_lints: ^5.0.0

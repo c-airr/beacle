@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../l10n/strings.dart';
 import '../models/models.dart';
+import '../native_dialogs.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -211,11 +211,17 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Future<void> _download(String vpsId, FsEntry e) async {
     if (transfer != null) return;
-    final loc = await getSaveLocation(suggestedName: e.name);
-    if (loc == null || !mounted) return;
+    final String? dest;
+    try {
+      dest = await NativeDialogs.saveFile(e.name);
+    } catch (err) {
+      if (mounted) showToast(context, '$err', error: true);
+      return;
+    }
+    if (dest == null || !mounted) return;
     final t = _Transfer(e.name, false, e.size);
     setState(() => transfer = t);
-    final out = File(loc.path);
+    final out = File(dest);
     RandomAccessFile? raf;
     try {
       raf = await out.open(mode: FileMode.write);
@@ -245,18 +251,26 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Future<void> _upload(String vpsId, String dir) async {
     if (transfer != null) return;
-    final files = await openFiles();
-    if (files.isEmpty || !mounted) return;
+    final List<String> paths;
+    try {
+      paths = await NativeDialogs.openFiles();
+    } catch (err) {
+      if (mounted) showToast(context, '$err', error: true);
+      return;
+    }
+    if (paths.isEmpty || !mounted) return;
+    final files = [for (final p in paths) File(p)];
     final names = {for (final e in listing?.entries ?? const <FsEntry>[]) e.name};
     for (final f in files) {
       if (!mounted) return;
       var overwrite = false;
-      if (names.contains(f.name)) {
+      final name = _baseName(f.path);
+      if (names.contains(name)) {
         final ok = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text(context.l.t('fsExistsTitle')),
-            content: Text(context.l.f('fsExistsBody', {'name': f.name})),
+            content: Text(context.l.f('fsExistsBody', {'name': name})),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('fsSkip'))),
               TextButton(
@@ -268,19 +282,22 @@ class _FilesScreenState extends State<FilesScreen> {
         if (ok != true) continue;
         overwrite = true;
       }
-      if (!await _uploadOne(vpsId, f, _join(dir, f.name), overwrite)) break;
+      if (!await _uploadOne(vpsId, f, _join(dir, name), overwrite)) break;
     }
     await _reload();
   }
 
   /// Returns false when the user cancelled or it failed, which stops a batch.
-  Future<bool> _uploadOne(String vpsId, XFile f, String dest, bool overwrite) async {
+  String _baseName(String path) => path.split(RegExp(r'[\\/]')).last;
+
+  Future<bool> _uploadOne(String vpsId, File f, String dest, bool overwrite) async {
     final total = await f.length();
-    final t = _Transfer(f.name, true, total);
+    final label = _baseName(f.path);
+    final t = _Transfer(label, true, total);
     setState(() => transfer = t);
     RandomAccessFile? raf;
     try {
-      raf = await File(f.path).open();
+      raf = await f.open();
       var offset = 0;
       do {
         if (t.cancelled) return false;
@@ -306,7 +323,7 @@ class _FilesScreenState extends State<FilesScreen> {
       } while (true);
       return true;
     } catch (e) {
-      if (mounted) showToast(context, '${f.name}: $e', error: true);
+      if (mounted) showToast(context, '$label: $e', error: true);
       return false;
     } finally {
       await raf?.close();
