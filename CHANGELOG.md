@@ -1,5 +1,7 @@
 # Changelog
 
+## 2.1.0 (unreleased)
+
 ## 2.0.0 — 2026-10-03
 
 SSH terminal and file explorer, a built-in WireGuard transport so servers no
