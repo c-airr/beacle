@@ -6,6 +6,8 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'window_control.dart';
+
 /// Native "save as" and "open files" dialogs without a Flutter plugin.
 ///
 /// Plugins make the Windows build create symlinks, which needs Developer Mode
@@ -117,19 +119,6 @@ const _ofnExplorer = 0x00080000;
 /// Room for a multi-select answer: directory plus many names.
 const _fileBufChars = 32 * 1024;
 
-/// The app's main window, so the dialog sits on top of it and blocks it.
-Pointer _winOwner() {
-  final user32 = DynamicLibrary.open('user32.dll');
-  final findWindow = user32.lookupFunction<Pointer Function(Pointer<Utf16>, Pointer<Utf16>),
-      Pointer Function(Pointer<Utf16>, Pointer<Utf16>)>('FindWindowW');
-  final cls = 'FLUTTER_RUNNER_WIN32_WINDOW'.toNativeUtf16();
-  try {
-    return findWindow(cls, nullptr);
-  } finally {
-    calloc.free(cls);
-  }
-}
-
 void _coInit() {
   final ole32 = DynamicLibrary.open('ole32.dll');
   final init = ole32.lookupFunction<Int32 Function(Pointer, Uint32), int Function(Pointer, int)>('CoInitializeEx');
@@ -150,7 +139,8 @@ String? _winDialog({required bool save, String suggested = ''}) {
     }
     ofn.ref
       ..lStructSize = sizeOf<_OpenFileName>()
-      ..hwndOwner = _winOwner()
+      // This process's own window (a tool window is a second Beacle).
+      ..hwndOwner = ownWin32Window() ?? nullptr
       ..lpstrFilter = filter
       ..lpstrFile = buf.cast()
       ..nMaxFile = _fileBufChars

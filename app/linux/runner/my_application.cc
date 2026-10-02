@@ -1,5 +1,7 @@
 #include "my_application.h"
 
+#include <cstring>
+
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -10,9 +12,95 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlMethodChannel* window_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static double arg_double(FlValue* args, const char* key) {
+  if (args == nullptr || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) return 0;
+  FlValue* v = fl_value_lookup_string(args, key);
+  if (v == nullptr) return 0;
+  if (fl_value_get_type(v) == FL_VALUE_TYPE_FLOAT) return fl_value_get_float(v);
+  if (fl_value_get_type(v) == FL_VALUE_TYPE_INT) return (double)fl_value_get_int(v);
+  return 0;
+}
+
+// Window size and title for lib/window_control.dart: the split view widens
+// the window to the right (moving it left only when the screen ends), and a
+// tool window gets its own title. Sizes are GTK logical pixels.
+static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
+                             gpointer user_data) {
+  GtkWindow* window = GTK_WINDOW(user_data);
+  const gchar* method = fl_method_call_get_name(call);
+  FlValue* args = fl_method_call_get_args(call);
+  g_autoptr(FlMethodResponse) response = nullptr;
+
+  if (strcmp(method, "grow") == 0) {
+    double added = 0, shift = 0;
+    double by = arg_double(args, "by");
+    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
+    if (by > 0 && gdk_window != nullptr && !gtk_window_is_maximized(window)) {
+      GdkMonitor* monitor = gdk_display_get_monitor_at_window(
+          gdk_window_get_display(gdk_window), gdk_window);
+      GdkRectangle work;
+      gdk_monitor_get_workarea(monitor, &work);
+      gint x, y, w, h;
+      gtk_window_get_position(window, &x, &y);
+      gtk_window_get_size(window, &w, &h);
+      gint new_w = w + (gint)by;
+      if (new_w > work.width) new_w = work.width > w ? work.width : w;
+      gint new_x = x;
+      if (new_x + new_w > work.x + work.width) {
+        new_x = work.x + work.width - new_w;
+        if (new_x < work.x) new_x = work.x;
+      }
+      gtk_window_resize(window, new_w, h);
+      if (new_x != x) gtk_window_move(window, new_x, y);
+      added = new_w - w;
+      shift = x - new_x;
+    }
+    g_autoptr(FlValue) result = fl_value_new_list();
+    fl_value_append_take(result, fl_value_new_float(added));
+    fl_value_append_take(result, fl_value_new_float(shift));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+  } else if (strcmp(method, "shrink") == 0) {
+    gint by = (gint)arg_double(args, "by");
+    gint shift = (gint)arg_double(args, "shift");
+    if (!gtk_window_is_maximized(window)) {
+      gint x, y, w, h;
+      gtk_window_get_position(window, &x, &y);
+      gtk_window_get_size(window, &w, &h);
+      if (w - by >= 400) {
+        gtk_window_resize(window, w - by, h);
+        if (shift != 0) gtk_window_move(window, x + shift, y);
+      }
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "focus") == 0) {
+    gtk_window_present(window);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "setTitle") == 0) {
+    FlValue* t = (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP)
+                     ? fl_value_lookup_string(args, "title")
+                     : nullptr;
+    if (t != nullptr && fl_value_get_type(t) == FL_VALUE_TYPE_STRING) {
+      const gchar* title = fl_value_get_string(t);
+      gtk_window_set_title(window, title);
+      GtkWidget* bar = gtk_window_get_titlebar(window);
+      if (bar != nullptr && GTK_IS_HEADER_BAR(bar)) {
+        gtk_header_bar_set_title(GTK_HEADER_BAR(bar), title);
+      }
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  g_autoptr(GError) error = nullptr;
+  if (!fl_method_call_respond(call, response, &error)) {
+    g_warning("beacle/window: %s", error->message);
+  }
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -75,6 +163,14 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)), "beacle/window",
+      FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->window_channel, window_method_cb, g_object_ref(window),
+      g_object_unref);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
@@ -121,6 +217,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->window_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

@@ -17,8 +17,8 @@ constexpr const char kTrayChannel[] = "beacle/tray";
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project,
-                             bool start_hidden)
-    : project_(project), start_hidden_(start_hidden) {}
+                             bool start_hidden, bool tool_window)
+    : project_(project), start_hidden_(start_hidden), tool_window_(tool_window) {}
 
 FlutterWindow::~FlutterWindow() {}
 
@@ -40,9 +40,11 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  tray_.on_show = [this]() { RestoreFromTray(); };
-  tray_.on_quit = [this]() { QuitForReal(); };
-  tray_.Create(GetHandle());
+  if (!tool_window_) {
+    tray_.on_show = [this]() { RestoreFromTray(); };
+    tray_.on_quit = [this]() { QuitForReal(); };
+    tray_.Create(GetHandle());
+  }
 
   SetUpTrayChannel();
 

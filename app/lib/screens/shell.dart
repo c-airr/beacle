@@ -8,11 +8,13 @@ import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../update/app_updater.dart';
+import '../tool_window.dart';
 import '../user_config.dart';
 import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/wg_migrate_dialog.dart';
 import '../widgets/alerts_panel.dart';
+import '../window_control.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
 import 'files_screen.dart';
@@ -42,11 +44,24 @@ class AppShellState extends State<AppShell> {
   StreamSubscription? _alertSub;
   final _serversKey = GlobalKey<ServersScreenState>();
   final _terminalKey = GlobalKey<TerminalScreenState>();
+  final _filesKey = GlobalKey();
+
+  /// The tool shown in the split panel on the right, if any.
+  int? _splitTool;
+
+  /// Width the window gained for the split panel, to give back on close.
+  WindowGrowth _growth = WindowGrowth.none;
+
+  /// The last main (non-tool) tab, to fall back to when a tool shown in the
+  /// main area moves out of it.
+  int _lastMain = 0;
+
+  static const _splitWidth = 640.0;
   // Persisted in settings.json so closing the banner survives a restart.
   static const _wgBannerDismissKey = 'wg_migrate_banner_dismissed';
   late bool _wgMigrateBannerDismissed;
 
-  late final List<Widget> _screens;
+  late final List<Widget> _mainScreens;
 
   @visibleForTesting
   static const items = [
@@ -77,7 +92,7 @@ class AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _wgMigrateBannerDismissed = UserSettings.load().raw[_wgBannerDismissKey] == true;
-    _screens = [
+    _mainScreens = [
       const OverviewScreen(),
       const MapScreen(),
       ServersScreen(key: _serversKey),
@@ -86,9 +101,6 @@ class AppShellState extends State<AppShell> {
       const ProxyScreen(),
       const AlertsScreen(),
       const SettingsScreen(),
-      // toolItems, same order
-      TerminalScreen(key: _terminalKey),
-      const FilesScreen(),
     ];
     final state = context.read<AppState>();
     _alertSub = state.alertStream.stream.listen((a) {
@@ -125,13 +137,66 @@ class AppShellState extends State<AppShell> {
     _serversKey.currentState?.selectVps(vpsId);
   }
 
-  /// Opens a shell on [vpsId] in the SSH tab and switches to it.
-  void openTerminal(String vpsId) {
+  static final _sshTool = toolItems.indexWhere((t) => t.$2 == 'navSsh');
+
+  /// The tool's widget. GlobalKeys let it move between the main area and the
+  /// split panel without losing open shells or the current folder.
+  Widget _toolWidget(int t) => t == _sshTool ? TerminalScreen(key: _terminalKey) : FilesScreen(key: _filesKey);
+
+  SshDisplayMode _modeOf(int t) {
+    final state = context.read<AppState>();
+    return t == _sshTool ? state.sshMode : state.filesMode;
+  }
+
+  /// Opens tool [t] the way the user chose for it in setup/Settings; for SSH,
+  /// [vpsId] also opens a shell on that server.
+  Future<void> openTool(int t, {String? vpsId}) async {
+    context.read<AppState>().bumpActivity();
+    switch (_modeOf(t)) {
+      case SshDisplayMode.separateWindow:
+        await ToolWindows.open(t == _sshTool ? 'ssh' : 'files', vpsId: vpsId);
+        return;
+      case SshDisplayMode.splitView:
+        if (_splitTool == t && vpsId == null) {
+          await _closeSplit();
+          return;
+        }
+        await _openSplit(t);
+      case SshDisplayMode.fullscreen:
+        if (_splitTool == t) await _closeSplit();
+        setState(() {
+          focusedVpsId = null;
+          index = _firstTool + t;
+        });
+    }
+    if (vpsId != null && t == _sshTool) {
+      // The terminal may have just been mounted; give it a frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _terminalKey.currentState?.open(vpsId));
+    }
+  }
+
+  /// Opens a shell on [vpsId] (the "Connect with SSH" button).
+  void openTerminal(String vpsId) => openTool(_sshTool, vpsId: vpsId);
+
+  Future<void> _openSplit(int t) async {
+    final wasOpen = _splitTool != null;
     setState(() {
-      focusedVpsId = null;
-      index = _firstTool + toolItems.indexWhere((t) => t.$2 == 'navSsh');
+      _splitTool = t;
+      // A tool cannot be in the main area and the panel at once.
+      if (index == _firstTool + t) index = _lastMain;
     });
-    _terminalKey.currentState?.open(vpsId);
+    // Telegram-style: the window grows to make room instead of squeezing the
+    // screen you were on. Swapping tools in an open panel keeps the size.
+    if (!wasOpen) {
+      _growth = await WindowControl.grow(_splitWidth, View.of(context).devicePixelRatio);
+    }
+  }
+
+  Future<void> _closeSplit() async {
+    final growth = _growth;
+    _growth = WindowGrowth.none;
+    setState(() => _splitTool = null);
+    await WindowControl.shrink(growth, View.of(context).devicePixelRatio);
   }
 
   void goToAlerts() {
@@ -158,7 +223,7 @@ class AppShellState extends State<AppShell> {
                     _buildTopBar(state),
                     if (state.availableUpdate != null) _buildUpdateBanner(state),
                     if (wgBanner != null) wgBanner,
-                    Expanded(child: IndexedStack(index: index, children: _screens)),
+                    Expanded(child: _content()),
                   ],
                 ),
               ),
@@ -186,6 +251,57 @@ class AppShellState extends State<AppShell> {
         ],
       ),
     ),
+    );
+  }
+
+  /// Main area plus, in split view, the tool panel on the right.
+  Widget _content() {
+    final stack = IndexedStack(
+      index: index,
+      children: [
+        ..._mainScreens,
+        // Tools shown in the main area; a placeholder keeps the indices when
+        // a tool lives in the split panel or its own window instead.
+        for (var t = 0; t < toolItems.length; t++)
+          _splitTool == t || _modeOf(t) == SshDisplayMode.separateWindow ? const SizedBox.shrink() : _toolWidget(t),
+      ],
+    );
+    final split = _splitTool;
+    if (split == null) return stack;
+    return Row(
+      children: [
+        Expanded(child: stack),
+        Container(
+          width: _splitWidth,
+          decoration: const BoxDecoration(
+            color: BeacleColors.bg,
+            border: Border(left: BorderSide(color: BeacleColors.border)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                height: 36,
+                padding: const EdgeInsets.only(left: 14, right: 4),
+                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BeacleColors.border))),
+                child: Row(children: [
+                  Icon(toolItems[split].$1, size: 15, color: BeacleColors.textDim),
+                  const SizedBox(width: 8),
+                  Text(context.l.t(toolItems[split].$2),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: context.l.t('close'),
+                    onPressed: _closeSplit,
+                  ),
+                ]),
+              ),
+              Expanded(child: _toolWidget(split)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -219,6 +335,7 @@ class AppShellState extends State<AppShell> {
                   setState(() {
                     if (i != _tabServers) focusedVpsId = null;
                     index = i;
+                    _lastMain = i;
                   });
                 },
               ),
@@ -234,14 +351,8 @@ class AppShellState extends State<AppShell> {
               child: _NavItem(
                 icon: toolItems[t].$1,
                 label: context.l.t(toolItems[t].$2),
-                selected: index == _firstTool + t,
-                onTap: () {
-                  context.read<AppState>().bumpActivity();
-                  setState(() {
-                    focusedVpsId = null;
-                    index = _firstTool + t;
-                  });
-                },
+                selected: index == _firstTool + t || _splitTool == t,
+                onTap: () => openTool(t),
               ),
             ),
           Padding(

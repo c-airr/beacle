@@ -17,8 +17,10 @@ class FlutterWindow : public Win32Window {
   // Creates a new FlutterWindow hosting a Flutter view running |project|.
   // |start_hidden| keeps the window off screen at launch, for the
   // start-in-the-tray setting; the tray icon is the way back to it.
+  // |tool_window| is a second Beacle process showing only SSH or Files
+  // (lib/tool_window.dart); it leaves the tray icon to the main window.
   explicit FlutterWindow(const flutter::DartProject& project,
-                         bool start_hidden = false);
+                         bool start_hidden = false, bool tool_window = false);
   virtual ~FlutterWindow();
 
  protected:
@@ -53,6 +55,7 @@ class FlutterWindow : public Win32Window {
   bool close_to_tray_ = false;
 
   bool start_hidden_ = false;
+  bool tool_window_ = false;
 
   // Set once the user really means it, so the WM_CLOSE handler stops
   // intercepting.

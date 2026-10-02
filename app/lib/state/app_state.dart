@@ -168,6 +168,25 @@ class AppState extends ChangeNotifier {
 
   final StreamController<Alert> alertStream = StreamController.broadcast();
 
+  /// Set in a tool window (lib/tool_window.dart): it only looks. Power modes
+  /// and alert sounds belong to the main window — two windows switching the
+  /// fleet between eco and active would fight, and every alert would chime
+  /// twice.
+  bool viewerOnly = false;
+
+  /// Start for a tool window: data and the live stream, nothing else.
+  Future<void> startViewer() async {
+    viewerOnly = true;
+    _loadMutes();
+    await refreshAll();
+    _connectWs();
+    _staleCheck?.cancel();
+    _staleCheck = Timer.periodic(const Duration(seconds: 10), (_) {
+      _pruneSnapshots();
+      notifyListeners();
+    });
+  }
+
   Future<void> start() async {
     _loadMutes();
     applyTraySettings();
@@ -302,6 +321,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _applyPowerMode() async {
     _powerModeChangedAt = DateTime.now();
+    if (viewerOnly) return;
     try {
       await api.setPowerMode(uiPowerMode);
     } catch (_) {}
@@ -430,7 +450,7 @@ class AppState extends ChangeNotifier {
         alertStream.add(a);
         // Muted conditions stay silent: muting is a promise to stop bringing
         // this one up, and a chime is bringing it up.
-        if (!a.resolved && existing < 0 && !isMuted(a)) AlertSound.play(a.severity);
+        if (!viewerOnly && !a.resolved && existing < 0 && !isMuted(a)) AlertSound.play(a.severity);
         break;
       case 'link_update':
         final l = VpsLink.fromJson(payload as Map<String, dynamic>);

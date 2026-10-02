@@ -9,10 +9,17 @@ import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/shell.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
+import 'tool_window.dart';
 import 'user_config.dart';
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // A separate SSH or Files window: same backend, no backend management.
+  final tool = argValue(args, '--tool');
+  if (tool == 'ssh' || tool == 'files') {
+    runToolWindow(tool!, argValue(args, '--vps'));
+    return;
+  }
   BeaclePaths.ensureDirs();
   if (!File(BeaclePaths.stateFile).existsSync()) {
     File(BeaclePaths.stateFile).writeAsStringSync(
@@ -47,6 +54,7 @@ class _BeacleAppState extends State<BeacleApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ToolWindows.closeAll();
     EmbeddedBackend.instance.stop();
     state.dispose();
     super.dispose();
