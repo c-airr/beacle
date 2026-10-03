@@ -376,6 +376,18 @@ class ApiClient {
   // than the default; the backend allows a minute per call.
   static const _fsTimeout = Duration(seconds: 70);
 
+  Future<TempLogin> createTempLogin(String vpsId, {required int minutes, required bool sudo}) async =>
+      TempLogin.fromJson(await post(_a(vpsId, 'ssh/temp-logins'), body: {'minutes': minutes, 'sudo': sudo})
+          as Map<String, dynamic>);
+
+  Future<List<TempLogin>> tempLogins(String vpsId) async =>
+      ((await get(_a(vpsId, 'ssh/temp-logins'))) as List? ?? [])
+          .map((e) => TempLogin.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+  Future<void> deleteTempLogin(String vpsId, String user) async =>
+      delete(_a(vpsId, 'ssh/temp-logins/${Uri.encodeComponent(user)}'));
+
   Future<FsListing> fsDir(String vpsId, String path, {bool hidden = false}) async =>
       FsListing.fromJson(await get(
           _a(vpsId, 'fs/dir?path=${Uri.encodeQueryComponent(path)}${hidden ? '&hidden=1' : ''}')));

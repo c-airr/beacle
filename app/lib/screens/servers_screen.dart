@@ -11,6 +11,7 @@ import '../widgets/edit_vps_dialog.dart';
 import '../widgets/history_panel.dart';
 import '../widgets/os_updates.dart';
 import '../widgets/reboot_dialog.dart';
+import '../widgets/temp_login_dialog.dart';
 import 'shell.dart';
 
 /// Per-VPS host statistics: CPU (incl. cores), RAM, disk, network, system info.
@@ -278,6 +279,8 @@ class _ServerStats extends StatelessWidget {
             Wrap(spacing: 8, runSpacing: 8, children: [
               SmallButton(context.l.t('sshConnectButton'),
                   icon: Icons.terminal, onPressed: vps.online ? () => AppShell.of(context).openTerminal(vps.id) : null),
+              SmallButton(context.l.t('tlButton'),
+                  icon: Icons.key_outlined, onPressed: vps.online ? () => showTempLoginDialog(context, vps) : null),
               SmallButton(context.l.t('srvUpdateAgent'), icon: Icons.system_update_alt, onPressed: () async {
                 try {
                   final r = await state.api.agentUpdate(vps.id);

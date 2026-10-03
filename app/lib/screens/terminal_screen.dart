@@ -14,6 +14,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/temp_login_dialog.dart';
 
 /// One shell on one server. The bytes travel app ⇄ backend ⇄ agent over
 /// WebSockets (see backend/terminal.go); there is no SSH client and no key.
@@ -330,7 +331,14 @@ class TerminalScreenState extends State<TerminalScreen> {
                       const SizedBox(width: 10),
                       Expanded(child: Text(v.name, style: const TextStyle(fontSize: 13))),
                       Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: context.l.t('tlButton'),
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.key_outlined, size: 15),
+                        onPressed: v.online ? () => showTempLoginDialog(context, v) : null,
+                      ),
+                      const SizedBox(width: 4),
                       Icon(Icons.arrow_forward, size: 14, color: v.online ? BeacleColors.text : BeacleColors.border),
                     ]),
                   ),

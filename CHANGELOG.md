@@ -12,6 +12,12 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Added
 
+- **Temporary SSH logins** — "SSH login" on a server's page or in the SSH
+  tab creates a throwaway account (`beacle-xxxxxx`) with a one-time password
+  for your own SSH client, optionally with sudo, valid 15 min to 24 h. Root's
+  credentials never leave the panel. The agent lets only those accounts in
+  with a password, checks the sshd config before reloading it, and deletes
+  the account, its files and its processes when the time runs out.
 - **New look** — Beacle's own icon instead of Flutter's (window, taskbar,
   tray, installer, macOS); the content sits in one rounded panel beside the
   sidebar, with rounded cards, buttons, dialogs and fields and a larger page

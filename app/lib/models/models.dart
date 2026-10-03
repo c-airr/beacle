@@ -753,6 +753,22 @@ class FsEntry {
         version = _s(j['version']);
 }
 
+/// A throwaway SSH account on a server (agent 2.0). [password] is only in
+/// the answer that created it.
+class TempLogin {
+  final String user, password, warning;
+  final bool sudo;
+  final int port;
+  final DateTime expiresAt;
+  TempLogin.fromJson(Map<String, dynamic> j)
+      : user = _s(j['user']),
+        password = _s(j['password']),
+        warning = _s(j['warning']),
+        sudo = _b(j['sudo']),
+        port = _i(j['port']),
+        expiresAt = _dt(j['expires_at']);
+}
+
 /// One chunk of a remote file; [data] is base64 on the wire.
 class FsChunk {
   final String path, version, data;
