@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"net/http"
 	"net/netip"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"beacle/shared"
@@ -91,6 +94,14 @@ func probeServer(host string) (shared.ConnectivityProbe, error) {
 		p.Reason = "cgnat"
 		return p, nil
 	}
+	if own := panelPublicIP(); own.IsValid() && own == ip {
+		// The server leaves the internet through the same address as this
+		// machine: it sits behind the same router (or the same carrier
+		// NAT), and the panel's packets to that address never reach it.
+		p.Recommended = shared.TransportTailscale
+		p.Reason = "same_nat"
+		return p, nil
+	}
 	p.PingOK, p.LatencyMs = icmpPing(ip.String())
 	switch {
 	case p.Class == shared.IPPrivate && !p.PingOK:
@@ -110,4 +121,34 @@ func probeServer(host string) (shared.ConnectivityProbe, error) {
 		}
 	}
 	return p, nil
+}
+
+// panelPublicIP is the address this machine reaches the internet from,
+// looked up once in a while. A var so tests can pin it.
+var panelPublicIP = func() netip.Addr {
+	ownIP.mu.Lock()
+	defer ownIP.mu.Unlock()
+	if time.Since(ownIP.at) < 10*time.Minute {
+		return ownIP.ip
+	}
+	ownIP.at = time.Now()
+	ownIP.ip = netip.Addr{}
+	client := &http.Client{Timeout: 4 * time.Second}
+	resp, err := client.Get("https://api.ipify.org")
+	if err != nil {
+		ownIP.at = time.Time{} // offline now; ask again next time
+		return ownIP.ip
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
+	if ip, err := netip.ParseAddr(strings.TrimSpace(string(b))); err == nil {
+		ownIP.ip = ip.Unmap()
+	}
+	return ownIP.ip
+}
+
+var ownIP struct {
+	mu sync.Mutex
+	at time.Time
+	ip netip.Addr
 }

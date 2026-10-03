@@ -26,6 +26,14 @@ The agent keeps the old panel URL for `WGSwitchFallback` (10 minutes) until
 `register_ack` arrives over WireGuard. Switch back:
 `POST /api/vps/{id}/wireguard/switch-tailscale`.
 
+Once the tunnel is confirmed (no fallback left), the panel may ask the agent
+to uninstall Tailscale from the host: `POST /api/transport/tailscale/remove`
+(through the agent proxy). It runs `tailscale logout` and removes the package
+(apt/dnf/yum/pacman/apk; otherwise disables `tailscaled`) and answers
+`{ok, output}`. While the switch is still on trial it answers 409. The
+migrate endpoint and the connectivity probe refuse a server whose public IP is
+the panel's own (`reason: "same_nat"`): it sits behind the same router.
+
 ## Agent ↔ Backend (WebSocket only)
 
 **No HTTP** for agent registration or metrics. The agent dials `GET /agent/ws`

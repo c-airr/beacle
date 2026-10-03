@@ -431,6 +431,8 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 		timeout = 3 * time.Minute
 	case strings.HasSuffix(path, "/exec"):
 		timeout = 45 * time.Second
+	case rest == "transport/tailscale/remove":
+		timeout = 4 * time.Minute // package removal on a slow mirror
 	case rest == "fs/delete":
 		timeout = 3 * time.Minute // recursive deletes of big trees
 	case strings.HasPrefix(rest, "fs/"):

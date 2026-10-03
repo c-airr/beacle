@@ -42,6 +42,9 @@ func wireGuardEndpoint(host string, port int) (string, error) {
 	case shared.IPLoopback, shared.IPInvalid:
 		return "", fmt.Errorf("%s is not a server address", ip)
 	}
+	if own := panelPublicIP(); own.IsValid() && own == ip {
+		return "", fmt.Errorf("%s is this computer's own internet address — the server is behind the same router, and the tunnel cannot reach it; keep it on Tailscale", ip)
+	}
 	if port == 0 {
 		port = shared.WGDefaultPort
 	}
