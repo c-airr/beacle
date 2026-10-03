@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -515,33 +516,12 @@ func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn, writeCh c
 			if msg.Command == nil {
 				continue
 			}
-			cmd := msg.Command
-			var body []byte
-			if len(cmd.Body) > 0 {
-				body = []byte(cmd.Body)
-			}
-			code, resp := c.api.Dispatch(cmd.Method, cmd.Path, body)
-			out, err := json.Marshal(shared.AgentWSMessage{
-				Type: shared.AgentWSCommandResult,
-				Result: &shared.AgentCommandResult{
-					RequestID:  cmd.RequestID,
-					StatusCode: code,
-					Body:       json.RawMessage(resp),
-				},
-			})
-			if err != nil {
-				continue
-			}
-			select {
-			case writeCh <- out:
-			case <-ctx.Done():
-				return ctx.Err() // session is finished; nobody is reading this
-			default:
-				log.Printf("ws write buffer full, dropping command result")
-			}
-			if isMutatingMethod(cmd.Method) && code >= 200 && code < 300 {
-				sync.RequestRefresh()
-			}
+			// Never run a command on this loop. It used to, and one slow
+			// route (an apt check, a docker call) stopped the loop from
+			// reading: pings went unanswered, the read deadline passed and
+			// the session dropped, while every file listing and keystroke
+			// queued behind it.
+			go c.runCommand(ctx, *msg.Command, writeCh, sync)
 		case shared.AgentWSPowerMode:
 			mode := msg.Mode
 			if mode == "" {
@@ -561,6 +541,84 @@ func (c *WSClient) readLoop(ctx context.Context, conn *websocket.Conn, writeCh c
 			shared.AgentWSPortsSnapshot, shared.AgentWSProxySnapshot:
 			// ignore agent-originated / stale
 		}
+	}
+}
+
+// cmdSlots caps commands running at once; a burst waits in its goroutine,
+// never on the read loop.
+var cmdSlots = make(chan struct{}, 16)
+
+// cmdLanes keeps changes within one feature in arrival order, the way they
+// ran when every command was sequential: two writes to the proxy config, or
+// a mkdir and the upload into it. Reads, and changes to different features,
+// run side by side.
+var cmdLanes = struct {
+	sync.Mutex
+	m map[string]*sync.Mutex
+}{m: map[string]*sync.Mutex{}}
+
+// commandLane names the feature a route belongs to: its first two segments
+// after /api ("fs/upload", "system/updates", "proxy/sites").
+func commandLane(p string) string {
+	if u, err := url.Parse(p); err == nil {
+		p = u.Path
+	}
+	parts := strings.Split(strings.TrimPrefix(p, "/api/"), "/")
+	if len(parts) > 2 {
+		parts = parts[:2]
+	}
+	return parts[0] + "/" + strings.Join(parts[1:], "/")
+}
+
+func laneLock(lane string) *sync.Mutex {
+	cmdLanes.Lock()
+	defer cmdLanes.Unlock()
+	l := cmdLanes.m[lane]
+	if l == nil {
+		l = &sync.Mutex{}
+		cmdLanes.m[lane] = l
+	}
+	return l
+}
+
+// runCommand executes one panel command and queues its result.
+func (c *WSClient) runCommand(ctx context.Context, cmd shared.AgentCommand, writeCh chan<- []byte, sync *SyncEngine) {
+	select {
+	case cmdSlots <- struct{}{}:
+		defer func() { <-cmdSlots }()
+	case <-ctx.Done():
+		return
+	}
+	if isMutatingMethod(cmd.Method) {
+		l := laneLock(commandLane(cmd.Path))
+		l.Lock()
+		defer l.Unlock()
+	}
+	var body []byte
+	if len(cmd.Body) > 0 {
+		body = []byte(cmd.Body)
+	}
+	code, resp := c.api.Dispatch(cmd.Method, cmd.Path, body)
+	out, err := json.Marshal(shared.AgentWSMessage{
+		Type: shared.AgentWSCommandResult,
+		Result: &shared.AgentCommandResult{
+			RequestID:  cmd.RequestID,
+			StatusCode: code,
+			Body:       json.RawMessage(resp),
+		},
+	})
+	if err != nil {
+		return
+	}
+	// Waiting is fine here, off the read loop; dropping a result left the
+	// panel spinning until its timeout.
+	select {
+	case writeCh <- out:
+	case <-ctx.Done():
+		return // session is finished; nobody is reading this
+	}
+	if isMutatingMethod(cmd.Method) && code >= 200 && code < 300 {
+		sync.RequestRefresh()
 	}
 }
 

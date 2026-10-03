@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,9 +20,11 @@ type linuxPTY struct {
 	cmd      *exec.Cmd
 }
 
-// loginShell picks root's shell, falling back to whatever exists.
+// loginShell picks the user's shell from /etc/passwd, then bash. Not $SHELL:
+// systemd sets it to /bin/sh for root whatever passwd says, and dash in a
+// terminal has no history, no arrow keys and no tab completion.
 func loginShell() string {
-	for _, sh := range []string{os.Getenv("SHELL"), "/bin/bash", "/bin/sh"} {
+	for _, sh := range []string{passwdShell(os.Getuid()), "/bin/bash", os.Getenv("SHELL"), "/bin/sh"} {
 		if sh == "" {
 			continue
 		}
@@ -29,6 +33,31 @@ func loginShell() string {
 		}
 	}
 	return "/bin/sh"
+}
+
+// passwdShell is the login shell /etc/passwd gives uid, or "".
+func passwdShell(uid int) string {
+	b, err := os.ReadFile("/etc/passwd")
+	if err != nil {
+		return ""
+	}
+	return passwdShellIn(string(b), uid)
+}
+
+func passwdShellIn(passwd string, uid int) string {
+	want := strconv.Itoa(uid)
+	for _, line := range strings.Split(passwd, "\n") {
+		f := strings.Split(strings.TrimSpace(line), ":")
+		if len(f) == 7 && f[2] == want {
+			// nologin and false are for service accounts, not a person at a
+			// terminal.
+			if strings.HasSuffix(f[6], "nologin") || strings.HasSuffix(f[6], "/false") {
+				return ""
+			}
+			return f[6]
+		}
+	}
+	return ""
 }
 
 // shellUser is who the shell runs as — the agent's own user (root under the

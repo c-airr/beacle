@@ -61,3 +61,15 @@ func TestRealShellRunsCommandsAndExits(t *testing.T) {
 		}
 	}
 }
+
+// systemd hands root SHELL=/bin/sh; the terminal must use passwd's shell.
+func TestPasswdShellIn(t *testing.T) {
+	passwd := "root:x:0:0:root:/root:/bin/bash\n" +
+		"daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n" +
+		"deploy:x:1000:1000::/home/deploy:/usr/bin/zsh\n"
+	for uid, want := range map[int]string{0: "/bin/bash", 1: "", 1000: "/usr/bin/zsh", 42: ""} {
+		if got := passwdShellIn(passwd, uid); got != want {
+			t.Errorf("uid %d: got %q, want %q", uid, got, want)
+		}
+	}
+}
