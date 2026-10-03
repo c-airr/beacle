@@ -15,6 +15,8 @@
 ;   * an AppUserModelID on the shortcut, so pinning to the taskbar sticks to
 ;     the shortcut instead of spawning a second, unpinnable button
 ;   * an Apps & Features entry that removes the install cleanly
+;   * an install over a running Beacle stops the app, its tool windows and its
+;     backend first, so no file is left locked and half-updated
 ;   * an uninstall that stops the running app and its backend first, then takes
 ;     %AppData%\Beacle with it
 
@@ -138,6 +140,20 @@ begin
     SetupMessage(msgWizardPreparing),
     'Beacle is being downloaded from GitHub.',
     nil);
+end;
+
+// Installing over a running Beacle: the window, its SSH/Files windows and the
+// backend (which outlives the window on purpose) all hold their .exe open, and
+// tar cannot replace a file in use — the update came out half old, half new.
+// Stop every one of them first; the new build starts its own backend.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM beacle.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM beacle-backend.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+  Result := '';
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;

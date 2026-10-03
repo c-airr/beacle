@@ -106,6 +106,17 @@ class AppUpdater {
     if (s.raw.remove(_suppressKey) != null) s.save();
   }
 
+  /// Batch lines that stop every Beacle process before files are swapped.
+  /// Closing the window leaves the backend running (it outlives the window
+  /// on purpose) and SSH/Files windows are processes of their own; any of
+  /// them holds its .exe open, robocopy cannot replace it, and by default it
+  /// retries every 30 seconds a million times — the update just hung. No /T:
+  /// this script's own cmd can be a child of a beacle.exe still exiting.
+  static const _stopAll = '''
+taskkill /F /IM beacle.exe >nul 2>&1
+taskkill /F /IM beacle-backend.exe >nul 2>&1
+timeout /t 1 /nobreak >nul''';
+
   /// Downloads the update and stages it; applied on next launch.
   static Future<String> downloadAndStage(UpdateInfo info) async {
     _versionsDir.createSync(recursive: true);
@@ -128,8 +139,9 @@ class AppUpdater {
     script.writeAsStringSync('''
 @echo off
 timeout /t 2 /nobreak >nul
-robocopy "$_installDir" "${_versionsDir.path}\\previous" /MIR /XD versions /XF apply-update.bat >nul
-robocopy "${stageDir.path}" "$_installDir" /E /XD versions >nul
+$_stopAll
+robocopy "$_installDir" "${_versionsDir.path}\\previous" /MIR /XD versions /XF apply-update.bat /R:5 /W:1 >nul
+robocopy "${stageDir.path}" "$_installDir" /E /XD versions /R:5 /W:1 >nul
 start "" "$_installDir\\beacle.exe"
 ''');
     return 'Update ${info.version} staged. Restart Beacle and run apply-update.bat, or click "Apply and restart".';
@@ -157,7 +169,8 @@ start "" "$_installDir\\beacle.exe"
     script.writeAsStringSync('''
 @echo off
 timeout /t 2 /nobreak >nul
-robocopy "${prev.path}" "$_installDir" /E /XD versions >nul
+$_stopAll
+robocopy "${prev.path}" "$_installDir" /E /XD versions /R:5 /W:1 >nul
 start "" "$_installDir\\beacle.exe"
 ''');
     await Process.start('cmd', ['/c', script.path], mode: ProcessStartMode.detached);

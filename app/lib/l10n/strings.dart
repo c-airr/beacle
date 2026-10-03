@@ -24,6 +24,16 @@ class L {
     params.forEach((k, v) => s = s.replaceAll('{$k}', '$v'));
     return s;
   }
+
+  /// "just now", "5m ago" — how long since [when], in this language.
+  String ago(DateTime when) {
+    final sec = DateTime.now().difference(when.toLocal()).inSeconds;
+    if (sec < 5) return t('agoNow');
+    if (sec < 60) return f('agoS', {'n': sec});
+    if (sec < 3600) return f('agoM', {'n': sec ~/ 60});
+    if (sec < 86400) return f('agoH', {'n': sec ~/ 3600});
+    return f('agoD', {'n': sec ~/ 86400});
+  }
 }
 
 extension LContext on BuildContext {
@@ -185,6 +195,15 @@ const _en = <String, String>{
   // cron + timers
   'edit': 'Edit',
   'delete': 'Delete',
+  'srvUpdated': 'updated {ago}',
+  'agoNow': 'just now',
+  'agoS': '{n}s ago',
+  'agoM': '{n}m ago',
+  'agoH': '{n}h ago',
+  'agoD': '{n}d ago',
+  'srvUpdateAgent': 'Update agent',
+  'srvRollback': 'Rollback',
+  'srvStatsHint': 'Exact host statistics — CPU cores, memory, disks, network.',
   'cronFilterHint': 'Filter jobs…',
   'cronLoadFailed': 'Could not load scheduled tasks.',
   'cronMine': "Root's crontab",
@@ -677,6 +696,15 @@ const _pl = <String, String>{
   // cron + timery
   'edit': 'Edytuj',
   'delete': 'Usuń',
+  'srvUpdated': 'odświeżono {ago}',
+  'agoNow': 'przed chwilą',
+  'agoS': '{n} s temu',
+  'agoM': '{n} min temu',
+  'agoH': '{n} godz. temu',
+  'agoD': '{n} dni temu',
+  'srvUpdateAgent': 'Aktualizuj agenta',
+  'srvRollback': 'Cofnij agenta',
+  'srvStatsHint': 'Dokładne statystyki hosta — rdzenie CPU, pamięć, dyski, sieć.',
   'cronFilterHint': 'Filtruj zadania…',
   'cronLoadFailed': 'Nie udało się wczytać zaplanowanych zadań.',
   'cronMine': 'Crontab roota',

@@ -76,7 +76,7 @@ class ServersScreenState extends State<ServersScreen> {
       children: [
         Container(
           width: 230,
-          color: BeacleColors.card,
+          color: BeacleColors.surface,
           child: Column(
             children: [
               Padding(
@@ -102,7 +102,8 @@ class ServersScreenState extends State<ServersScreen> {
                     spacing: 6,
                     runSpacing: 6,
                     children: [
-                      _tagChip(context, context.l.t('allTags'), tagFilter == null, () => setState(() => tagFilter = null)),
+                      _tagChip(
+                          context, context.l.t('allTags'), tagFilter == null, () => setState(() => tagFilter = null)),
                       for (final t in tags)
                         _tagChip(context, '#$t', tagFilter == t.toLowerCase(),
                             () => setState(() => tagFilter = tagFilter == t.toLowerCase() ? null : t.toLowerCase())),
@@ -175,9 +176,7 @@ class ServersScreenState extends State<ServersScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11, color: selected ? BeacleColors.text : BeacleColors.textDim)),
+        child: Text(label, style: TextStyle(fontSize: 11, color: selected ? BeacleColors.text : BeacleColors.textDim)),
       ),
     );
   }
@@ -258,55 +257,61 @@ class _ServerStats extends StatelessWidget {
     return SmoothListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
+        // A Wrap, not a Row: six buttons do not fit next to the name in a
+        // normal-sized window, and a Row just cut the last ones off.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 10,
           children: [
-            StatusDot(vps.status, size: 12),
-            const SizedBox(width: 10),
-            Text(vps.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 12),
-            Text(vps.host, style: const TextStyle(color: BeacleColors.textDim)),
-            const SizedBox(width: 12),
-            Text('updated ${fmtAgo(vps.lastSeen)}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-            const Spacer(),
-            SmallButton(context.l.t('sshConnectButton'),
-                icon: Icons.terminal,
-                onPressed: vps.online ? () => AppShell.of(context).openTerminal(vps.id) : null),
-            const SizedBox(width: 8),
-            SmallButton('Update agent', icon: Icons.system_update_alt, onPressed: () async {
-              try {
-                final r = await state.api.agentUpdate(vps.id);
-                if (context.mounted) showToast(context, r);
-              } catch (e) {
-                if (context.mounted) showToast(context, '$e', error: true);
-              }
-            }),
-            const SizedBox(width: 8),
-            SmallButton('Rollback', icon: Icons.history, onPressed: () async {
-              try {
-                final r = await state.api.agentRollback(vps.id);
-                if (context.mounted) showToast(context, r);
-              } catch (e) {
-                if (context.mounted) showToast(context, '$e', error: true);
-              }
-            }),
-            const SizedBox(width: 8),
-            SmallButton(context.l.t('reboot'), icon: Icons.restart_alt,
-                onPressed: vps.online ? () => showRebootDialog(context, vps, snap) : null),
-            const SizedBox(width: 8),
-            SmallButton(context.l.t('poweroff'), icon: Icons.power_settings_new_outlined,
-                onPressed: vps.online ? () => showPoweroffDialog(context, vps) : null),
-            const SizedBox(width: 8),
-            SmallButton('Delete', icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
-              if (!await confirmDeleteVps(context, vps)) return;
-              await state.api.deleteVps(vps.id);
-              await state.refreshAll();
-            }),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              StatusDot(vps.status, size: 12),
+              const SizedBox(width: 10),
+              Text(vps.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 12),
+              Text(vps.host, style: const TextStyle(color: BeacleColors.textDim)),
+              const SizedBox(width: 12),
+              Text(context.l.f('srvUpdated', {'ago': context.l.ago(vps.lastSeen)}),
+                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            ]),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              SmallButton(context.l.t('sshConnectButton'),
+                  icon: Icons.terminal, onPressed: vps.online ? () => AppShell.of(context).openTerminal(vps.id) : null),
+              SmallButton(context.l.t('srvUpdateAgent'), icon: Icons.system_update_alt, onPressed: () async {
+                try {
+                  final r = await state.api.agentUpdate(vps.id);
+                  if (context.mounted) showToast(context, r);
+                } catch (e) {
+                  if (context.mounted) showToast(context, '$e', error: true);
+                }
+              }),
+              SmallButton(context.l.t('srvRollback'), icon: Icons.history, onPressed: () async {
+                try {
+                  final r = await state.api.agentRollback(vps.id);
+                  if (context.mounted) showToast(context, r);
+                } catch (e) {
+                  if (context.mounted) showToast(context, '$e', error: true);
+                }
+              }),
+              SmallButton(context.l.t('reboot'),
+                  icon: Icons.restart_alt, onPressed: vps.online ? () => showRebootDialog(context, vps, snap) : null),
+              SmallButton(context.l.t('poweroff'),
+                  icon: Icons.power_settings_new_outlined,
+                  onPressed: vps.online ? () => showPoweroffDialog(context, vps) : null),
+              SmallButton(context.l.t('delete'), icon: Icons.delete_outline, color: BeacleColors.err,
+                  onPressed: () async {
+                if (!await confirmDeleteVps(context, vps)) return;
+                await state.api.deleteVps(vps.id);
+                await state.refreshAll();
+              }),
+            ]),
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Exact host statistics — CPU cores, memory, disks, network.',
-          style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+        Text(
+          context.l.t('srvStatsHint'),
+          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
         ),
         const SizedBox(height: 12),
         OsUpdatesBanner(vps: vps),
@@ -432,7 +437,8 @@ class _CpuSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${m.cpuPercent.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+          Text('${m.cpuPercent.toStringAsFixed(1)}%',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(
             '${m.cpuCores} cores · load ${m.load1.toStringAsFixed(2)}',
@@ -529,9 +535,8 @@ class _RamPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final usedCached = m.memUsedCachedBytes > 0 ? m.memUsedCachedBytes : m.memUsedBytes + m.memCachedBytes;
-    final pctCached = m.memPercentCached > 0
-        ? m.memPercentCached
-        : (m.memTotalBytes > 0 ? usedCached / m.memTotalBytes * 100 : 0.0);
+    final pctCached =
+        m.memPercentCached > 0 ? m.memPercentCached : (m.memTotalBytes > 0 ? usedCached / m.memTotalBytes * 100 : 0.0);
 
     return PanelCard(
       expand: true,
@@ -539,7 +544,8 @@ class _RamPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${m.memPercent.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+          Text('${m.memPercent.toStringAsFixed(1)}%',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(
             '${fmtBytes(m.memUsedBytes)} / ${fmtBytes(m.memTotalBytes)} used',

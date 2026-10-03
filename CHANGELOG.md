@@ -12,6 +12,10 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Added
 
+- **New look** — Beacle's own icon instead of Flutter's (window, taskbar,
+  tray, installer, macOS); the content sits in one rounded panel beside the
+  sidebar, with rounded cards, buttons, dialogs and fields and a larger page
+  title. The server header's buttons wrap instead of running off the edge.
 - **Move servers to WireGuard** — a banner (shown while any server is still
   on Tailscale, gone for good once closed) and Settings → WireGuard list
   every server with whether it can switch: offline, agent older than 2.0,
@@ -72,6 +76,10 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
+- Applying an update could hang or leave a half-updated install: closing the
+  window left the backend and any SSH/Files windows running, their files
+  stayed locked, and the copy retried for hours. "Apply and restart",
+  Rollback and the installer now stop every Beacle process first.
 - A server switched to WireGuard whose tunnel could not come up (e.g. one
   behind the panel's own router) took the Tailscale fallback as success,
   dropped it, and went offline for good at the next panel restart. Only a
