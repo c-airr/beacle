@@ -76,6 +76,11 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
+- OS updates looped: after "Update now" the same packages were offered again.
+  `apt-get upgrade` keeps back packages that need a new dependency (a new
+  kernel) — it now runs with `--with-new-pkgs`, still never removing
+  anything. Packages apt would still not install (phased Ubuntu rollouts,
+  conflicts) are listed as held back and no longer count as pending.
 - Applying an update could hang or leave a half-updated install: closing the
   window left the backend and any SSH/Files windows running, their files
   stayed locked, and the copy retried for hours. "Apply and restart",

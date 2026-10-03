@@ -260,6 +260,13 @@ class _OsUpdatesDialogState extends State<_OsUpdatesDialog> {
                   ),
                 ),
               ),
+            if (u.held.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                context.l.f('osHeld', {'n': u.held.length, 'names': u.held.map((p) => p.name).join(', ')}),
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4),
+              ),
+            ],
             if (running) ...[
               const SizedBox(height: 10),
               Row(children: [

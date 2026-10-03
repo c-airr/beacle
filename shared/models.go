@@ -295,6 +295,10 @@ type OSPackage struct {
 	Current  string `json:"current"`
 	Latest   string `json:"latest"`
 	Security bool   `json:"security"`
+	// Held: apt lists it as upgradable but an upgrade would not install it
+	// (a phased Ubuntu rollout, or it needs a package removed). Not counted
+	// as pending — upgrading again would not change anything.
+	Held bool `json:"held,omitempty"`
 }
 
 // OSUpdates is the pending system update state of a host.

@@ -184,6 +184,7 @@ const _en = <String, String>{
   // os updates
   'osUpdatesTitle': 'OS updates',
   'osUpToDate': 'System is up to date.',
+  'osHeld': 'Held back by apt ({n}): {names}. An upgrade will not install them — Ubuntu is rolling them out gradually, or they need another package removed. They arrive on their own in the coming days.',
   'osUpdatesAvailable': '{n} updates available ({s} security).',
   'osRebootRequired': 'Restart required.',
   'osDetails': 'Details',
@@ -685,6 +686,7 @@ const _pl = <String, String>{
   // aktualizacje systemu
   'osUpdatesTitle': 'Aktualizacje systemu',
   'osUpToDate': 'System jest aktualny.',
+  'osHeld': 'Wstrzymane przez apt ({n}): {names}. Aktualizacja ich nie zainstaluje — Ubuntu wydaje je stopniowo albo wymagają usunięcia innej paczki. Przyjdą same w kolejnych dniach.',
   'osUpdatesAvailable': 'Dostępnych aktualizacji: {n} (w tym bezpieczeństwa: {s}).',
   'osRebootRequired': 'Wymagany restart.',
   'osDetails': 'Szczegóły',

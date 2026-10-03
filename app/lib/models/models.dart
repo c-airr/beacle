@@ -456,25 +456,38 @@ class SystemLogFile {
 class OSPackage {
   final String name, current, latest;
   final bool security;
+
+  /// Listed as upgradable, but an upgrade would not install it (a phased
+  /// rollout, or it needs another package removed).
+  final bool held;
   OSPackage.fromJson(Map<String, dynamic> j)
       : name = _s(j['name']),
         current = _s(j['current']),
         latest = _s(j['latest']),
-        security = _b(j['security']);
+        security = _b(j['security']),
+        held = _b(j['held']);
 }
 
 /// Pending system updates of a host.
 class OSUpdates {
   final String manager, checkedAt;
+  /// What an upgrade would install. Held packages are kept apart: counting
+  /// them offered an upgrade that changed nothing, again and again.
   final List<OSPackage> packages;
+  final List<OSPackage> held;
   final int securityCount;
   final bool rebootRequired;
+  OSUpdates._(this.manager, this.checkedAt, List<OSPackage> all, this.securityCount, this.rebootRequired)
+      : packages = all.where((p) => !p.held).toList(),
+        held = all.where((p) => p.held).toList();
   OSUpdates.fromJson(Map<String, dynamic> j)
-      : manager = _s(j['manager']),
-        checkedAt = _s(j['checked_at']),
-        packages = _list(j['packages'], OSPackage.fromJson),
-        securityCount = _i(j['security_count']),
-        rebootRequired = _b(j['reboot_required']);
+      : this._(
+          _s(j['manager']),
+          _s(j['checked_at']),
+          _list(j['packages'], OSPackage.fromJson),
+          _i(j['security_count']),
+          _b(j['reboot_required']),
+        );
 }
 
 /// A background `upgrade -y` run.

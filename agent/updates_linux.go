@@ -52,7 +52,7 @@ func runCmd(timeout time.Duration, name string, args ...string) (string, error) 
 	defer cancel()
 	// LC_ALL=C keeps parsing stable regardless of the VPS locale.
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "DEBIAN_FRONTEND=noninteractive")
 	out, err := cmd.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {
 		return string(out), fmt.Errorf("%s timed out", name)
@@ -141,12 +141,35 @@ func aptUpdates() (shared.OSUpdates, error) {
 			Security: aptIsSecurity(name, latest),
 		})
 	}
+	// Ask apt what an upgrade would really install. Whatever it would leave
+	// behind is held, or the panel offers an upgrade that changes nothing,
+	// forever.
+	if sim, err := runCmd(2*time.Minute, "apt-get", "-s", "-o", "Debug::NoLocking=1",
+		"upgrade", "--with-new-pkgs"); err == nil {
+		would := aptSimulatedInstalls(sim)
+		for i := range res.Packages {
+			res.Packages[i].Held = !would[res.Packages[i].Name]
+		}
+	}
 	for _, p := range res.Packages {
-		if p.Security {
+		if p.Security && !p.Held {
 			res.SecurityCount++
 		}
 	}
 	return res, nil
+}
+
+// aptSimulatedInstalls reads `apt-get -s upgrade`: one "Inst name [old] (new
+// ...)" line per package the upgrade would install.
+func aptSimulatedInstalls(out string) map[string]bool {
+	m := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 2 && f[0] == "Inst" {
+			m[f[1]] = true
+		}
+	}
+	return m
 }
 
 // aptIsSecurity checks whether the candidate version comes from a -security
@@ -271,7 +294,10 @@ func (c *linuxCollector) OSUpdateApply() error {
 		var out string
 		var code int
 		if mgr == "apt" {
-			o, err := runCmd(60*time.Minute, "apt-get", "upgrade", "-y",
+			// --with-new-pkgs: a package that needs a new dependency (the next
+			// kernel, a split library) is installed instead of kept back. It
+			// still never removes anything; what needs that stays held.
+			o, err := runCmd(60*time.Minute, "apt-get", "upgrade", "-y", "--with-new-pkgs",
 				"-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold")
 			out = o
 			if err != nil {
