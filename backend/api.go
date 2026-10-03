@@ -468,11 +468,24 @@ func (s *Server) handleAgentProxy(w http.ResponseWriter, r *http.Request) {
 		if isFS && ok {
 			detail = fsTarget(bodyBytes) // which file, not the echoed entry
 		}
+		if strings.HasPrefix(rest, "ssh/") {
+			detail = tempLoginUser(respBody) // the answer carries the password
+		}
 		s.logAction(entry.VPS, r.Method+" "+path, detail, ok)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_, _ = w.Write(respBody)
+}
+
+// tempLoginUser names the account a temporary SSH login call created, for the
+// action log — never the rest of the answer, which holds its password.
+func tempLoginUser(resp []byte) string {
+	var l shared.TempLogin
+	if json.Unmarshal(resp, &l) != nil {
+		return ""
+	}
+	return l.User
 }
 
 // fsTarget names the file an fs/* request touched, for the action log.

@@ -203,6 +203,29 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, map[string]any{"ok": true})
 	}))
+	mux.HandleFunc("POST /api/ssh/temp-logins", a(func(w http.ResponseWriter, r *http.Request) {
+		var req shared.TempLoginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		login, err := createTempLogin(req)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, login)
+	}))
+	mux.HandleFunc("GET /api/ssh/temp-logins", a(func(w http.ResponseWriter, r *http.Request) {
+		jsonOut(w, 200, listTempLogins())
+	}))
+	mux.HandleFunc("DELETE /api/ssh/temp-logins/{user}", a(func(w http.ResponseWriter, r *http.Request) {
+		if err := deleteTempLogin(r.PathValue("user")); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"ok": true})
+	}))
 	mux.HandleFunc("GET /api/firewall/status", a(func(w http.ResponseWriter, r *http.Request) {
 		st, err := s.col.FirewallStatus()
 		if err != nil {

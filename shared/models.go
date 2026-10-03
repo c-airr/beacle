@@ -422,6 +422,26 @@ type FirewallDryRunRequest struct {
 	ID     string            `json:"id,omitempty"`   // delete
 }
 
+// TempLoginRequest asks the agent for a throwaway SSH account, so a person
+// can use their own SSH client without being handed root's credentials.
+type TempLoginRequest struct {
+	Minutes int  `json:"minutes"`
+	Sudo    bool `json:"sudo"`
+}
+
+// TempLogin is one throwaway SSH account. The agent deletes it, its home and
+// its processes at ExpiresAt.
+type TempLogin struct {
+	User      string    `json:"user"`
+	Password  string    `json:"password,omitempty"` // only in the answer that created it
+	Sudo      bool      `json:"sudo"`
+	Port      int       `json:"port"`
+	ExpiresAt time.Time `json:"expires_at"`
+	// Warning: sshd settings that may still refuse the login (AllowUsers,
+	// no Include of sshd_config.d). Empty when sshd will take the password.
+	Warning string `json:"warning,omitempty"`
+}
+
 // RebootRequest asks the agent to reboot, optionally snapshotting sessions.
 type RebootRequest struct {
 	Restore bool `json:"restore"`

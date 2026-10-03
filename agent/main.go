@@ -54,6 +54,9 @@ func main() {
 	// sleeps to let the system settle, and must not delay connecting.
 	go maybeRestoreSessions(col)
 	go ensureWireGuardPort(cfg)
+	// Deletes temporary SSH logins as they expire, including any left over
+	// from before a restart.
+	go tempLoginReaper()
 	api := &APIServer{cfg: cfg, col: col, proxy: proxy, upd: updater, files: &FileManager{root: defaultFilesRoot()}}
 	// Automatic updates are parked — see AutoUpdateLoop in updater.go. The agent
 	// only replaces its own binary when someone presses Update.

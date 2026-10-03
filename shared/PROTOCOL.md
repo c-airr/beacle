@@ -105,6 +105,11 @@ user action, wysokie CPU itd.) są pushowane natychmiast — nie czekamy na tick
 }
 ```
 
+Commands run concurrently on the agent (2.0), each off the read loop; mutating
+commands within one feature (the first two path segments after `/api`, e.g.
+`fs/upload`) still run in arrival order. Answers can come back out of order —
+match them by `request_id`.
+
 Returning agents may send `Authorization: Bearer <token>` on the WebSocket upgrade.
 First-time agents connect without a token and register via the `register` frame.
 
@@ -177,6 +182,19 @@ New in 1.2:
   - `"disable_files": true` in the agent's `config.json` turns all of this
     off (403).
   - `GET /api/fs/list` stays as the screen launcher's picker (no dotfiles).
+- Temporary SSH logins (2.0), for a person's own SSH client instead of root's
+  credentials:
+  - `POST /api/ssh/temp-logins` `{"minutes","sudo"}` → `TempLogin` with
+    `user` (`beacle-xxxxxx`), `password` (only in this answer — the backend
+    logs the user name, never the body), `port` and `expires_at`. 5 min to
+    24 h. `sudo` asks for the same password. `warning` names sshd settings
+    that may still refuse it (AllowUsers, no `sshd_config.d` include).
+  - `GET /api/ssh/temp-logins`, `DELETE /api/ssh/temp-logins/{user}`.
+  - sshd gets `/etc/ssh/sshd_config.d/90-beacle-temp-logins.conf` with
+    `Match User <those accounts>` → `PasswordAuthentication yes`, validated
+    with `sshd -t` before any reload, removed with the last login. Expired
+    accounts are killed and deleted with their home every 30 s; only accounts
+    with the agent's GECOS marker are ever deleted.
 
 ## UI → Backend
 
