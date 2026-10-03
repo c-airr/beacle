@@ -69,24 +69,3 @@ func (s *APIServer) handleTransportStatus(w http.ResponseWriter, r *http.Request
 func (s *APIServer) handlePublicIPs(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, http.StatusOK, map[string]string{"public_ip": fetchPublicIP()})
 }
-
-// handleRemoveTailscale uninstalls Tailscale from the host for a server that
-// has moved to WireGuard and no longer needs it. Only once the tunnel is
-// confirmed: while the switch is on trial, Tailscale is the way back.
-func (s *APIServer) handleRemoveTailscale(w http.ResponseWriter, r *http.Request) {
-	var ready bool
-	_ = transport.update(s.cfg, func(c *Config) bool {
-		ready = c.IsWireGuard() && c.FallbackBackendURL == ""
-		return false
-	})
-	if !ready {
-		jsonErr(w, http.StatusConflict, "WireGuard is not confirmed on this server yet — Tailscale is still its way back to the panel")
-		return
-	}
-	out, err := removeTailscale(r.Context())
-	if err != nil {
-		jsonOut(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "output": out})
-		return
-	}
-	jsonOut(w, http.StatusOK, map[string]any{"ok": true, "output": out})
-}

@@ -83,7 +83,6 @@ func (s *APIServer) Routes() http.Handler {
 	// system
 	mux.HandleFunc("POST /api/transport/wireguard", a(s.handleTransportWireGuard))
 	mux.HandleFunc("POST /api/transport/tailscale", a(s.handleTransportTailscale))
-	mux.HandleFunc("POST /api/transport/tailscale/remove", a(s.handleRemoveTailscale))
 	mux.HandleFunc("GET /api/transport/status", a(s.handleTransportStatus))
 	mux.HandleFunc("GET /api/system/public-ips", a(s.handlePublicIPs))
 
