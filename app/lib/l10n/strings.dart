@@ -540,6 +540,15 @@ const _en = <String, String>{
   'fsUnsavedBody': 'Close the editor and lose your changes?',
   'fsDiscard': 'Discard',
   'fsEditorHint': 'Ctrl+S saves. Saving is atomic and keeps the owner and permissions of the file.',
+  'fsUploadTitle': 'Upload files',
+  'fsUploadFiles': 'Files from this computer',
+  'fsUploadNoFiles': 'Nothing picked yet.',
+  'fsUploadPick': 'Pick files…',
+  'fsUploadServer': 'Server',
+  'fsUploadDest': 'Destination folder',
+  'fsUploadN': 'Upload {n} files',
+  'fsUploaded': 'Uploaded ({n}) to {dir}',
+  'fsNotFound': 'No such file or folder: {error}',
 };
 
 const _pl = <String, String>{
@@ -1042,6 +1051,15 @@ const _pl = <String, String>{
   'fsUnsavedBody': 'Zamknąć edytor i stracić zmiany?',
   'fsDiscard': 'Odrzuć',
   'fsEditorHint': 'Ctrl+S zapisuje. Zapis jest atomowy i zachowuje właściciela oraz uprawnienia pliku.',
+  'fsUploadTitle': 'Wyślij pliki',
+  'fsUploadFiles': 'Pliki z tego komputera',
+  'fsUploadNoFiles': 'Nic jeszcze nie wybrano.',
+  'fsUploadPick': 'Wybierz pliki…',
+  'fsUploadServer': 'Serwer',
+  'fsUploadDest': 'Folder docelowy',
+  'fsUploadN': 'Wyślij ({n})',
+  'fsUploaded': 'Wysłano ({n}) do {dir}',
+  'fsNotFound': 'Nie ma takiego pliku ani folderu: {error}',
 };
 
 const _table = <AppLanguage, Map<String, String>>{

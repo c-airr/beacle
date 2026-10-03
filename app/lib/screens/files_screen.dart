@@ -13,6 +13,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/file_editor.dart';
+import '../widgets/upload_dialog.dart';
 
 /// Upload chunk size. Base64 inflates it by a third and the whole thing rides
 /// one JSON frame through the agent tunnel, so stay well under the agent's
@@ -51,6 +52,10 @@ class _FilesScreenState extends State<FilesScreen> {
   bool showHidden = false;
   String filter = '';
   _Transfer? transfer;
+
+  /// Numbers listing requests; an answer to anything but the latest is
+  /// dropped, or a slow reply lands on top of the folder you clicked into.
+  int _seq = 0;
   final _pathField = TextEditingController();
 
   ApiClient get _api => context.read<AppState>().api;
@@ -63,13 +68,14 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Future<void> _open(String vpsId, String path) async {
     context.read<AppState>().bumpActivity();
+    final seq = ++_seq;
     setState(() {
       loading = true;
       error = null;
     });
     try {
       final l = await _api.fsDir(vpsId, path, hidden: showHidden);
-      if (!mounted || selectedId != vpsId) return;
+      if (!mounted || selectedId != vpsId || seq != _seq) return;
       setState(() {
         listing = l;
         _listingVps = vpsId;
@@ -78,10 +84,10 @@ class _FilesScreenState extends State<FilesScreen> {
         loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _seq) return;
       setState(() {
         loading = false;
-        error = e is ApiException && e.status == 404 ? context.l.t('fsNotSupported') : '$e';
+        error = fsErrorText(L.read(context), e);
         // Keep the old listing for this host only; another host's would lie.
         if (_listingVps != vpsId) listing = null;
       });
@@ -249,18 +255,13 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  Future<void> _upload(String vpsId, String dir) async {
+  Future<void> _upload(String currentVps, String currentDir) async {
     if (transfer != null) return;
-    final List<String> paths;
-    try {
-      paths = await NativeDialogs.openFiles();
-    } catch (err) {
-      if (mounted) showToast(context, '$err', error: true);
-      return;
-    }
-    if (paths.isEmpty || !mounted) return;
-    final files = [for (final p in paths) File(p)];
-    final names = {for (final e in listing?.entries ?? const <FsEntry>[]) e.name};
+    final plan = await showUploadDialog(context, vpsId: currentVps, dir: currentDir);
+    if (plan == null || !mounted) return;
+    final vpsId = plan.vpsId, dir = plan.dir;
+    final files = [for (final p in plan.files) File(p)];
+    final names = plan.existing;
     for (final f in files) {
       if (!mounted) return;
       var overwrite = false;
@@ -284,7 +285,13 @@ class _FilesScreenState extends State<FilesScreen> {
       }
       if (!await _uploadOne(vpsId, f, _join(dir, name), overwrite)) break;
     }
-    await _reload();
+    if (!mounted) return;
+    // Show where the files went, even on another server or folder.
+    if (vpsId == selectedId && dir == listing?.path) {
+      await _reload();
+    } else {
+      showToast(context, context.l.f('fsUploaded', {'n': files.length, 'dir': dir}));
+    }
   }
 
   /// Returns false when the user cancelled or it failed, which stops a batch.

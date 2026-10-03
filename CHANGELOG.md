@@ -76,6 +76,18 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
+- A slow command (an apt check, a docker call) froze the whole connection to
+  that server: the agent ran commands one at a time on the loop that reads
+  from the panel, so pings went unanswered and the server dropped offline,
+  while file listings and terminal keystrokes waited behind it. Commands run
+  side by side now; changes to the same feature still run in order.
+- The SSH terminal opened `/bin/sh` instead of the user's shell (systemd sets
+  `SHELL=/bin/sh` for root): no history, arrow keys or tab completion. It
+  uses the shell from `/etc/passwd` now.
+- Files: a folder that does not exist was reported as "agent too old", and a
+  slow listing could land on top of the folder clicked into after it.
+- Files: Upload opens a dialog — pick files, choose the server from a list
+  and click through to the destination folder.
 - OS updates looped: after "Update now" the same packages were offered again.
   `apt-get upgrade` keeps back packages that need a new dependency (a new
   kernel) — it now runs with `--with-new-pkgs`, still never removing
