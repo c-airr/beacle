@@ -12,6 +12,15 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Added
 
+- **Move servers to WireGuard** — a banner (shown while any server is still
+  on Tailscale, gone for good once closed) and Settings → WireGuard list
+  every server with whether it can switch: offline, agent older than 2.0,
+  behind carrier NAT, or behind the same router as this computer are
+  explained instead of attempted. Tick servers and press Switch; each one is
+  tested and goes straight back to Tailscale if the tunnel is not up within
+  2 minutes. No address to type. Tailscale itself stays installed on the
+  server — Beacle only stops using it. Servers on WireGuard are listed with
+  "Switch back to Tailscale".
 - **WireGuard port opens itself** — when a server is installed with
   WireGuard or switched to it from the panel, the agent allows UDP 51931 in
   the server's own firewall, whichever it uses: ufw, firewalld or iptables
@@ -68,8 +77,8 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
   dropped it, and went offline for good at the next panel restart. Only a
   connection through the tunnel confirms the switch now, and "Switch back
   to Tailscale" works even while the agent is offline.
-- The "move to WireGuard" banner is gone for now; the switch is still in
-  each server's settings.
+- Settings were half in English with Polish selected; the General, Updates
+  and Status tabs are translated now.
 - Firewall tab failed with "iptables: exit status 2" on servers using plain
   iptables.
 

@@ -19,6 +19,7 @@ import '../update/agent_updater.dart';
 import '../update/app_updater.dart';
 import '../user_config.dart';
 import '../widgets/common.dart';
+import '../widgets/wg_switch.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -43,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   bool agentPickerBusy = false;
   bool agentUpdatingAll = false;
 
-  late final TabController _tabs = TabController(length: 4, vsync: this);
+  late final TabController _tabs = TabController(length: 5, vsync: this);
   bool? autostartOn;
 
   // Notifications tab
@@ -125,6 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               Tab(text: context.l.t('setUpdates')),
               Tab(text: context.l.t('setStatus')),
               Tab(text: context.l.t('setNotify')),
+              Tab(text: context.l.t('setWireGuard')),
             ],
           ),
         ),
@@ -136,6 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               _updatesTab(state),
               _statusTab(state),
               _notifyTab(state),
+              _wireGuardTab(state),
             ],
           ),
         ),
@@ -148,18 +151,17 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       padding: const EdgeInsets.all(20),
       children: [
         PanelCard(
-          title: 'APPEARANCE',
+          title: context.l.t('stAppearance'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // One option each for now, but presented as choices: the point of
               // a picker is that it says what the alternatives will be.
               _choice(
-                label: 'Theme',
-                detail: 'The palette is compiled in as constants, so a light theme is a rework '
-                    'of every screen rather than a flag.',
+                label: context.l.t('stTheme'),
+                detail: context.l.t('stThemeDetail'),
                 value: 'dark',
-                options: const {'dark': 'Dark'},
+                options: {'dark': context.l.t('stDark')},
                 onChanged: (_) {},
               ),
               const Divider(height: 24),
@@ -191,19 +193,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
         const SizedBox(height: 16),
         PanelCard(
-          title: 'STARTUP',
+          title: context.l.t('stStartup'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!Autostart.supported)
-                const Text(
-                  'Launch at login is only wired up for Windows.',
-                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                Text(
+                  context.l.t('stAutostartWinOnly'),
+                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
                 )
               else ...[
                 _toggle(
-                  label: 'Start Beacle when I sign in',
-                  detail: 'Registers this executable under the current user — no admin rights needed.',
+                  label: context.l.t('stAutostart'),
+                  detail: context.l.t('stAutostartDetail'),
                   value: autostartOn ?? false,
                   enabled: autostartOn != null,
                   onChanged: (v) async {
@@ -212,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     if (!mounted) return;
                     setState(() => autostartOn = now);
                     if (!ok && now != v) {
-                      showToast(context, 'Could not change the autostart entry', error: true);
+                      showToast(context, L.read(context).t('stAutostartFail'), error: true);
                     }
                   },
                 ),
@@ -223,9 +225,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   Padding(
                     padding: const EdgeInsets.only(left: 18),
                     child: _toggle(
-                      label: 'Start minimised to the tray',
-                      detail: 'Beacle comes up in the tray instead of on screen. Alerts and sounds '
-                          'still arrive; it just does not take the foreground.',
+                      label: context.l.t('stStartMin'),
+                      detail: context.l.t('stStartMinDetail'),
                       value: state.startMinimised,
                       enabled: Tray.supported,
                       // The flag lives in the autostart command, so the entry is
@@ -243,31 +244,29 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
         const SizedBox(height: 16),
         PanelCard(
-          title: 'TRAY',
+          title: context.l.t('stTray'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _choice(
-                label: 'When I close the window',
-                detail: 'Closing to the tray leaves the backend running, so agents stay connected '
-                    'and alerts keep arriving.',
+                label: context.l.t('stCloseLabel'),
+                detail: context.l.t('stCloseDetail'),
                 value: state.closeBehaviour,
-                options: const {'tray': 'Minimise to tray', 'quit': 'Close the app'},
+                options: {'tray': context.l.t('stCloseTray'), 'quit': context.l.t('stCloseQuit')},
                 onChanged: state.setCloseBehaviour,
                 enabled: Tray.supported,
               ),
               if (!Tray.supported) ...[
                 const SizedBox(height: 12),
-                const Text(
-                  'The tray is only built for Windows so far. On macOS and Linux the window '
-                  'closes the app.',
-                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
+                Text(
+                  context.l.t('stTrayWinOnly'),
+                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
                 ),
               ] else ...[
                 const SizedBox(height: 12),
-                const Text(
-                  'Right-click the tray icon for Show and Quit; double-click brings the window back.',
-                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
+                Text(
+                  context.l.t('stTrayHint'),
+                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
                 ),
               ],
             ],
@@ -355,15 +354,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       padding: const EdgeInsets.all(20),
       children: [
         PanelCard(
-          title: 'DESKTOP APP UPDATES',
+          title: context.l.t('stDesktopUpdates'),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Current version: $appVersion', style: const TextStyle(fontSize: 13)),
+            Text(context.l.f('stCurrentVersion', {'v': appVersion}), style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 4),
             Text(
               AppUpdater.selfUpdateSupported
-                  ? 'Updates are fetched from GitHub Releases. Your settings are never overwritten.'
-                  : 'Updates are published on GitHub Releases. Installing them in place is '
-                      'Windows-only for now — download the new build and replace this one.',
+                  ? context.l.t('stUpdatesFrom')
+                  : context.l.t('stUpdatesManual'),
               style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
             const SizedBox(height: 14),
@@ -376,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SmallButton('Check for updates', icon: Icons.search, onPressed: checking || downloading ? null : () async {
+                SmallButton(context.l.t('stCheckUpdates'), icon: Icons.search, onPressed: checking || downloading ? null : () async {
                   setState(() {
                     checking = true;
                     updateStatus = null;
@@ -386,11 +384,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     setState(() {
                       available = info;
                       updateStatus = info == null
-                          ? 'You are on the latest version.'
-                          : 'Version ${info.version} is available.';
+                          ? L.read(context).t('stLatest')
+                          : L.read(context).f('stVersionAvailable', {'v': info.version});
                     });
                   } catch (e) {
-                    setState(() => updateStatus = 'Update check failed: $e');
+                    setState(() => updateStatus = L.read(context).f('stCheckFailed', {'e': e}));
                   } finally {
                     setState(() => checking = false);
                   }
@@ -430,16 +428,17 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 // button that stages an update this platform cannot apply
                 // fails at the worst possible moment.
                 if (available != null && AppUpdater.selfUpdateSupported)
-                  SmallButton('Update', icon: Icons.system_update, color: BeacleColors.ok, onPressed: downloading ? null : () async {
+                  SmallButton(context.l.t('stUpdate'), icon: Icons.system_update, color: BeacleColors.ok, onPressed: downloading ? null : () async {
                     setState(() {
                       downloading = true;
                       updateStatus = null;
                     });
                     try {
-                      final msg = await AppUpdater.downloadAndStage(available!);
+                      await AppUpdater.downloadAndStage(available!);
+                      if (!mounted) return;
                       setState(() {
                         staged = available;
-                        updateStatus = msg;
+                        updateStatus = L.read(context).f('stStaged', {'v': staged!.version});
                       });
                     } catch (e) {
                       setState(() => updateStatus = '$e');
@@ -448,7 +447,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     }
                   }),
                 if (staged != null)
-                  SmallButton('Apply and restart', icon: Icons.restart_alt, color: BeacleColors.ok, onPressed: () async {
+                  SmallButton(context.l.t('stApply'), icon: Icons.restart_alt, color: BeacleColors.ok, onPressed: () async {
                     try {
                       await AppUpdater.applyAndRestart();
                     } catch (e) {
@@ -456,14 +455,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     }
                   }),
                 if (hasPrev)
-                  SmallButton('Rollback', icon: Icons.history, color: BeacleColors.warn, onPressed: () async {
+                  SmallButton(context.l.t('stRollback'), icon: Icons.history, color: BeacleColors.warn, onPressed: () async {
                     try {
                       await AppUpdater.rollbackAndRestart();
                     } catch (e) {
                       setState(() => updateStatus = '$e');
                     }
                   }),
-                SmallButton('Choose version…', icon: Icons.list_alt, onPressed: downloading ? null : _pickDesktopVersion),
+                SmallButton(context.l.t('stChooseVersion'), icon: Icons.list_alt, onPressed: downloading ? null : _pickDesktopVersion),
               ],
             ),
             if (checking || downloading)
@@ -480,11 +479,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
         const SizedBox(height: 16),
         PanelCard(
-          title: 'AGENT UPDATES',
+          title: context.l.t('stAgentUpdates'),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text(
-              'Agent updates are pulled from the GitHub release on demand. Press "Check for updates" to compare your agents against the latest release — Update buttons appear only when a newer agent actually exists. Agent config files are never overwritten.',
-              style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+            Text(
+              context.l.t('stAgentUpdatesBody'),
+              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -492,7 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SmallButton('Check for updates', icon: Icons.search,
+                SmallButton(context.l.t('stCheckUpdates'), icon: Icons.search,
                     onPressed: agentChecking ? null : () => _checkAgentUpdates(state)),
                 if (agentLatest != null) _latestAgentChip(agentLatest!),
                 // Only once a check has proved there is something to install,
@@ -501,8 +500,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 if (_agentsNeedingUpdate(state).length > 1)
                   SmallButton(
                     agentUpdatingAll
-                        ? 'Updating all…'
-                        : 'Update all (${_agentsNeedingUpdate(state).length})',
+                        ? context.l.t('stUpdatingAll')
+                        : context.l.f('stUpdateAllN', {'n': _agentsNeedingUpdate(state).length}),
                     icon: Icons.system_update_alt,
                     color: BeacleColors.ok,
                     onPressed: agentUpdatingAll || agentChecking
@@ -524,7 +523,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ),
             const SizedBox(height: 12),
             if (state.vpsList.isEmpty)
-              const Text('No VPS yet — add one in the VPS tab.', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
+              Text(context.l.t('stNoVps'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
             else
               for (final v in state.vpsList)
                 Padding(
@@ -540,14 +539,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                           style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                       if (_agentUpdateAvailable(v))
                         SmallButton(
-                          agentUpdating.contains(v.id) ? 'Updating…' : 'Update',
+                          agentUpdating.contains(v.id) ? context.l.t('stUpdating') : context.l.t('stUpdate'),
                           icon: Icons.system_update_alt,
                           color: BeacleColors.ok,
                           onPressed: !v.online || agentUpdating.contains(v.id)
                               ? null
                               : () => _updateAgent(state, v, null),
                         ),
-                      SmallButton('Choose version…', icon: Icons.list_alt,
+                      SmallButton(context.l.t('stChooseVersion'), icon: Icons.list_alt,
                           onPressed: !v.online || agentPickerBusy ? null : () => _pickAgentVersion(state, v)),
                     ],
                   ),
@@ -561,8 +560,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   /// Chip next to "Check for updates" showing what GitHub currently offers.
   Widget _latestAgentChip(AgentReleaseInfo info) {
     final label = info.version != null
-        ? 'latest: v${info.version}'
-        : 'latest build: ${info.publishedAt?.toLocal().toString().substring(0, 16) ?? info.tag}';
+        ? context.l.f('stLatestChip', {'v': info.version})
+        : context.l.f('stLatestBuildChip', {'d': info.publishedAt?.toLocal().toString().substring(0, 16) ?? info.tag});
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -620,7 +619,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       final info = await AgentUpdater.latestAgentRelease();
       if (!mounted) return;
       if (info == null) {
-        setState(() => agentUpdateStatus = 'Could not read the agent release from GitHub.');
+        setState(() => agentUpdateStatus = L.read(context).t('stAgentReadFail'));
         return;
       }
       // A release newer than the one the user walked away from makes the
@@ -631,27 +630,26 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           AppUpdater.isNewer(info.version!, suppressed)) {
         AgentUpdater.clearSuppression();
       }
+      final l = L.read(context);
       setState(() {
         agentLatest = info;
         final outdated = state.vpsList.where(_agentUpdateAvailable).length;
         if (info.version == null) {
           agentUpdateStatus =
-              'Latest build published ${info.publishedAt?.toLocal().toString().substring(0, 16) ?? 'unknown'} — '
-              'no VERSION asset on the release, so agents cannot be compared by version.';
+              l.f('stNoVersionAsset', {'d': info.publishedAt?.toLocal().toString().substring(0, 16) ?? '?'});
         } else if (outdated == 0) {
-          agentUpdateStatus = 'All agents are up to date (v${info.version}).';
+          agentUpdateStatus = l.f('stAgentsCurrent', {'v': info.version});
         } else {
-          agentUpdateStatus = 'Agent v${info.version} is available for $outdated VPS.';
+          agentUpdateStatus = l.f('stAgentAvailable', {'v': info.version, 'n': outdated});
         }
         // Worth saying out loud which question was answered: a digest match is
         // certainty about the bytes, a version match is a claim about a label.
         if (info.digests.isEmpty) {
-          agentUpdateStatus = '${agentUpdateStatus!} Compared by version — the '
-              'release carries no asset digest.';
+          agentUpdateStatus = '${agentUpdateStatus!} ${l.t('stNoDigest')}';
         }
       });
     } catch (e) {
-      if (mounted) setState(() => agentUpdateStatus = 'Agent update check failed: $e');
+      if (mounted) setState(() => agentUpdateStatus = L.read(context).f('stAgentCheckFailed', {'e': e}));
     } finally {
       if (mounted) setState(() => agentChecking = false);
     }
@@ -667,7 +665,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Future<void> _updateAllAgents(AppState state) async {
     final targets = _agentsNeedingUpdate(state);
     if (targets.isEmpty) {
-      showToast(context, 'Every agent is already up to date.');
+      showToast(context, L.read(context).t('stAllCurrentToast'));
       return;
     }
 
@@ -675,7 +673,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: BeacleColors.surface,
-        title: const Text('Update all agents?', style: TextStyle(fontSize: 15)),
+        title: Text(ctx.l.t('stUpdateAllTitle'), style: const TextStyle(fontSize: 15)),
         content: SizedBox(
           width: 380,
           child: Column(
@@ -683,9 +681,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${targets.length} agent${targets.length == 1 ? '' : 's'} will be updated one '
-                'after another. Each restarts as it finishes, so servers drop off the panel '
-                'briefly and come back on their own.',
+                ctx.l.f('stUpdateAllBody', {'n': targets.length}),
                 style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
               ),
               const SizedBox(height: 10),
@@ -699,10 +695,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.t('cancel'))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Update all'),
+            child: Text(ctx.l.t('stUpdateAll')),
           ),
         ],
       ),
@@ -733,8 +729,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     showToast(
       context,
       failed == 0
-          ? 'Updated $done agent${done == 1 ? '' : 's'} — they are restarting.'
-          : 'Updated $done, failed $failed. Check the servers that failed.',
+          ? L.read(context).f('stUpdatedN', {'n': done})
+          : L.read(context).f('stUpdatedFailed', {'n': done, 'f': failed}),
       error: failed > 0,
     );
   }
@@ -759,21 +755,21 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     try {
       releases = await AgentUpdater.agentReleases();
     } catch (e) {
-      if (mounted) showToast(context, 'Could not load releases: $e', error: true);
+      if (mounted) showToast(context, L.read(context).f('stReleasesFail', {'e': e}), error: true);
       setState(() => agentPickerBusy = false);
       return;
     }
     if (!mounted) return;
     setState(() => agentPickerBusy = false);
     if (releases.isEmpty) {
-      showToast(context, 'No releases with agent binaries found.', error: true);
+      showToast(context, L.read(context).t('stNoAgentReleases'), error: true);
       return;
     }
     final chosen = await showDialog<AgentReleaseInfo>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: BeacleColors.surface,
-        title: Text('Agent version for ${v.name}', style: const TextStyle(fontSize: 15)),
+        title: Text(ctx.l.f('stAgentVersionFor', {'name': v.name}), style: const TextStyle(fontSize: 15)),
         content: SizedBox(
           width: 420,
           height: 320,
@@ -785,19 +781,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   title: Text(r.version != null ? 'v${r.version}' : r.tag,
                       style: const TextStyle(fontSize: 13)),
                   subtitle: Text(
-                    '${r.tag}${r.prerelease ? ' · TEST BUILD' : ''}'
+                    '${r.tag}${r.prerelease ? ' · ${ctx.l.t('stTestBuild')}' : ''}'
                     '${r.publishedAt != null ? ' · ${r.publishedAt!.toLocal().toString().substring(0, 16)}' : ''}',
                     style: TextStyle(fontSize: 11, color: r.prerelease ? BeacleColors.warn : BeacleColors.textDim),
                   ),
                   trailing: r.version != null && r.version == v.agentVersion
-                      ? const Text('installed · reinstall', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      ? Text(ctx.l.t('stReinstallTag'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok))
                       : null,
                   onTap: () => Navigator.of(ctx).pop(r),
                 ),
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel'))],
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(ctx.l.t('cancel')))],
       ),
     );
     if (chosen == null || !mounted) return;
@@ -807,12 +803,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     final label = chosen.version != null ? 'v${chosen.version}' : chosen.tag;
     final reinstall = chosen.version != null && chosen.version == v.agentVersion;
     final ok = await _confirmInstall(
-      title: reinstall ? 'Reinstall $label on ${v.name}?' : 'Install $label on ${v.name}?',
-      message: 'The agent will download the binary from the "$label" release and restart.'
-          '${chosen.prerelease ? '\n\nThis is a TEST build — it may be unstable. Try it on one server first.' : ''}',
+      title: L.read(context).f(reinstall ? 'stReinstallOn' : 'stInstallOn', {'label': label, 'name': v.name}),
+      message: L.read(context).f('stAgentInstallBody', {'label': label}) +
+          (chosen.prerelease ? '\n\n${L.read(context).t('stTestWarn')}' : ''),
       downgrade: downgrade,
       downgradeMessage:
-          '${v.name} is running v${v.agentVersion}. Installing $label is a DOWNGRADE.',
+          L.read(context).f('stAgentDowngrade', {'name': v.name, 'cur': v.agentVersion, 'label': label}),
     );
     if (ok != true || !mounted) return;
     if (downgrade && agentLatest?.version != null) {
@@ -828,19 +824,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     try {
       releases = await AppUpdater.releases();
     } catch (e) {
-      if (mounted) showToast(context, 'Could not load releases: $e', error: true);
+      if (mounted) showToast(context, L.read(context).f('stReleasesFail', {'e': e}), error: true);
       return;
     }
     if (!mounted) return;
     if (releases.isEmpty) {
-      showToast(context, 'No stable releases found for this platform.', error: true);
+      showToast(context, L.read(context).t('stNoReleases'), error: true);
       return;
     }
     final chosen = await showDialog<UpdateInfo>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: BeacleColors.surface,
-        title: const Text('Install a specific version', style: TextStyle(fontSize: 15)),
+        title: Text(ctx.l.t('stPickVersion'), style: const TextStyle(fontSize: 15)),
         content: SizedBox(
           width: 420,
           height: 320,
@@ -859,28 +855,26 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   // A release can be rebuilt under the same tag, so the
                   // running version is a reinstall, not a dead end.
                   trailing: r.version == appVersion
-                      ? const Text('installed · reinstall', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      ? Text(ctx.l.t('stReinstallTag'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok))
                       : null,
                   onTap: () => Navigator.of(ctx).pop(r),
                 ),
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel'))],
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(ctx.l.t('cancel')))],
       ),
     );
     if (chosen == null || !mounted) return;
     final reinstall = chosen.version == appVersion;
     final downgrade = AppUpdater.compareVersions(chosen.version, appVersion) < 0;
     final ok = await _confirmInstall(
-      title: reinstall ? 'Reinstall v${chosen.version}?' : 'Install v${chosen.version}?',
+      title: L.read(context).f(reinstall ? 'stReinstallV' : 'stInstallV', {'v': chosen.version}),
       message: reinstall
-          ? 'v${chosen.version} is installed. It will be downloaded again from GitHub and replace this '
-              'installation — this picks up a build republished under the same version. '
-              'Apply it with "Apply and restart".'
-          : 'The release will be downloaded and staged; apply it with "Apply and restart".',
+          ? L.read(context).f('stReinstallBody', {'v': chosen.version})
+          : L.read(context).t('stInstallBody'),
       downgrade: downgrade,
-      downgradeMessage: 'You are on v$appVersion. Installing v${chosen.version} is a DOWNGRADE.',
+      downgradeMessage: L.read(context).f('stAppDowngrade', {'cur': appVersion, 'v': chosen.version}),
     );
     if (ok != true || !mounted) return;
     if (downgrade) {
@@ -893,10 +887,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       updateStatus = null;
     });
     try {
-      final msg = await AppUpdater.downloadAndStage(chosen);
+      await AppUpdater.downloadAndStage(chosen);
+      if (!mounted) return;
       setState(() {
         staged = chosen;
-        updateStatus = msg;
+        updateStatus = L.read(context).f('stStaged', {'v': staged!.version});
       });
     } catch (e) {
       setState(() => updateStatus = '$e');
@@ -920,8 +915,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         title: Text(title, style: const TextStyle(fontSize: 15)),
         content: Text(message, style: const TextStyle(fontSize: 13, color: BeacleColors.textDim)),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Continue')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(ctx.l.t('cancel'))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(ctx.l.t('continueBtn'))),
         ],
       ),
     );
@@ -930,16 +925,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: BeacleColors.surface,
-        title: const Text('Confirm downgrade', style: TextStyle(fontSize: 15, color: BeacleColors.warn)),
+        title: Text(ctx.l.t('stConfirmDowngrade'), style: const TextStyle(fontSize: 15, color: BeacleColors.warn)),
         content: Text(
-          '${downgradeMessage ?? 'This installs an older version.'}\n\nAre you absolutely sure?',
+          '${downgradeMessage ?? ctx.l.t('stOlderVersion')}\n\n${ctx.l.t('stSure')}',
           style: const TextStyle(fontSize: 13, color: BeacleColors.textDim),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(ctx.l.t('cancel'))),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes, downgrade', style: TextStyle(color: BeacleColors.warn)),
+            child: Text(ctx.l.t('stYesDowngrade'), style: const TextStyle(color: BeacleColors.warn)),
           ),
         ],
       ),
@@ -979,7 +974,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       final msg = await action();
       if (mounted) setState(() => maintenanceStatus = msg);
     } catch (e) {
-      if (mounted) setState(() => maintenanceStatus = '$label failed: $e');
+      if (mounted) setState(() => maintenanceStatus = L.read(context).f('stOpFailed', {'op': label, 'e': e}));
     }
   }
 
@@ -1040,37 +1035,38 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       netChecks = [];
     });
     final out = <String>[];
+    final l = L.read(context);
 
     out.add(state.connected
-        ? '✓ Backend reachable on $localBackendUrl'
-        : '✗ Backend unreachable: ${state.lastError ?? 'unknown error'}');
+        ? '✓ ${l.f('stNetBackendOk', {'url': localBackendUrl})}'
+        : '✗ ${l.f('stNetBackendDown', {'e': state.lastError ?? l.t('stUnknownError')})}');
 
     try {
       final devs = await state.api.tailscaleDevices();
       final self = devs.where((d) => d.self).firstOrNull;
-      out.add('✓ Tailscale responding — ${devs.length} device(s) in the tailnet');
+      out.add('✓ ${l.f('stNetTsOk', {'n': devs.length})}');
       if (self == null) {
-        out.add('✗ This machine is not in the device list — is Tailscale logged in?');
+        out.add('✗ ${l.t('stNetSelfMissing')}');
       } else {
         out.add(self.ips.isEmpty
-            ? '✗ This machine has no Tailscale IP yet'
-            : '✓ This machine: ${self.name} (${self.ips.first})');
+            ? '✗ ${l.t('stNetSelfNoIp')}'
+            : '✓ ${l.f('stNetSelf', {'name': self.name, 'ip': self.ips.first})}');
       }
       final offline = devs.where((d) => !d.self && !d.online).length;
-      if (offline > 0) out.add('· $offline device(s) in the tailnet are offline');
+      if (offline > 0) out.add('· ${l.f('stNetOffline', {'n': offline})}');
     } catch (e) {
-      out.add('✗ Tailscale not available: $e');
+      out.add('✗ ${l.f('stNetTsFail', {'e': e})}');
     }
 
     if (state.vpsList.isEmpty) {
-      out.add('· No VPS registered yet');
+      out.add('· ${l.t('stNetNoVps')}');
     } else {
       final online = state.vpsList.where((v) => v.online).length;
       final agentDown = state.vpsList.where((v) => v.status == 'agent_down').length;
       out.add('${online == state.vpsList.length ? '✓' : '·'} '
-          'Agents connected: $online of ${state.vpsList.length}');
+          '${l.f('stNetAgents', {'on': online, 'all': state.vpsList.length})}');
       if (agentDown > 0) {
-        out.add('✗ $agentDown VPS answer on Tailscale but their agent is not reporting');
+        out.add('✗ ${l.f('stNetAgentDown', {'n': agentDown})}');
       }
     }
 
@@ -1327,6 +1323,65 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
+  /// Moving servers off Tailscale, and back. The banner that offers the
+  /// switch can be closed for good; this tab is where it lives after that.
+  Widget _wireGuardTab(AppState state) {
+    final onWg = state.vpsList.where((v) => v.isWireGuard).toList();
+    return SmoothListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        PanelCard(title: context.l.t('wgToTitle'), child: const WireGuardSwitchPanel()),
+        const SizedBox(height: 16),
+        PanelCard(
+          title: context.l.t('wgOnTitle'),
+          child: onWg.isEmpty
+              ? Text(context.l.t('wgOnNone'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+              : Column(
+                  children: [
+                    for (final v in onWg)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(children: [
+                          StatusDot(v.status),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(v.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                          ),
+                          Text(v.wgEndpoint,
+                              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                          const SizedBox(width: 12),
+                          SmallButton(context.l.t('wgSwitchBack'),
+                              icon: Icons.undo, onPressed: () => _switchBack(state, v)),
+                        ]),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _switchBack(AppState state, Vps v) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${ctx.l.t('wgSwitchBack')} — ${v.name}'),
+        content: Text(ctx.l.t('wgSwitchBackConfirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.t('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.l.t('wgSwitchBack'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await state.api.switchBackTailscale(v.id);
+      await state.refreshAll();
+    } catch (e) {
+      if (mounted) showToast(context, '$e', error: true);
+    }
+  }
+
   Widget _statusTab(AppState state) {
     final self = tsDevices.where((d) => d.self).firstOrNull;
     final peers = tsDevices.where((d) => !d.self).toList();
@@ -1341,34 +1396,41 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _field(
-                'Backend status',
-                state.connected ? 'Running' : 'Stopped — ${state.lastError ?? 'no connection'}',
+                context.l.t('stBackendStatus'),
+                state.connected
+                    ? context.l.t('stRunning')
+                    : '${context.l.t('stStopped')} — ${state.lastError ?? context.l.t('stNoConnection')}',
                 tone: state.connected ? BeacleColors.ok : BeacleColors.err,
               ),
-              _field('Backend port', localBackendUrl.split(':').last),
-              _field('Data directory', BeaclePaths.configDir, mono: true),
+              _field(context.l.t('stBackendPort'), localBackendUrl.split(':').last),
+              _field(context.l.t('stDataDir'), BeaclePaths.configDir, mono: true),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  SmallButton('Open data directory', icon: Icons.folder_open, onPressed: () {
-                    _runMaintenance('Opening the folder', () async {
+                  SmallButton(context.l.t('stOpenDataDir'), icon: Icons.folder_open, onPressed: () {
+                    final l = L.read(context);
+                    _runMaintenance(l.t('stOpeningFolder'), () async {
                       await ConfigMaintenance.openDataDirectory();
-                      return 'Opened ${BeaclePaths.configDir}';
+                      return l.f('stOpened', {'p': BeaclePaths.configDir});
                     });
                   }),
-                  SmallButton('Backup configuration', icon: Icons.save_alt, onPressed: () {
-                    _runMaintenance('Backup', () async {
+                  SmallButton(context.l.t('stBackup'), icon: Icons.save_alt, onPressed: () {
+                    final l = L.read(context);
+                    _runMaintenance(l.t('stBackupOp'), () async {
                       final path = await ConfigMaintenance.backup();
-                      return 'Backed up to $path';
+                      return l.f('stBackedUp', {'p': path});
                     });
                   }),
-                  SmallButton('Restore configuration', icon: Icons.restore, onPressed: () => _restoreDialog(state)),
-                  SmallButton('Clear cached data', icon: Icons.cleaning_services, onPressed: () {
-                    _runMaintenance('Clearing the cache', () async {
+                  SmallButton(context.l.t('stRestore'), icon: Icons.restore, onPressed: () => _restoreDialog(state)),
+                  SmallButton(context.l.t('stClearCache'), icon: Icons.cleaning_services, onPressed: () {
+                    final l = L.read(context);
+                    _runMaintenance(l.t('stClearingCache'), () async {
                       final freed = await ConfigMaintenance.clearCache();
-                      return freed == 0 ? 'Cache was already empty' : 'Cleared ${fmtBytes(freed)} of cache';
+                      return freed == 0
+                          ? l.t('stCacheEmpty')
+                          : l.f('stCacheCleared', {'size': fmtBytes(freed)});
                     });
                   }),
                 ],
@@ -1389,15 +1451,15 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _field(
-                'Tunnel',
+                context.l.t('stTunnel'),
                 wgLoading
-                    ? 'Checking…'
+                    ? context.l.t('stChecking')
                     : wgError != null
-                        ? 'Unavailable — $wgError'
+                        ? '${context.l.t('stUnavailable')} — $wgError'
                         : wgStatus == null
                             ? '—'
                             : wgStatus!.running
-                                ? 'Running'
+                                ? context.l.t('stRunning')
                                 : context.l.t('wgStatusOff'),
                 tone: wgError != null
                     ? BeacleColors.err
@@ -1406,16 +1468,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                         : BeacleColors.textDim,
               ),
               if (wgStatus != null && wgStatus!.publicKey.isNotEmpty)
-                _field('Panel public key', wgStatus!.publicKey, mono: true),
+                _field(context.l.t('stPanelKey'), wgStatus!.publicKey, mono: true),
               if (wgStatus != null && wgStatus!.error.isNotEmpty)
-                _field('Error', wgStatus!.error, tone: BeacleColors.err),
+                _field(context.l.t('stError'), wgStatus!.error, tone: BeacleColors.err),
               if (wgStatus != null && wgStatus!.peers.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 for (final p in wgStatus!.peers)
                   Padding(
                     padding: const EdgeInsets.only(left: 170, bottom: 3),
                     child: Text(
-                      '${p.name} · ${p.endpoint} · ${p.lastHandshake > 0 ? 'handshake ok' : 'no handshake'}',
+                      '${p.name} · ${p.endpoint} · ${p.lastHandshake > 0 ? context.l.t('stHandshakeOk') : context.l.t('stNoHandshake')}',
                       style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1425,7 +1487,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               if (wgLoading)
                 const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               else
-                SmallButton('Refresh', icon: Icons.refresh, onPressed: _loadWireGuard),
+                SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadWireGuard),
             ],
           ),
         ),
@@ -1436,24 +1498,26 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _field(
-                'Tailscale status',
+                context.l.t('stTsStatus'),
                 tsLoading
-                    ? 'Checking…'
+                    ? context.l.t('stChecking')
                     : tsError != null
-                        ? 'Unavailable — $tsError'
+                        ? '${context.l.t('stUnavailable')} — $tsError'
                         : tsDevices.isEmpty
-                            ? 'Not checked yet'
-                            : 'Connected',
+                            ? context.l.t('stNotChecked')
+                            : context.l.t('connected'),
                 tone: tsError != null
                     ? BeacleColors.err
                     : tsDevices.isEmpty
                         ? BeacleColors.textDim
                         : BeacleColors.ok,
               ),
-              _field('Current device',
+              _field(context.l.t('stCurrentDevice'),
                   self == null ? '—' : '${self.name}${selfIp.isEmpty ? '' : '  ·  $selfIp'}'),
-              _field('Connected devices',
-                  tsDevices.isEmpty ? '—' : '${peers.where((d) => d.online).length} online of ${peers.length}'),
+              _field(context.l.t('stConnectedDevices'),
+                  tsDevices.isEmpty
+                      ? '—'
+                      : context.l.f('stOnlineOf', {'on': peers.where((d) => d.online).length, 'all': peers.length})),
               if (peers.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 for (final d in peers.take(12))
@@ -1472,7 +1536,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 if (peers.length > 12)
                   Padding(
                     padding: const EdgeInsets.only(left: 170, top: 2),
-                    child: Text('+ ${peers.length - 12} more',
+                    child: Text(context.l.f('stMore', {'n': peers.length - 12}),
                         style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   ),
               ],
@@ -1484,18 +1548,18 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   if (tsLoading)
                     const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   else
-                    SmallButton('Refresh devices', icon: Icons.refresh, onPressed: _loadTailscale),
-                  SmallButton('Validate network', icon: Icons.checklist,
+                    SmallButton(context.l.t('stRefreshDevices'), icon: Icons.refresh, onPressed: _loadTailscale),
+                  SmallButton(context.l.t('stValidateNet'), icon: Icons.checklist,
                       onPressed: netChecking ? null : () => _validateNetwork(state)),
                   SmallButton(
-                    'Copy local Tailscale IP',
+                    context.l.t('stCopyTsIp'),
                     icon: Icons.copy,
                     onPressed: selfIp.isEmpty
                         ? null
                         : () async {
                             await Clipboard.setData(ClipboardData(text: selfIp));
                             if (!mounted) return;
-                            showToast(context, 'Copied $selfIp');
+                            showToast(context, '${L.read(context).t('copied')} $selfIp');
                           },
                   ),
                 ],
@@ -1540,13 +1604,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Future<void> _restoreDialog(AppState state) async {
     final backups = ConfigMaintenance.backups();
     if (backups.isEmpty) {
-      setState(() => maintenanceStatus = 'No backups yet — use "Backup configuration" first.');
+      setState(() => maintenanceStatus = L.read(context).t('stNoBackups'));
       return;
     }
     final picked = await showDialog<Directory>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Restore which backup?'),
+        title: Text(ctx.l.t('stRestoreWhich')),
         children: [
           for (final b in backups.take(20))
             SimpleDialogOption(
@@ -1558,10 +1622,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       ),
     );
     if (picked == null) return;
-    await _runMaintenance('Restore', () async {
+    if (!mounted) return;
+    final l = L.read(context);
+    await _runMaintenance(l.t('stRestoreOp'), () async {
       final n = await ConfigMaintenance.restore(picked);
-      return 'Restored $n file(s). Restart Beacle for them to take effect — the current '
-          'files were copied aside first.';
+      return l.f('stRestored', {'n': n});
     });
   }
 }

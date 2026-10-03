@@ -12,7 +12,7 @@ import '../tool_window.dart';
 import '../user_config.dart';
 import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
-import '../widgets/wg_migrate_dialog.dart';
+import '../widgets/wg_switch.dart';
 import '../widgets/alerts_panel.dart';
 import '../window_control.dart';
 import 'alerts_screen.dart';
@@ -389,23 +389,12 @@ class AppShellState extends State<AppShell> {
     );
   }
 
-  Vps? _tailscaleMigrateCandidate(AppState state) {
-    for (final v in state.vpsList) {
-      if (v.isTailscale && v.wgPublicKey.isEmpty && v.online) return v;
-    }
-    return null;
-  }
-
-  /// The "move to WireGuard" nudge is off until its flow is reworked: it
-  /// invited every user to switch, including servers behind the panel's own
-  /// NAT where the tunnel cannot work. The switch stays in a server's
-  /// settings for anyone who wants it.
-  static const _offerWgMigration = false;
-
+  /// Someone coming from 1.x has every server on Tailscale. The banner
+  /// tells them 2.0 does not need it and opens the server picker; once
+  /// closed it stays closed, and the same picker lives in Settings.
   Widget? _buildWgMigrateBanner(AppState state) {
-    if (!_offerWgMigration || _wgMigrateBannerDismissed) return null;
-    final v = _tailscaleMigrateCandidate(state);
-    if (v == null) return null;
+    if (_wgMigrateBannerDismissed) return null;
+    if (!state.vpsList.any((v) => v.isTailscale && v.status != 'pending')) return null;
     return Material(
       color: BeacleColors.surface.withValues(alpha: 0.95),
       child: Container(
@@ -427,8 +416,8 @@ class AppShellState extends State<AppShell> {
               ),
             ),
             TextButton(
-              onPressed: () => showWireGuardMigrateDialog(context, v),
-              child: Text(context.l.t('wgMigrateStart'), style: const TextStyle(fontSize: 11)),
+              onPressed: () => showWireGuardSwitchDialog(context),
+              child: Text(context.l.t('wgBannerButton'), style: const TextStyle(fontSize: 11)),
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 16),
@@ -467,7 +456,7 @@ class AppShellState extends State<AppShell> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Beacle ${info.version} is available — you are on $appVersion. Open Settings → Updates to install.',
+                  context.l.f('stUpdateBanner', {'v': info.version, 'cur': appVersion}),
                   style: TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
                   overflow: TextOverflow.ellipsis,
                 ),

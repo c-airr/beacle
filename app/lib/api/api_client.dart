@@ -124,6 +124,11 @@ class ApiClient {
   Future<Vps> switchBackTailscale(String vpsId) async =>
       Vps.fromJson(await post('/api/vps/$vpsId/wireguard/switch-tailscale') as Map<String, dynamic>);
 
+  /// How the agent itself reaches the panel: `transport`, and `pending`
+  /// while a switch to WireGuard is still on trial.
+  Future<Map<String, dynamic>> transportStatus(String vpsId) async =>
+      (await get('/api/vps/$vpsId/agent/transport/status')) as Map<String, dynamic>;
+
   Future<String> installCommand() async {
     final r = (await get('/api/install-command')) as Map;
     final backend = (r['backend_url'] as String? ?? '').trim();
