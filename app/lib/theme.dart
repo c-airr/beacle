@@ -18,6 +18,13 @@ class BeacleColors {
   static const warn = Color(0xFFFBBF24);
   static const err = Color(0xFFF87171);
 
+  /// The content area floats as one rounded panel beside the sidebar; cards
+  /// sit on it a step lighter, with hairline edges instead of hard borders.
+  static const panel = Color(0xFF0A0A0B);
+  static const panelBorder = Color(0xFF1A1A1C);
+  static const card = Color(0xFF111113);
+  static const cardBorder = Color(0xFF1F1F23);
+
   static Color statusColor(String status) {
     switch (status) {
       case 'online':
@@ -42,6 +49,14 @@ class BeacleColors {
   }
 }
 
+/// Corner radii, from small controls up to the content panel.
+class BeacleRadius {
+  static const control = 10.0;
+  static const card = 14.0;
+  static const dialog = 16.0;
+  static const panel = 16.0;
+}
+
 ThemeData beacleTheme() {
   final base = ThemeData.dark(useMaterial3: true);
   return base.copyWith(
@@ -61,23 +76,81 @@ ThemeData beacleTheme() {
       fontFamily: 'Segoe UI',
     ),
     dialogTheme: base.dialogTheme.copyWith(
-      backgroundColor: BeacleColors.glassHi,
+      backgroundColor: BeacleColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(BeacleRadius.dialog),
+        side: const BorderSide(color: BeacleColors.cardBorder),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: BeacleColors.text,
+        foregroundColor: BeacleColors.bg,
+        disabledBackgroundColor: BeacleColors.surfaceHi,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: BeacleColors.text,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
+      ),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      side: const BorderSide(color: BeacleColors.borderGlow, width: 1.5),
+    ),
+    tabBarTheme: base.tabBarTheme.copyWith(
+      labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      indicator: const UnderlineTabIndicator(
+        borderRadius: BorderRadius.all(Radius.circular(2)),
+        borderSide: BorderSide(color: BeacleColors.text, width: 2),
+      ),
+      overlayColor: WidgetStateProperty.all(BeacleColors.hover),
+      splashBorderRadius: BorderRadius.circular(BeacleRadius.control),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: BeacleColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: BeacleColors.cardBorder),
+      ),
+    ),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
+    ),
+    snackBarTheme: SnackBarThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: BeacleColors.surfaceHi,
       labelStyle: const TextStyle(color: BeacleColors.textDim, fontSize: 12),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(BeacleRadius.control),
         borderSide: const BorderSide(color: BeacleColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(BeacleRadius.control),
         borderSide: const BorderSide(color: BeacleColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(BeacleRadius.control),
         borderSide: const BorderSide(color: BeacleColors.borderGlow),
       ),
       isDense: true,

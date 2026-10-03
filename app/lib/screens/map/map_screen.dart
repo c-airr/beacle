@@ -529,7 +529,7 @@ class _ContinentRowState extends State<_ContinentRow> {
                 : active
                     ? BeacleColors.hover
                     : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: widget.selected ? Border.all(color: BeacleColors.borderGlow) : null,
           ),
           child: Row(

@@ -73,7 +73,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           width: 560,
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: BeacleColors.surface,
+            color: BeacleColors.card,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: BeacleColors.border),
           ),
@@ -118,12 +118,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _pickLanguage(mode),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
             color: selected ? BeacleColors.surfaceHi : Colors.transparent,
           ),
@@ -220,12 +220,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => onPick(mode),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
             color: selected ? BeacleColors.surfaceHi : Colors.transparent,
           ),
@@ -346,7 +346,7 @@ class _InstallBlock extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: BeacleColors.surfaceHi,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
       child: Column(

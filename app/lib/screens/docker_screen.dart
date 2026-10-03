@@ -150,7 +150,7 @@ class _TabChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: selected ? BeacleColors.glassHi : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
           ),
           child: Text(
@@ -178,8 +178,8 @@ class _VpsSectionHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        color: BeacleColors.card,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
       child: Row(
@@ -302,8 +302,8 @@ class _ContainerCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       decoration: BoxDecoration(
-        color: BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        color: BeacleColors.card,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
       child: Column(

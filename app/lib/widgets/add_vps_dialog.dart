@@ -16,7 +16,7 @@ Widget tailscaleRequirementBanner() => Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: BeacleColors.surfaceHi,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
       child: const Text(

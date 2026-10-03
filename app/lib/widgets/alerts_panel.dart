@@ -57,7 +57,7 @@ class AlertsPanel extends StatelessWidget {
                 if (active.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: BeacleColors.err.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: BeacleColors.err.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
                     child: Text('${active.length} active', style: const TextStyle(fontSize: 11, color: BeacleColors.err)),
                   ),
                 const Spacer(),

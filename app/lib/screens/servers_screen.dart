@@ -76,7 +76,7 @@ class ServersScreenState extends State<ServersScreen> {
       children: [
         Container(
           width: 230,
-          color: BeacleColors.surface,
+          color: BeacleColors.card,
           child: Column(
             children: [
               Padding(

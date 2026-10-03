@@ -86,7 +86,7 @@ class _OsUpdatesBannerState extends State<OsUpdatesBanner> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: attention ? color.withValues(alpha: 0.08) : BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: attention ? color.withValues(alpha: 0.4) : BeacleColors.border),
       ),
       child: Row(

@@ -310,7 +310,7 @@ class _WireGuardSwitchPanelState extends State<WireGuardSwitchPanel> {
       padding: const EdgeInsets.fromLTRB(4, 6, 10, 6),
       decoration: BoxDecoration(
         color: BeacleColors.surfaceHi.withValues(alpha: r.selected ? 0.9 : 0.45),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: r.selected ? BeacleColors.accent.withValues(alpha: 0.5) : BeacleColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -32,8 +32,7 @@ class AppShell extends StatefulWidget {
   @override
   State<AppShell> createState() => AppShellState();
 
-  static AppShellState of(BuildContext context) =>
-      context.findAncestorStateOfType<AppShellState>()!;
+  static AppShellState of(BuildContext context) => context.findAncestorStateOfType<AppShellState>()!;
 }
 
 class AppShellState extends State<AppShell> {
@@ -215,46 +214,57 @@ class AppShellState extends State<AppShell> {
 
     return ActivityScope(
       child: Scaffold(
-      backgroundColor: BeacleColors.bg,
-      body: Stack(
-        children: [
-          Row(
-            children: [
-              _buildSidebar(state),
-              Expanded(
+        backgroundColor: BeacleColors.bg,
+        body: Stack(
+          children: [
+            Row(
+              children: [
+                _buildSidebar(state),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: BeacleColors.panel,
+                        borderRadius: BorderRadius.circular(BeacleRadius.panel),
+                        border: Border.all(color: BeacleColors.panelBorder),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildTopBar(state),
+                          if (state.availableUpdate != null) _buildUpdateBanner(state),
+                          if (wgBanner != null) wgBanner,
+                          Expanded(child: _content()),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (alertsOpen)
+              Positioned(
+                top: 66,
+                right: 20,
+                child: AlertsPanel(onClose: () => setState(() => alertsOpen = false)),
+              ),
+            Positioned(
+              top: 72,
+              right: 20,
+              child: IgnorePointer(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildTopBar(state),
-                    if (state.availableUpdate != null) _buildUpdateBanner(state),
-                    if (wgBanner != null) wgBanner,
-                    Expanded(child: _content()),
+                    if (!alertsOpen)
+                      for (final a in _toasts.reversed.take(3)) _AlertToast(alert: a),
                   ],
                 ),
               ),
-            ],
-          ),
-          if (alertsOpen)
-            Positioned(
-              top: 52,
-              right: 16,
-              child: AlertsPanel(onClose: () => setState(() => alertsOpen = false)),
             ),
-          Positioned(
-            top: 58,
-            right: 16,
-            child: IgnorePointer(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (!alertsOpen)
-                    for (final a in _toasts.reversed.take(3)) _AlertToast(alert: a),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -395,29 +405,31 @@ class AppShellState extends State<AppShell> {
   Widget? _buildWgMigrateBanner(AppState state) {
     if (_wgMigrateBannerDismissed) return null;
     if (!state.vpsList.any((v) => v.isTailscale && v.status != 'pending')) return null;
-    return Material(
-      color: BeacleColors.surface.withValues(alpha: 0.95),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        height: 44,
+        padding: const EdgeInsets.only(left: 16, right: 6),
         decoration: BoxDecoration(
-          color: BeacleColors.accent.withValues(alpha: 0.06),
-          border: Border(bottom: BorderSide(color: BeacleColors.border.withValues(alpha: 0.5))),
+          color: BeacleColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BeacleColors.cardBorder),
         ),
         child: Row(
           children: [
-            const Icon(Icons.vpn_key_outlined, size: 14, color: BeacleColors.textDim),
-            const SizedBox(width: 8),
+            const Icon(Icons.vpn_key_outlined, size: 16, color: BeacleColors.ok),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 context.l.t('wgMigrateBanner'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
+                style: const TextStyle(fontSize: 12.5, color: BeacleColors.text, height: 1.2),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             TextButton(
               onPressed: () => showWireGuardSwitchDialog(context),
-              child: Text(context.l.t('wgBannerButton'), style: const TextStyle(fontSize: 11)),
+              child: Text(context.l.t('wgBannerButton'),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 16),
@@ -436,34 +448,39 @@ class AppShellState extends State<AppShell> {
 
   Widget _buildUpdateBanner(AppState state) {
     final info = state.availableUpdate!;
-    return Material(
-      color: BeacleColors.surface.withValues(alpha: 0.95),
-      child: InkWell(
-        onTap: () {
-          context.read<AppState>().bumpActivity();
-          setState(() => index = items.length - 1); // Settings
-        },
-        child: Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: BeacleColors.ok.withValues(alpha: 0.08),
-            border: Border(bottom: BorderSide(color: BeacleColors.border.withValues(alpha: 0.5))),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.system_update, size: 14, color: BeacleColors.ok),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  context.l.f('stUpdateBanner', {'v': info.version, 'cur': appVersion}),
-                  style: TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
-                  overflow: TextOverflow.ellipsis,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Material(
+        color: BeacleColors.ok.withValues(alpha: 0.08),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: BeacleColors.ok.withValues(alpha: 0.25)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            context.read<AppState>().bumpActivity();
+            setState(() => index = items.length - 1); // Settings
+          },
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(Icons.system_update, size: 14, color: BeacleColors.ok),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    context.l.f('stUpdateBanner', {'v': info.version, 'cur': appVersion}),
+                    style: TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(context.l.t('navSettings'), style: TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
-            ],
+                const SizedBox(width: 8),
+                Text(context.l.t('navSettings'),
+                    style: TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
+              ],
+            ),
           ),
         ),
       ),
@@ -472,14 +489,15 @@ class AppShellState extends State<AppShell> {
 
   Widget _buildTopBar(AppState state) {
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      height: 56,
+      padding: const EdgeInsets.only(left: 24, right: 14),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: BeacleColors.border.withValues(alpha: 0.5))),
       ),
       child: Row(
         children: [
-          Text(_label(context, index), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
+          Text(_label(context, index),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
           const Spacer(),
           Text(
             context.l.f('onlineOf', {
@@ -514,7 +532,8 @@ class AppShellState extends State<AppShell> {
                       color: BeacleColors.err,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text('${state.activeAlerts}', style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700)),
+                    child:
+                        Text('${state.activeAlerts}', style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700)),
                   ),
                 ),
             ],
@@ -531,7 +550,8 @@ class _NavItem extends StatefulWidget {
   final bool selected;
   final int badge;
   final VoidCallback onTap;
-  const _NavItem({required this.icon, required this.label, required this.selected, this.badge = 0, required this.onTap});
+  const _NavItem(
+      {required this.icon, required this.label, required this.selected, this.badge = 0, required this.onTap});
 
   @override
   State<_NavItem> createState() => _NavItemState();
@@ -560,9 +580,8 @@ class _NavItemState extends State<_NavItem> {
                     : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: widget.selected ? Border.all(color: BeacleColors.borderGlow) : null,
-            boxShadow: widget.selected
-                ? [BoxShadow(color: BeacleColors.glow.withValues(alpha: 0.06), blurRadius: 12)]
-                : null,
+            boxShadow:
+                widget.selected ? [BoxShadow(color: BeacleColors.glow.withValues(alpha: 0.06), blurRadius: 12)] : null,
           ),
           child: Row(
             children: [

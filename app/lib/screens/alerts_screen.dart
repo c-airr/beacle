@@ -250,7 +250,7 @@ class _SeverityChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: selected ? tone.withValues(alpha: 0.6) : BeacleColors.border),
           ),
           child: Row(

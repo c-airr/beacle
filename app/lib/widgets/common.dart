@@ -23,7 +23,7 @@ class PanelCard extends StatelessWidget {
     required this.child,
     this.title,
     this.trailing,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(18),
     this.expand = false,
   });
 
@@ -37,9 +37,9 @@ class PanelCard extends StatelessWidget {
     // inner column to fill the height it is given.
     return Container(
       decoration: BoxDecoration(
-        color: BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: BeacleColors.border),
+        color: BeacleColors.card,
+        borderRadius: BorderRadius.circular(BeacleRadius.card),
+        border: Border.all(color: BeacleColors.cardBorder),
       ),
       padding: padding,
       alignment: Alignment.topLeft,
@@ -52,11 +52,11 @@ class PanelCard extends StatelessWidget {
               Expanded(
                 child: Text(title!,
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.4)),
+                        fontSize: 11, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.9)),
               ),
               if (trailing != null) trailing!,
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
           ],
           child,
         ],
@@ -85,7 +85,7 @@ class GlassCard extends StatelessWidget {
       width: width,
       decoration: BoxDecoration(
         color: BeacleColors.glass,
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(BeacleRadius.dialog),
         border: Border.all(color: BeacleColors.border.withValues(alpha: 0.8)),
         boxShadow: [
           BoxShadow(color: BeacleColors.glow.withValues(alpha: 0.03), blurRadius: 24, offset: const Offset(0, 8)),
@@ -208,10 +208,12 @@ class SmallButton extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onPressed,
       icon: icon != null ? Icon(icon, size: 14, color: color ?? BeacleColors.text) : const SizedBox.shrink(),
-      label: Text(label, style: TextStyle(fontSize: 12, color: color ?? BeacleColors.text)),
+      label: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: color ?? BeacleColors.text)),
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: BeacleColors.border),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        side: const BorderSide(color: BeacleColors.borderGlow),
+        backgroundColor: BeacleColors.surfaceHi,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -229,7 +231,7 @@ class CopyField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: BeacleColors.bg,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(BeacleRadius.control),
         border: Border.all(color: BeacleColors.border),
       ),
       child: Row(
@@ -278,7 +280,7 @@ class SecretCopyField extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: BeacleColors.bg,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(BeacleRadius.control),
             border: Border.all(color: BeacleColors.border),
           ),
           child: Row(

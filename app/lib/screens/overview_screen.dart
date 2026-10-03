@@ -380,8 +380,8 @@ class _EmptyBand extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       decoration: BoxDecoration(
-        color: BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        color: BeacleColors.card,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
       child: Text(text, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
@@ -410,8 +410,8 @@ class _KpiTile extends StatelessWidget {
       width: width,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: BeacleColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        color: BeacleColors.card,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
       child: Column(
@@ -458,8 +458,8 @@ class _AttentionRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: BeacleColors.surface,
-          borderRadius: BorderRadius.circular(8),
+          color: BeacleColors.card,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _color.withValues(alpha: 0.28)),
         ),
         child: Row(
@@ -509,8 +509,8 @@ class _InfraCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: BeacleColors.surface,
-          borderRadius: BorderRadius.circular(8),
+          color: BeacleColors.card,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: BeacleColors.border),
         ),
         child: Column(

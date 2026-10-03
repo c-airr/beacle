@@ -449,7 +449,7 @@ class _FilesScreenState extends State<FilesScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            color: BeacleColors.surface,
+            color: BeacleColors.card,
             child: Text(error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
           ),
         if (transfer != null) _transferStrip(transfer!),
@@ -561,7 +561,7 @@ class _FilesScreenState extends State<FilesScreen> {
     final pct = t.total > 0 ? (t.done / t.total).clamp(0.0, 1.0) : null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: BeacleColors.surface,
+      color: BeacleColors.card,
       child: Row(
         children: [
           Icon(t.upload ? Icons.upload_outlined : Icons.download_outlined, size: 16, color: BeacleColors.textDim),
