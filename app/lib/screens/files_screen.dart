@@ -11,6 +11,7 @@ import '../models/models.dart';
 import '../native_dialogs.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../user_config.dart';
 import '../widgets/common.dart';
 import '../widgets/file_editor.dart';
 import '../widgets/upload_dialog.dart';
@@ -58,11 +59,40 @@ class _FilesScreenState extends State<FilesScreen> {
   int _seq = 0;
   final _pathField = TextEditingController();
 
+  /// The folder tree on the left, per server: the subfolders of every folder
+  /// loaded so far and which folders are open. It is fed by the same fs/dir
+  /// answers as the list, so opening a folder on the right fills it in.
+  final Map<String, Map<String, List<String>>> _treeDirs = {};
+  final Map<String, Set<String>> _treeOpen = {};
+  final Set<String> _treeLoading = {};
+  final _treeScroll = ScrollController();
+  bool _treeShown = true;
+  double _treeWidth = 240;
+  static const _treeRow = 26.0;
+  static const _treeKey = 'files_tree';
+
   ApiClient get _api => context.read<AppState>().api;
+
+  @override
+  void initState() {
+    super.initState();
+    final t = UserSettings.load().raw[_treeKey];
+    if (t is Map) {
+      _treeShown = t['shown'] as bool? ?? true;
+      _treeWidth = ((t['width'] as num?)?.toDouble() ?? 240).clamp(160, 520);
+    }
+  }
+
+  void _saveTree() {
+    final s = UserSettings.load();
+    s.raw[_treeKey] = {'shown': _treeShown, 'width': _treeWidth};
+    s.save();
+  }
 
   @override
   void dispose() {
     _pathField.dispose();
+    _treeScroll.dispose();
     super.dispose();
   }
 
@@ -82,7 +112,9 @@ class _FilesScreenState extends State<FilesScreen> {
         _pathByVps[vpsId] = l.path;
         _pathField.text = l.path;
         loading = false;
+        _treeTake(vpsId, l.path, l.entries);
       });
+      _treeReveal(vpsId, l.path);
     } catch (e) {
       if (!mounted || seq != _seq) return;
       setState(() {
@@ -101,6 +133,91 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   String _join(String dir, String name) => dir == '/' ? '/$name' : '$dir/$name';
+
+  // --- folder tree -------------------------------------------------------------
+
+  /// Every folder from / down to [path], / first.
+  List<String> _ancestors(String path) {
+    final parts = path.split('/').where((p) => p.isNotEmpty).toList();
+    return ['/', for (var i = 0; i < parts.length; i++) '/${parts.sublist(0, i + 1).join('/')}'];
+  }
+
+  void _treeTake(String vpsId, String path, List<FsEntry> entries) {
+    final names = [for (final e in entries) if (e.isDir) e.name]
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    (_treeDirs[vpsId] ??= {})[path] = names;
+  }
+
+  Future<void> _treeLoad(String vpsId, String path) async {
+    final key = '$vpsId\u0000$path';
+    if (!_treeLoading.add(key)) return;
+    if (mounted) setState(() {});
+    try {
+      final l = await _api.fsDir(vpsId, path, hidden: showHidden);
+      if (mounted) setState(() => _treeTake(vpsId, path, l.entries));
+    } catch (_) {
+      // No permission, or gone: a folder with nothing to show.
+      if (mounted) setState(() => (_treeDirs[vpsId] ??= {})[path] = const []);
+    } finally {
+      _treeLoading.remove(key);
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _treeToggle(String vpsId, String path) {
+    final open = _treeOpen[vpsId] ??= {'/'};
+    setState(() {
+      if (!open.remove(path)) open.add(path);
+    });
+    if (open.contains(path) && !(_treeDirs[vpsId]?.containsKey(path) ?? false)) _treeLoad(vpsId, path);
+  }
+
+  /// Opens every folder on the way to [path] and scrolls it into view, the
+  /// way VS Code reveals the file you are in.
+  void _treeReveal(String vpsId, String path) {
+    final open = _treeOpen[vpsId] ??= {'/'};
+    final known = _treeDirs[vpsId] ?? const {};
+    for (final a in _ancestors(path)) {
+      open.add(a);
+      if (!known.containsKey(a)) _treeLoad(vpsId, a);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_treeScroll.hasClients) return;
+      final i = _treeRows(vpsId).indexWhere((r) => r.$1 == path);
+      if (i < 0) return;
+      final pos = _treeScroll.position;
+      final top = i * _treeRow;
+      if (top < pos.pixels || top + _treeRow > pos.pixels + pos.viewportDimension) {
+        _treeScroll.animateTo((top - pos.viewportDimension / 3).clamp(0, pos.maxScrollExtent),
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      }
+    });
+  }
+
+  /// The tree as rows: path, name, depth. Only open folders show children.
+  List<(String, String, int)> _treeRows(String vpsId) {
+    final dirs = _treeDirs[vpsId] ?? const {};
+    final open = _treeOpen[vpsId] ?? const {'/'};
+    final out = <(String, String, int)>[];
+    void walk(String path, String name, int depth) {
+      out.add((path, name, depth));
+      if (!open.contains(path)) return;
+      for (final c in dirs[path] ?? const <String>[]) {
+        walk(_join(path, c), c, depth + 1);
+      }
+    }
+
+    walk('/', '/', 0);
+    return out;
+  }
+
+  /// Hidden files on or off: every folder has to be asked again.
+  void _treeRefetch(String vpsId) {
+    _treeDirs.remove(vpsId);
+    for (final p in _treeOpen[vpsId] ?? const <String>{}) {
+      _treeLoad(vpsId, p);
+    }
+  }
 
   // --- actions ---------------------------------------------------------------
 
@@ -406,7 +523,17 @@ class _FilesScreenState extends State<FilesScreen> {
                     size: 18, color: showHidden ? BeacleColors.text : BeacleColors.textDim),
                 onPressed: () {
                   setState(() => showHidden = !showHidden);
+                  _treeRefetch(vps.id);
                   _reload();
+                },
+              ),
+              IconButton(
+                tooltip: context.l.t('fsTree'),
+                icon: Icon(Icons.account_tree_outlined,
+                    size: 18, color: _treeShown ? BeacleColors.text : BeacleColors.textDim),
+                onPressed: () {
+                  setState(() => _treeShown = !_treeShown);
+                  _saveTree();
                 },
               ),
               IconButton(
@@ -419,49 +546,149 @@ class _FilesScreenState extends State<FilesScreen> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: [
-              Expanded(child: _breadcrumb(vps.id, dir)),
-              SmallButton(context.l.t('fsNewFolder'),
-                  icon: Icons.create_new_folder_outlined,
-                  onPressed: online && l != null ? () => _mkdir(vps.id, dir) : null),
-              const SizedBox(width: 8),
-              SmallButton(context.l.t('fsNewFile'),
-                  icon: Icons.note_add_outlined, onPressed: online && l != null ? () => _newFile(vps.id, dir) : null),
-              const SizedBox(width: 8),
-              SmallButton(context.l.t('fsUpload'),
-                  icon: Icons.upload_outlined,
-                  onPressed: online && l != null && transfer == null ? () => _upload(vps.id, dir) : null),
-            ],
-          ),
-        ),
         const Divider(height: 1),
         Expanded(
-          child: error != null && l == null
-              ? Center(child: Text(error!, style: const TextStyle(color: BeacleColors.err)))
-              : l == null
-                  ? const SizedBox.shrink()
-                  : shown.isEmpty
-                      ? Center(
-                          child: Text(context.l.t('fsEmpty'), style: const TextStyle(color: BeacleColors.textDim)))
-                      : SmoothListView.builder(
-                          padding: const EdgeInsets.all(8),
-                          itemCount: shown.length,
-                          itemBuilder: (_, i) => _row(vps.id, shown[i], online),
-                        ),
+          child: LayoutBuilder(builder: (context, box) {
+            // Too narrow for both (a split view): the list wins.
+            final tree = _treeShown && box.maxWidth >= 640;
+            final list = Column(children: [
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(child: _breadcrumb(vps.id, dir)),
+                    SmallButton(context.l.t('fsNewFolder'),
+                        icon: Icons.create_new_folder_outlined,
+                        onPressed: online && l != null ? () => _mkdir(vps.id, dir) : null),
+                    const SizedBox(width: 8),
+                    SmallButton(context.l.t('fsNewFile'),
+                        icon: Icons.note_add_outlined, onPressed: online && l != null ? () => _newFile(vps.id, dir) : null),
+                    const SizedBox(width: 8),
+                    SmallButton(context.l.t('fsUpload'),
+                        icon: Icons.upload_outlined,
+                        onPressed: online && l != null && transfer == null ? () => _upload(vps.id, dir) : null),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: error != null && l == null
+                    ? Center(child: Text(error!, style: const TextStyle(color: BeacleColors.err)))
+                    : l == null
+                        ? const SizedBox.shrink()
+                        : shown.isEmpty
+                            ? Center(
+                                child: Text(context.l.t('fsEmpty'), style: const TextStyle(color: BeacleColors.textDim)))
+                            : SmoothListView.builder(
+                                padding: const EdgeInsets.all(8),
+                                itemCount: shown.length,
+                                itemBuilder: (_, i) => _row(vps.id, shown[i], online),
+                              ),
+              ),
+              if (error != null && l != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  color: BeacleColors.card,
+                  child: Text(error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                ),
+              if (transfer != null) _transferStrip(transfer!),
+            ]);
+            if (!tree) return list;
+            return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              SizedBox(width: _treeWidth.clamp(160, box.maxWidth / 2), child: _tree(vps.id, l?.path)),
+              // Drag to resize, like the sidebar in VS Code.
+              MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragUpdate: (d) =>
+                      setState(() => _treeWidth = (_treeWidth + d.delta.dx).clamp(160, box.maxWidth / 2)),
+                  onHorizontalDragEnd: (_) => _saveTree(),
+                  child: const SizedBox(
+                    width: 5,
+                    child: Center(child: VerticalDivider(width: 1, thickness: 1, color: BeacleColors.border)),
+                  ),
+                ),
+              ),
+              Expanded(child: list),
+            ]);
+          }),
         ),
-        if (error != null && l != null)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            color: BeacleColors.card,
-            child: Text(error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
-          ),
-        if (transfer != null) _transferStrip(transfer!),
       ],
     );
+  }
+
+  Widget _tree(String vpsId, String? current) {
+    final rows = _treeRows(vpsId);
+    final open = _treeOpen[vpsId] ?? const {'/'};
+    final dirs = _treeDirs[vpsId] ?? const {};
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
+        child: Row(children: [
+          Expanded(
+            child: Text(context.l.t('fsFolders').toUpperCase(),
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.9, color: BeacleColors.textDim)),
+          ),
+          IconButton(
+            tooltip: context.l.t('fsCollapseAll'),
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.unfold_less, size: 16, color: BeacleColors.textDim),
+            onPressed: () => setState(() => _treeOpen[vpsId] = {'/'}),
+          ),
+        ]),
+      ),
+      Expanded(
+        child: SmoothListView.builder(
+          controller: _treeScroll,
+          itemExtent: _treeRow,
+          padding: const EdgeInsets.only(bottom: 12),
+          itemCount: rows.length,
+          itemBuilder: (_, i) {
+            final (path, name, depth) = rows[i];
+            final isOpen = open.contains(path);
+            final kids = dirs[path];
+            final selected = path == current;
+            final busy = _treeLoading.contains('$vpsId\u0000$path');
+            return InkWell(
+              onTap: () => selected ? _treeToggle(vpsId, path) : _open(vpsId, path),
+              child: Container(
+                color: selected ? BeacleColors.glassHi : null,
+                padding: EdgeInsets.only(left: 6.0 + depth * 14, right: 8),
+                child: Row(children: [
+                  SizedBox(
+                    width: 20,
+                    child: kids != null && kids.isEmpty
+                        ? null
+                        : InkWell(
+                            borderRadius: BorderRadius.circular(4),
+                            onTap: () => _treeToggle(vpsId, path),
+                            child: Icon(isOpen ? Icons.expand_more : Icons.chevron_right,
+                                size: 16, color: BeacleColors.textDim),
+                          ),
+                  ),
+                  Icon(isOpen ? Icons.folder_open_outlined : Icons.folder_outlined,
+                      size: 15, color: BeacleColors.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                            color: selected ? BeacleColors.text : BeacleColors.textDim)),
+                  ),
+                  if (busy) const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5)),
+                ]),
+              ),
+            );
+          },
+        ),
+      ),
+    ]);
   }
 
   Widget _breadcrumb(String vpsId, String dir) {

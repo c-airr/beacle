@@ -57,7 +57,10 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 - **File explorer** — browse any server's filesystem, edit config files in
   place (saves are atomic, keep owner and permissions, and refuse to clobber
   a file someone changed on the server meanwhile), download and upload with
-  progress and resume, new folder / rename / delete. `/`, top-level system
+  progress and resume, new folder / rename / delete. A folder tree on the
+  left, as in VS Code, opens the way to the folder you are in; the arrows
+  expand a folder without leaving the current one, the edge drags wider, and
+  the tree button hides it. `/`, top-level system
   directories and the agent's own files cannot be deleted. Works the same
   over Tailscale and WireGuard; opt out per server with `"disable_files": true`.
 - **Panel API refuses browsers** — the local API used to answer any web page

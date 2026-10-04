@@ -23,14 +23,19 @@ class _SmoothMouseScroll extends StatefulWidget {
   final Axis axis;
   final _SmoothBuilder builder;
 
-  const _SmoothMouseScroll({required this.axis, required this.builder});
+  /// Lets the owner scroll the view itself (reveal a row); one is made
+  /// otherwise.
+  final ScrollController? controller;
+
+  const _SmoothMouseScroll({required this.axis, required this.builder, this.controller});
 
   @override
   State<_SmoothMouseScroll> createState() => _SmoothMouseScrollState();
 }
 
 class _SmoothMouseScrollState extends State<_SmoothMouseScroll> {
-  final ScrollController _controller = ScrollController();
+  final ScrollController _own = ScrollController();
+  ScrollController get _controller => widget.controller ?? _own;
   bool _directManipulation = false;
   double? _target;
   int _direction = 0;
@@ -60,6 +65,9 @@ class _SmoothMouseScrollState extends State<_SmoothMouseScroll> {
 
     final direction = raw.sign.toInt();
     final current = position.pixels;
+    // At rest the view may have been moved by its owner since the last
+    // wheel tick; start from where it is, not from the old target.
+    if (!position.isScrollingNotifier.value) _target = current;
     // Changing direction should react immediately instead of finishing the
     // previous animation first.
     if (_direction != direction || _target == null) _target = current;
@@ -82,7 +90,7 @@ class _SmoothMouseScrollState extends State<_SmoothMouseScroll> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _own.dispose();
     super.dispose();
   }
 
@@ -108,6 +116,8 @@ class SmoothListView extends StatelessWidget {
   final List<Widget>? children;
   final int? itemCount;
   final IndexedWidgetBuilder? itemBuilder;
+  final ScrollController? controller;
+  final double? itemExtent;
 
   const SmoothListView({
     super.key,
@@ -115,6 +125,8 @@ class SmoothListView extends StatelessWidget {
     this.reverse = false,
     this.shrinkWrap = false,
     this.padding,
+    this.controller,
+    this.itemExtent,
     this.children = const <Widget>[],
   })  : itemCount = null,
         itemBuilder = null;
@@ -125,6 +137,8 @@ class SmoothListView extends StatelessWidget {
     this.reverse = false,
     this.shrinkWrap = false,
     this.padding,
+    this.controller,
+    this.itemExtent,
     required int this.itemCount,
     required IndexedWidgetBuilder this.itemBuilder,
   }) : children = null;
@@ -133,6 +147,7 @@ class SmoothListView extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SmoothMouseScroll(
       axis: scrollDirection,
+      controller: controller,
       builder: (context, controller, physics) {
         if (itemBuilder != null) {
           return ListView.builder(
@@ -142,6 +157,7 @@ class SmoothListView extends StatelessWidget {
             physics: physics,
             shrinkWrap: shrinkWrap,
             padding: padding,
+            itemExtent: itemExtent,
             itemCount: itemCount,
             itemBuilder: itemBuilder!,
           );
@@ -153,6 +169,7 @@ class SmoothListView extends StatelessWidget {
           physics: physics,
           shrinkWrap: shrinkWrap,
           padding: padding,
+          itemExtent: itemExtent,
           children: children!,
         );
       },
