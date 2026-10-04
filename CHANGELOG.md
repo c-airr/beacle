@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.1.0 — 2026-10-04
+
+Eight languages across the whole panel, a light theme that is easy on the
+eyes, and search for everything behind Ctrl+K.
+
+### Added
+
+- **Search (Ctrl+K)** — Ctrl+K (⌘K on macOS), or the search field in the
+  top bar, opens a palette that finds servers by name, address, location or
+  tag; Docker containers by name, image or compose project; systemd
+  services; screen sessions; proxy sites; active alerts and the pages
+  themselves. Enter opens the result where it lives: a container opens the
+  Docker tab filtered to it, a service the Services tab on its server, a
+  site the Proxy tab. It also has a few actions — add a server, open SSH on
+  one, switch the theme. Arrow keys move, Esc closes. Inside an SSH shell
+  Ctrl+K stays the shell's.
+- **Light theme** — Settings → General → Theme: Dark, Light or System.
+  Light is a cool paper grey with cards a shade lighter and soft near-black
+  text, never white, so it does not glare; status colours are a step darker
+  to keep their contrast, and the map and the SSH terminal have light
+  palettes of their own. System follows the OS and switches with it.
+  Switching is instant and keeps open tabs, shells and scroll positions;
+  SSH and Files windows follow the main window.
+- **Six more languages** — German, Spanish, French, Italian, Portuguese
+  (Brazil) and Simplified Chinese, next to English and Polish. Each
+  language is listed under its own name, so it can be found by someone who
+  does not read the current one.
+
+### Changed
+
+- **Every screen is translated** — Overview, Servers, Proxy, Map, Alerts
+  and the dialogs behind them were still English with Polish selected.
+  Alert messages, which the backend writes in English (webhooks use them
+  too), are shown in the interface language as well.
+- **Settings and language reach tool windows** — an SSH or Files window
+  open in its own window picks up a language or theme change at once
+  instead of at its next start.
+
 ## 2.0.5 — 2026-10-04
 
 Log in to the terminal as the server's own account, a folder tree in Files,

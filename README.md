@@ -33,7 +33,7 @@
 
 A desktop panel for managing your VPS fleet, so you don't have to juggle SSH sessions across ten terminals anymore. Monitoring, Docker, systemd, reverse proxy, and a map of your infrastructure — all in one app.
 
-**Status: stable** — 2.0.5 is out, with builds for Windows, Linux and macOS.
+**Status: stable** — 2.1.0 is out, with builds for Windows, Linux and macOS.
 
 ---
 
@@ -116,7 +116,8 @@ All traffic goes over Tailscale, outbound-only, so you don't need to open any po
 - **Proxy** — GUI for Caddy or Nginx Proxy Manager, no manual config editing, with a port checker
 - **Map** — where your servers physically are
 - **Alerts** — thresholds breached (CPU, RAM, disk, server offline), with hysteresis so it doesn't spam every 5 seconds
-- **Settings** — startup and tray behaviour, agent updates, backend status
+- **Settings** — theme (dark, light or system), language, startup and tray behaviour, agent updates, backend status
+- **Search** — Ctrl+K (⌘K on macOS) or the field in the top bar finds any server, container, service, screen session, proxy site or page and takes you there
 
 ---
 
@@ -145,15 +146,15 @@ That's it — the agent registers itself and the panel starts getting data. Agen
 sha256sum -c SHA256SUMS.txt
 
 # Prove the file was built by this repository's Release workflow
-gh attestation verify ./beacle-setup-2.0.5.exe --repo c-airr/beacle
+gh attestation verify ./beacle-setup-2.1.0.exe --repo c-airr/beacle
 ```
 
 ### Cut a release (maintainers)
 
 ```bash
-git tag 2.0.5
-git push origin 2.0.5
-# or: Actions → Release → run workflow → tag 2.0.5
+git tag 2.1.0
+git push origin 2.1.0
+# or: Actions → Release → run workflow → tag 2.1.0
 
 # A build to try out first: "test" in the tag makes it a pre-release that no
 # one gets automatically. Install it by hand; Settings → Updates lists its
@@ -182,8 +183,9 @@ Do **not** upload app or agent binaries by hand. The workflow builds them on `wi
 
 ### Next
 
-- [ ] Light theme — the palette is compiled in as constants, so it is a rework of every screen
-- [x] Translations (core) — 1.2 ships English + Polish for onboarding, nav, Docker, Services and Settings; remaining screens still English
+- [x] Light theme — 2.1: Dark, Light (soft grey, not white) or follow the OS
+- [x] Translations — 2.1: the whole panel in English, Polish, German, Spanish, French, Italian, Portuguese and Simplified Chinese
+- [x] Search — 2.1: Ctrl+K (⌘K) finds servers, containers, services, sites and pages
 - [ ] Signed and notarised macOS builds (right-click → Open until then)
 
 ### v2.0 — platform

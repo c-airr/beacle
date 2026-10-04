@@ -131,7 +131,9 @@ app/  — Flutter desktop
     user_config.dart       config.json, servers.json, settings.json
     config.dart            localBackendUrl (127.0.0.1:8930)
     backend/embedded_backend.dart  backend.exe lifecycle + shutdown
-    theme.dart             Dark theme (BeacleColors)
+    theme.dart             Palety ciemna/jasna (BeaclePalette), BeacleColors czyta bieżącą; applyPalette przebudowuje UI
+    search/                Wyszukiwarka Ctrl+K: search_index.dart (ranking, testowalny) + search_palette.dart (UI)
+    l10n/                  strings.dart + strings_<język>.dart (en, pl, de, es, fr, it, pt, zh); test/l10n_test.dart pilnuje kompletności
     api/api_client.dart    REST klient (wszystko przez backend proxy)
     state/app_state.dart   Provider: VPS list, snapshots, WS, hub status, alerty
     models/models.dart     Dart DTO (mirror shared/models.go)
