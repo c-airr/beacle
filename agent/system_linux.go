@@ -445,13 +445,22 @@ func (c *linuxCollector) Metrics() (shared.SystemMetrics, error) {
 func (c *linuxCollector) Processes() ([]shared.ProcessInfo, error) {
 	// ps still supplies the inventory — user names, RSS and the full command
 	// line are all fiddlier to assemble from /proc than they are worth.
-	out, err := exec.Command("ps", "-eo", "pid,user,pcpu,pmem,rss,stat,comm,args").Output()
+	cmd := exec.Command("ps", "-eo", "pid,user,pcpu,pmem,rss,stat,comm,args")
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
-	live := c.procCPUDeltas()
+	return parseProcesses(string(out), c.procCPUDeltas(), cmd.Process.Pid), nil
+}
 
-	lines := strings.Split(string(out), "\n")
+// parseProcesses turns ps output into the process table, busiest first.
+//
+// self is the ps that produced the listing. It is left out: it is new, so it
+// has no delta and falls back to ps's lifetime average, and a process that has
+// lived 20 ms and spent all of them reading /proc averages close to 100%. It
+// topped every server's table as the thing eating the CPU.
+func parseProcesses(out string, live map[int]float64, self int) []shared.ProcessInfo {
+	lines := strings.Split(out, "\n")
 	var procs []shared.ProcessInfo
 	for i, line := range lines {
 		if i == 0 || strings.TrimSpace(line) == "" {
@@ -462,6 +471,9 @@ func (c *linuxCollector) Processes() ([]shared.ProcessInfo, error) {
 			continue
 		}
 		pid, _ := strconv.Atoi(fields[0])
+		if pid == self {
+			continue
+		}
 		cpu, _ := strconv.ParseFloat(fields[2], 64)
 		mem, _ := strconv.ParseFloat(fields[3], 64)
 		rss, _ := strconv.ParseUint(fields[4], 10, 64)
@@ -489,7 +501,7 @@ func (c *linuxCollector) Processes() ([]shared.ProcessInfo, error) {
 	if len(procs) > 100 {
 		procs = procs[:100]
 	}
-	return procs, nil
+	return procs
 }
 
 // --- Ping ----------------------------------------------------------------------

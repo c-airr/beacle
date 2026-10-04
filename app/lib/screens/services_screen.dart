@@ -76,6 +76,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   List<ProcessInfo> processes = [];
   bool loadingProcs = false;
+  // A poll that has not come back yet. The timer fires on the clock, not on
+  // the answer, and on a slow link the next tick used to start another ps
+  // while the last one was still running.
+  bool _procsInFlight = false;
   Timer? _procTimer;
   Timer? _nohupTimer;
   Timer? _logTimer;
@@ -481,7 +485,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
       if (mounted) setState(() => processes = []);
       return;
     }
+    if (silent && _procsInFlight) return;
     if (!silent && mounted) setState(() => loadingProcs = true);
+    _procsInFlight = true;
     try {
       final p = await state.api.processes(id);
       if (mounted && selectedId == id) {
@@ -497,6 +503,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
           loadingProcs = false;
         });
       }
+    } finally {
+      _procsInFlight = false;
     }
   }
 
