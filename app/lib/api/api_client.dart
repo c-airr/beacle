@@ -380,6 +380,9 @@ class ApiClient {
       TempLogin.fromJson(await post(_a(vpsId, 'ssh/temp-logins'), body: {'minutes': minutes, 'sudo': sudo})
           as Map<String, dynamic>);
 
+  Future<TerminalUsers> terminalUsers(String vpsId) async =>
+      TerminalUsers.fromJson(await get(_a(vpsId, 'terminal/users')) as Map<String, dynamic>);
+
   Future<List<TempLogin>> tempLogins(String vpsId) async =>
       ((await get(_a(vpsId, 'ssh/temp-logins'))) as List? ?? [])
           .map((e) => TempLogin.fromJson(e as Map<String, dynamic>))

@@ -45,9 +45,12 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
   auto-update, GitHub's Latest and the agents' default update skip it; the
   agent version picker lists it as TEST BUILD so it can be put on one server
   on purpose.
-- **SSH terminal** — a root shell on any server, in tabs, from the new SSH
+- **SSH terminal** — a shell on any server, in tabs, from the new SSH
   entry in the bottom-left corner or "Connect with SSH" on a server's page.
-  It runs through the Beacle agent, so no SSH keys or open port 22 are
+  It logs in as the server's own account (ubuntu, opc, debian...) or as
+  root, picked per server and remembered; no password is asked for, since
+  the agent starts the shell with that account's groups in its home. It
+  runs through the Beacle agent, so no SSH keys or open port 22 are
   needed and it works the same over Tailscale and WireGuard. Closing a tab
   ends the shell; shells also end when the panel disconnects or after 30
   minutes without input. Opt out per server with `"disable_terminal": true`.
@@ -82,6 +85,12 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
+- Every server's process table showed `ps -eo pid,user,pcpu,...` at close to
+  100% CPU. That was the agent's own listing: a process 20 ms old that spent
+  them all working averages ~100%, and with no earlier sample to compare it
+  fell back to that average. It is left out now; the server was never busy.
+  The process tab also no longer starts a new listing while the last one is
+  still on its way.
 - A slow command (an apt check, a docker call) froze the whole connection to
   that server: the agent ran commands one at a time on the loop that reads
   from the panel, so pings went unanswered and the server dropped offline,

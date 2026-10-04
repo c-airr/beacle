@@ -49,12 +49,12 @@ func TestTerminalRelaysBothWays(t *testing.T) {
 	h := NewAgentHub(nil, nil, nil, nil, nil)
 	agent := fakeAgent(h, "vps1")
 
-	ts, err := h.OpenTerminal("vps1", 120, 40)
+	ts, err := h.OpenTerminal("vps1", 120, 40, "ubuntu")
 	if err != nil {
 		t.Fatal(err)
 	}
 	open := sentFrame(t, agent)
-	if open.Op != shared.TermOpen || open.Cols != 120 || open.Rows != 40 || open.Session != ts.id {
+	if open.Op != shared.TermOpen || open.Cols != 120 || open.Rows != 40 || open.Session != ts.id || open.User != "ubuntu" {
 		t.Fatalf("open frame = %+v", open)
 	}
 
@@ -78,7 +78,7 @@ func TestAnotherAgentCannotWriteIntoASession(t *testing.T) {
 	h := NewAgentHub(nil, nil, nil, nil, nil)
 	fakeAgent(h, "vps1")
 	other := fakeAgent(h, "vps2")
-	ts, _ := h.OpenTerminal("vps1", 80, 24)
+	ts, _ := h.OpenTerminal("vps1", 80, 24, "")
 
 	h.handleTerminalFrame(other, &shared.TerminalFrame{Session: ts.id, Op: shared.TermData, Data: "ZXZpbA=="})
 	select {
@@ -90,7 +90,7 @@ func TestAnotherAgentCannotWriteIntoASession(t *testing.T) {
 
 func TestTerminalOnOfflineServerFails(t *testing.T) {
 	h := NewAgentHub(nil, nil, nil, nil, nil)
-	if _, err := h.OpenTerminal("nope", 80, 24); err == nil {
+	if _, err := h.OpenTerminal("nope", 80, 24, ""); err == nil {
 		t.Fatal("want an error for a server with no agent socket")
 	}
 }
@@ -98,7 +98,7 @@ func TestTerminalOnOfflineServerFails(t *testing.T) {
 func TestAgentDropEndsTheTerminal(t *testing.T) {
 	h := NewAgentHub(nil, nil, nil, nil, nil)
 	agent := fakeAgent(h, "vps1")
-	ts, _ := h.OpenTerminal("vps1", 80, 24)
+	ts, _ := h.OpenTerminal("vps1", 80, 24, "")
 	sentFrame(t, agent) // open
 
 	close(agent.done)
@@ -110,7 +110,7 @@ func TestAgentDropEndsTheTerminal(t *testing.T) {
 func TestShellExitForgetsTheSession(t *testing.T) {
 	h := NewAgentHub(nil, nil, nil, nil, nil)
 	agent := fakeAgent(h, "vps1")
-	ts, _ := h.OpenTerminal("vps1", 80, 24)
+	ts, _ := h.OpenTerminal("vps1", 80, 24, "")
 	sentFrame(t, agent)
 
 	h.handleTerminalFrame(agent, &shared.TerminalFrame{Session: ts.id, Op: shared.TermExit, Code: 0})

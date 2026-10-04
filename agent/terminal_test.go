@@ -71,7 +71,7 @@ func newTermHarness(t *testing.T, disabled bool) *termHarness {
 	t.Cleanup(cancel)
 	h := &termHarness{t: t, out: make(chan []byte, 64)}
 	h.m = NewTerminalManager(ctx, h.out, disabled)
-	h.m.start = func(cols, rows int) (ptyProcess, error) {
+	h.m.start = func(cols, rows int, _ string) (ptyProcess, error) {
 		p := newFakePTY(cols, rows)
 		h.mu.Lock()
 		h.ptys = append(h.ptys, p)

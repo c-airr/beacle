@@ -72,7 +72,7 @@ func (s *termSession) hangup() {
 type TerminalManager struct {
 	ctx      context.Context
 	out      chan<- []byte
-	start    func(cols, rows int) (ptyProcess, error)
+	start    func(cols, rows int, user string) (ptyProcess, error)
 	disabled bool
 	idle     time.Duration
 
@@ -172,7 +172,7 @@ func (m *TerminalManager) open(f shared.TerminalFrame) {
 	if cols <= 0 || rows <= 0 {
 		cols, rows = 80, 24
 	}
-	p, err := m.start(cols, rows)
+	p, err := m.start(cols, rows, f.User)
 	if err != nil {
 		m.mu.Unlock()
 		m.fail(f.Session, err.Error())
@@ -182,7 +182,11 @@ func (m *TerminalManager) open(f shared.TerminalFrame) {
 	s.lastInput.Store(time.Now().UnixNano())
 	m.sessions[f.Session] = s
 	m.mu.Unlock()
-	log.Printf("terminal %s opened by the panel", f.Session)
+	as := f.User
+	if as == "" {
+		as = "the agent's user"
+	}
+	log.Printf("terminal %s opened by the panel as %s", f.Session, as)
 
 	go s.writeInput()
 	go m.pump(s)

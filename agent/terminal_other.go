@@ -7,7 +7,12 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"beacle/shared"
 )
+
+// terminalUsers: the dev shell has no accounts to pick from.
+func terminalUsers() shared.TerminalUsers { return shared.TerminalUsers{Users: []string{}} }
 
 // devPTY stands in for a shell on the Windows dev agent: it echoes what is
 // typed and answers each line, enough to work on the terminal UI.
@@ -23,7 +28,7 @@ type devPTY struct {
 	once   sync.Once
 }
 
-func startPTY(cols, rows int) (ptyProcess, error) {
+func startPTY(cols, rows int, _ string) (ptyProcess, error) {
 	r, w := io.Pipe()
 	p := &devPTY{r: r, w: w, cols: cols, rows: rows, out: make(chan []byte, 256), exited: make(chan struct{})}
 	go func() {

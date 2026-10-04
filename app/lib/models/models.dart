@@ -769,6 +769,18 @@ class TempLogin {
         expiresAt = _dt(j['expires_at']);
 }
 
+/// Who a shell can be opened as on a server: root and the people's accounts
+/// (ubuntu, opc, ...). [main] is the one a person would SSH in as. Agents
+/// without the picker answer 404 and only open root shells.
+class TerminalUsers {
+  final List<String> users;
+  final String main;
+  const TerminalUsers(this.users, this.main);
+  TerminalUsers.fromJson(Map<String, dynamic> j)
+      : users = ((j['users'] as List?) ?? []).map((e) => '$e').toList(),
+        main = _s(j['main']);
+}
+
 /// One chunk of a remote file; [data] is base64 on the wire.
 class FsChunk {
   final String path, version, data;

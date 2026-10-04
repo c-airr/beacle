@@ -226,6 +226,9 @@ func (s *APIServer) Routes() http.Handler {
 		}
 		jsonOut(w, 200, map[string]any{"ok": true})
 	}))
+	mux.HandleFunc("GET /api/terminal/users", a(func(w http.ResponseWriter, r *http.Request) {
+		jsonOut(w, 200, terminalUsers())
+	}))
 	mux.HandleFunc("GET /api/firewall/status", a(func(w http.ResponseWriter, r *http.Request) {
 		st, err := s.col.FirewallStatus()
 		if err != nil {

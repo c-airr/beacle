@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,7 +59,10 @@ func agentHasTerminal(v string) bool {
 
 // OpenTerminal starts a shell on the agent and returns the stream of its
 // frames.
-func (h *AgentHub) OpenTerminal(vpsID string, cols, rows int) (*termSub, error) {
+//
+// user is who the shell runs as; "" is the agent's own user (root). The agent
+// checks it against the server's login accounts.
+func (h *AgentHub) OpenTerminal(vpsID string, cols, rows int, user string) (*termSub, error) {
 	h.mu.Lock()
 	sess, ok := h.agents[vpsID]
 	if !ok || !sess.registered.Load() {
@@ -79,7 +83,7 @@ func (h *AgentHub) OpenTerminal(vpsID string, cols, rows int) (*termSub, error) 
 	h.mu.Unlock()
 
 	h.send(sess, shared.AgentWSMessage{Type: shared.AgentWSTerminal, Terminal: &shared.TerminalFrame{
-		Session: t.id, Op: shared.TermOpen, Cols: cols, Rows: rows,
+		Session: t.id, Op: shared.TermOpen, Cols: cols, Rows: rows, User: user,
 	}})
 	// The shell dies with the agent socket; tell the app instead of leaving
 	// it typing into nothing.
@@ -160,11 +164,20 @@ func queryInt(r *http.Request, key string, def int) int {
 	return def
 }
 
-// handleTerminalWS serves GET /api/vps/{id}/terminal?cols=&rows=.
+// termUserRe is what a Linux account name can look like. The agent decides
+// whether the account may log in; this only keeps junk off the wire.
+var termUserRe = regexp.MustCompile(`^[a-z_][a-z0-9_.-]{0,31}$`)
+
+// handleTerminalWS serves GET /api/vps/{id}/terminal?cols=&rows=&user=.
 func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	entry := s.store.GetVPS(r.PathValue("id"))
 	if entry == nil {
 		writeErr(w, http.StatusNotFound, "vps not found")
+		return
+	}
+	user := r.URL.Query().Get("user")
+	if user != "" && !termUserRe.MatchString(user) {
+		writeErr(w, http.StatusBadRequest, "bad user name")
 		return
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -182,14 +195,18 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 		_ = writeFrame(shared.TerminalFrame{Op: shared.TermError, Error: errAgentTooOld.Error()})
 		return
 	}
-	t, err := s.agentHub.OpenTerminal(entry.VPS.ID, queryInt(r, "cols", 80), queryInt(r, "rows", 24))
+	t, err := s.agentHub.OpenTerminal(entry.VPS.ID, queryInt(r, "cols", 80), queryInt(r, "rows", 24), user)
 	if err != nil {
 		_ = writeFrame(shared.TerminalFrame{Op: shared.TermError, Error: err.Error()})
 		return
 	}
 	defer s.agentHub.CloseTerminal(t)
-	s.logAction(entry.VPS, "terminal opened", "", true)
-	log.Printf("terminal %s opened on %s", t.id, entry.VPS.Name)
+	as := user
+	if as == "" {
+		as = "root"
+	}
+	s.logAction(entry.VPS, "terminal opened", as, true)
+	log.Printf("terminal %s opened on %s as %s", t.id, entry.VPS.Name, as)
 
 	// App → agent.
 	readDone := make(chan struct{})

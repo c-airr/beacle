@@ -900,6 +900,16 @@ type TerminalFrame struct {
 	Rows    int    `json:"rows,omitempty"`
 	Code    int    `json:"code,omitempty"`  // exit status for "exit"
 	Error   string `json:"error,omitempty"` // for "error"
+	// User is who the shell runs as, on "open". Empty is the agent's own
+	// user (root), which is all agents before the picker know.
+	User string `json:"user,omitempty"`
+}
+
+// TerminalUsers is who a shell can be opened as: root and the people's
+// accounts (ubuntu, opc, ...). Main is the one a person would SSH in as.
+type TerminalUsers struct {
+	Users []string `json:"users"`
+	Main  string   `json:"main,omitempty"`
 }
 
 type AgentWSMessage struct {

@@ -59,13 +59,20 @@ once at startup (and reconnects automatically). All traffic is JSON
 ### Terminal (2.0)
 
 `terminal` frames carry a `TerminalFrame` `{session, op, data, cols, rows,
-code, error}`; `data` is base64. The panel picks `session`.
+code, error, user}`; `data` is base64. The panel picks `session`.
 
-- panel → agent: `open` (cols/rows), `data` (keystrokes), `resize`, `close`.
+- panel → agent: `open` (cols/rows, optional `user`), `data` (keystrokes),
+  `resize`, `close`.
 - agent → panel: `data` (output), `exit` (`code`), `error`.
 
-The agent runs root's login shell on a PTY (`TERM=xterm-256color`, clean
-environment). At most 4 sessions, closed after 30 min without input, and all
+The agent runs a login shell on a PTY (`TERM=xterm-256color`, clean
+environment) as `user`, or as itself (root) when `user` is empty — all an
+agent before the picker knows. `user` must be root or a person's account:
+uid from `UID_MIN` (login.defs, default 1000) below 60000, a shell that is not
+nologin/false, not a temporary login. The shell gets that account's uid, gid
+and supplementary groups, starts in its home and owns its tty; no password
+is involved. `GET /api/terminal/users` → `{"users": ["root", "ubuntu"],
+"main": "ubuntu"}` lists them; `main` is the first non-root account. At most 4 sessions, closed after 30 min without input, and all
 hung up (SIGHUP to the session, SIGKILL 3 s later) when the panel WebSocket
 drops. `"disable_terminal": true` in `config.json` answers every `open` with
 `error`.
@@ -202,7 +209,7 @@ REST under `/api/*`, live stream at `GET /ws` (JSON `WSMessage` frames).
 The backend proxies any `/api/vps/{id}/agent/*` request to the matching
 agent over WebSocket, so the UI never talks to agents directly.
 
-**Terminal (2.0):** `GET /api/vps/{id}/terminal?cols=&rows=` upgrades to a
+**Terminal (2.0):** `GET /api/vps/{id}/terminal?cols=&rows=&user=` upgrades to a
 WebSocket carrying `TerminalFrame` JSON both ways (app sends `data`,
 `resize`, `close`; receives `data`, `exit`, `error`). One socket = one shell;
 closing it hangs the shell up. Requests with an `Origin` header (browsers)

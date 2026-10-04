@@ -13,6 +13,7 @@ import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../user_config.dart';
 import '../widgets/common.dart';
 import '../widgets/temp_login_dialog.dart';
 
@@ -21,6 +22,9 @@ import '../widgets/temp_login_dialog.dart';
 class TermSession {
   final String vpsId;
   final String vpsName;
+
+  /// Who the shell runs as; empty is the agent's own user, root.
+  final String user;
   final terminal = Terminal(maxLines: 10000);
   final controller = TerminalController();
   final VoidCallback onChange;
@@ -33,7 +37,7 @@ class TermSession {
   bool connected = false;
   bool ended = false;
 
-  TermSession({required this.vpsId, required this.vpsName, required this.onChange}) {
+  TermSession({required this.vpsId, required this.vpsName, this.user = '', required this.onChange}) {
     terminal.onOutput = (data) => _send({'op': 'data', 'data': base64Encode(utf8.encode(data))});
     terminal.onResize = (w, h, _, __) => _send({'op': 'resize', 'cols': w, 'rows': h});
   }
@@ -52,7 +56,8 @@ class TermSession {
 
     final cols = terminal.viewWidth > 0 ? terminal.viewWidth : 80;
     final rows = terminal.viewHeight > 0 ? terminal.viewHeight : 24;
-    final url = '${backendUrl.replaceFirst('http', 'ws')}/api/vps/$vpsId/terminal?cols=$cols&rows=$rows';
+    final as = user.isEmpty ? '' : '&user=${Uri.encodeQueryComponent(user)}';
+    final url = '${backendUrl.replaceFirst('http', 'ws')}/api/vps/$vpsId/terminal?cols=$cols&rows=$rows$as';
     final ws = IOWebSocketChannel.connect(url);
     _ws = ws;
     connected = true;
@@ -97,6 +102,8 @@ class TermSession {
     ended = true;
     _close();
   }
+
+  String get label => user.isEmpty ? vpsName : '$user@$vpsName';
 }
 
 /// Copy/paste like Windows Terminal. xterm's defaults put "select all" on
@@ -151,13 +158,73 @@ class TerminalScreenState extends State<TerminalScreen> {
   final List<TermSession> sessions = [];
   int active = 0;
 
-  /// Opens a new shell on [vpsId] and shows it.
-  void open(String vpsId) {
+  /// Accounts each server offers, by VPS id. An empty list is an agent
+  /// without the picker, which opens root shells only.
+  final Map<String, TerminalUsers> _users = {};
+  final Map<String, Future<TerminalUsers>> _usersLoading = {};
+
+  static const _userKey = 'terminal_user';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (final v in _hosts(context.read<AppState>())) {
+        if (v.online) _loadUsers(v.id);
+      }
+    });
+  }
+
+  Future<TerminalUsers> _loadUsers(String vpsId) {
+    final known = _users[vpsId];
+    if (known != null) return Future.value(known);
+    final api = context.read<AppState>().api;
+    return _usersLoading[vpsId] ??= () async {
+      var u = const TerminalUsers([], '');
+      try {
+        u = await api.terminalUsers(vpsId);
+      } catch (_) {
+        // An older agent: root only, as before.
+      }
+      _usersLoading.remove(vpsId);
+      if (mounted) setState(() => _users[vpsId] = u);
+      return u;
+    }();
+  }
+
+  /// The account a shell on [vpsId] opens as: the one picked last time,
+  /// else the server's main account (ubuntu, opc, ...), else root.
+  String _userFor(String vpsId) {
+    final u = _users[vpsId];
+    if (u == null || u.users.isEmpty) return '';
+    final saved = (UserSettings.load().raw[_userKey] as Map?)?[vpsId] as String?;
+    if (saved != null && u.users.contains(saved)) return saved;
+    return u.main.isNotEmpty ? u.main : u.users.first;
+  }
+
+  void _pickUser(String vpsId, String user) {
+    final s = UserSettings.load();
+    final m = Map<String, dynamic>.from(s.raw[_userKey] as Map? ?? {});
+    m[vpsId] = user;
+    s.raw[_userKey] = m;
+    s.save();
+    setState(() {});
+  }
+
+  /// Opens a new shell on [vpsId] and shows it, as [user] or as the account
+  /// [_userFor] picks.
+  Future<void> open(String vpsId, {String? user}) async {
     final state = context.read<AppState>();
     state.bumpActivity();
     final vps = state.vpsList.where((v) => v.id == vpsId).firstOrNull;
     if (vps == null) return;
-    final s = TermSession(vpsId: vps.id, vpsName: vps.name, onChange: () {
+    if (user == null) {
+      await _loadUsers(vpsId);
+      if (!mounted) return;
+      user = _userFor(vpsId);
+    }
+    final s = TermSession(vpsId: vps.id, vpsName: vps.name, user: user, onChange: () {
       if (mounted) setState(() {});
     });
     setState(() {
@@ -206,18 +273,24 @@ class TerminalScreenState extends State<TerminalScreen> {
                   child: Row(children: [for (var i = 0; i < sessions.length; i++) _tab(i)]),
                 ),
               ),
-              PopupMenuButton<String>(
+              PopupMenuButton<(String, String?)>(
                 tooltip: context.l.t('sshNewSession'),
                 icon: const Icon(Icons.add, size: 18),
                 color: BeacleColors.surfaceHi,
-                onSelected: open,
+                onSelected: (p) => open(p.$1, user: p.$2),
                 itemBuilder: (_) => [
                   for (final v in hosts)
-                    PopupMenuItem(
-                      value: v.id,
-                      enabled: v.online,
-                      child: Row(children: [StatusDot(v.status, size: 7), const SizedBox(width: 8), Text(v.name)]),
-                    ),
+                    // One entry per account where the server offers a choice.
+                    for (final u in _accounts(v.id))
+                      PopupMenuItem(
+                        value: (v.id, u),
+                        enabled: v.online,
+                        child: Row(children: [
+                          StatusDot(v.status, size: 7),
+                          const SizedBox(width: 8),
+                          Text(u == null ? v.name : '$u@${v.name}'),
+                        ]),
+                      ),
                 ],
               ),
             ],
@@ -286,7 +359,7 @@ class TerminalScreenState extends State<TerminalScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(s.vpsName,
+            Text(s.label,
                 style: TextStyle(fontSize: 12, color: selected ? BeacleColors.text : BeacleColors.textDim)),
             const SizedBox(width: 2),
             InkWell(
@@ -303,8 +376,66 @@ class TerminalScreenState extends State<TerminalScreen> {
     );
   }
 
+  /// The accounts to offer for [vpsId] in the new-tab menu; a lone null is
+  /// "the agent's default" for a server that offers no choice.
+  List<String?> _accounts(String vpsId) {
+    final u = _users[vpsId]?.users ?? const [];
+    return u.length > 1 ? u : const [null];
+  }
+
+  /// Which account the row opens as, switchable where there is a choice.
+  Widget _userChip(Vps v) {
+    final users = _users[v.id]?.users ?? const <String>[];
+    final current = _userFor(v.id);
+    final label = Text(current.isEmpty ? 'root' : current,
+        style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.text));
+    if (users.length < 2 || !v.online) {
+      return Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: label);
+    }
+    return PopupMenuButton<String>(
+      tooltip: context.l.t('sshAs'),
+      color: BeacleColors.surfaceHi,
+      onSelected: (u) => _pickUser(v.id, u),
+      itemBuilder: (_) => [
+        for (final u in users)
+          PopupMenuItem(
+            value: u,
+            child: Row(children: [
+              Icon(u == current ? Icons.check : Icons.person_outline, size: 15, color: BeacleColors.textDim),
+              const SizedBox(width: 8),
+              Text(u, style: const TextStyle(fontFamily: 'Consolas', fontSize: 13)),
+              if (u == 'root') ...[
+                const SizedBox(width: 8),
+                Text(context.l.t('sshAsRoot'), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              ],
+            ]),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: BeacleColors.border),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.person_outline, size: 13, color: BeacleColors.textDim),
+          const SizedBox(width: 4),
+          label,
+          const Icon(Icons.arrow_drop_down, size: 16, color: BeacleColors.textDim),
+        ]),
+      ),
+    );
+  }
+
   /// No shell open yet: pick a server.
   Widget _picker(AppState state, List<Vps> hosts) {
+    // A server that came online after the screen opened.
+    final missing = hosts.where((v) => v.online && !_users.containsKey(v.id)).map((v) => v.id).toList();
+    if (missing.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) missing.forEach(_loadUsers);
+      });
+    }
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
@@ -331,6 +462,8 @@ class TerminalScreenState extends State<TerminalScreen> {
                       const SizedBox(width: 10),
                       Expanded(child: Text(v.name, style: const TextStyle(fontSize: 13))),
                       Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                      const SizedBox(width: 8),
+                      _userChip(v),
                       const SizedBox(width: 4),
                       IconButton(
                         tooltip: context.l.t('tlButton'),
