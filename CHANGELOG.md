@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.0.5 — 2026-10-04
+
+Log in to the terminal as the server's own account, a folder tree in Files,
+steady tabs in Services, and the fixes that made 2.0.0 feel stuck.
+
+**Update the agents too** (Settings → Updates, or "Update agent" on a
+server's page): the account picker and the faster answers come from the
+agent.
+
+### Added
+
+- **SSH terminal as ubuntu, opc, debian...** — the SSH tab offers, per
+  server, the account to log in as: the server's own account by default, or
+  root. No password is asked for: the agent starts the shell with that
+  account's uid, groups and home, on a terminal it owns. The choice is
+  remembered and tabs read `ubuntu@server`.
+- **Folder tree in Files** — on the left, as in VS Code. It opens the way to
+  the folder you are in; the arrows expand a folder without leaving the
+  current one, the edge drags wider, and the tree button hides it.
+- **Rebuilds are offered as updates** — the app knows the commit it was
+  built from, so a fix republished under the same version number shows up
+  in the update banner and Settings as e.g. "2.0.5 (4c235d8)" instead of
+  going unnoticed. Builds from before this change do not know their commit
+  and have to be reinstalled once by hand.
+
+### Fixed
+
+- The agent never answered a request for something it does not have (a
+  route from a newer panel): the plain-text "404 page not found" could not
+  be packed into a reply, so the reply was dropped and the panel waited 30
+  seconds for a 502. Files froze like that on older agents. It answers at
+  once now, and the app says the agent needs an update.
+- Every server's process table showed `ps -eo pid,user,pcpu,...` at close to
+  100% CPU. That was the agent's own listing: a process 20 ms old that spent
+  them all working averages ~100%, and with no earlier sample to compare it
+  fell back to that average. It is left out now; the server was never busy.
+  The process tab also no longer starts a new listing while the last one is
+  still on its way.
+- Services: the tabs jumped and changed size at every click and every
+  refresh. They sit in their own row now and keep their width whatever is
+  selected, loading or counted; the same goes for the Docker tabs.
+
 ## 2.0.0 — 2026-10-03
 
 SSH terminal and file explorer, a built-in WireGuard transport so servers no
@@ -40,32 +82,21 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 - **Reinstall** — "Install a specific version" (app) and the agent version
   picker offer the installed version as a reinstall, to pick up a build
   republished under the same version.
-- **Rebuilds are offered as updates** — the app knows the commit it was
-  built from, so a fix republished under the same version number shows up
-  in the update banner and Settings as e.g. "2.0.0 (4c235d8)" instead of
-  going unnoticed. Builds from before this change do not know their commit
-  and have to be reinstalled once by hand.
 - **Test releases** — a tag or release title with "test" (also beta, rc,
   alpha), e.g. `2.0.1-test1`, is published as a pre-release. The app's
   auto-update, GitHub's Latest and the agents' default update skip it; the
   agent version picker lists it as TEST BUILD so it can be put on one server
   on purpose.
-- **SSH terminal** — a shell on any server, in tabs, from the new SSH
+- **SSH terminal** — a root shell on any server, in tabs, from the new SSH
   entry in the bottom-left corner or "Connect with SSH" on a server's page.
-  It logs in as the server's own account (ubuntu, opc, debian...) or as
-  root, picked per server and remembered; no password is asked for, since
-  the agent starts the shell with that account's groups in its home. It
-  runs through the Beacle agent, so no SSH keys or open port 22 are
+  It runs through the Beacle agent, so no SSH keys or open port 22 are
   needed and it works the same over Tailscale and WireGuard. Closing a tab
   ends the shell; shells also end when the panel disconnects or after 30
   minutes without input. Opt out per server with `"disable_terminal": true`.
 - **File explorer** — browse any server's filesystem, edit config files in
   place (saves are atomic, keep owner and permissions, and refuse to clobber
   a file someone changed on the server meanwhile), download and upload with
-  progress and resume, new folder / rename / delete. A folder tree on the
-  left, as in VS Code, opens the way to the folder you are in; the arrows
-  expand a folder without leaving the current one, the edge drags wider, and
-  the tree button hides it. `/`, top-level system
+  progress and resume, new folder / rename / delete. `/`, top-level system
   directories and the agent's own files cannot be deleted. Works the same
   over Tailscale and WireGuard; opt out per server with `"disable_files": true`.
 - **Panel API refuses browsers** — the local API used to answer any web page
@@ -93,20 +124,6 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
-- The agent never answered a request for something it does not have (a
-  route from a newer panel): the plain-text "404 page not found" could not
-  be packed into a reply, so the reply was dropped and the panel waited 30
-  seconds for a 502. Files froze like that on older agents. It answers at
-  once now, and the app says the agent needs an update.
-- Every server's process table showed `ps -eo pid,user,pcpu,...` at close to
-  100% CPU. That was the agent's own listing: a process 20 ms old that spent
-  them all working averages ~100%, and with no earlier sample to compare it
-  fell back to that average. It is left out now; the server was never busy.
-  The process tab also no longer starts a new listing while the last one is
-  still on its way.
-- Services: the tabs jumped and changed size at every click and every
-  refresh. They sit in their own row now and keep their width whatever is
-  selected, loading or counted; the same goes for the Docker tabs.
 - A slow command (an apt check, a docker call) froze the whole connection to
   that server: the agent ran commands one at a time on the loop that reads
   from the panel, so pings went unanswered and the server dropped offline,

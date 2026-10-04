@@ -33,7 +33,7 @@
 
 A desktop panel for managing your VPS fleet, so you don't have to juggle SSH sessions across ten terminals anymore. Monitoring, Docker, systemd, reverse proxy, and a map of your infrastructure — all in one app.
 
-**Status: stable** — 2.0.0 is out, with builds for Windows, Linux and macOS.
+**Status: stable** — 2.0.5 is out, with builds for Windows, Linux and macOS.
 
 ---
 
@@ -145,15 +145,15 @@ That's it — the agent registers itself and the panel starts getting data. Agen
 sha256sum -c SHA256SUMS.txt
 
 # Prove the file was built by this repository's Release workflow
-gh attestation verify ./beacle-setup-2.0.0.exe --repo c-airr/beacle
+gh attestation verify ./beacle-setup-2.0.5.exe --repo c-airr/beacle
 ```
 
 ### Cut a release (maintainers)
 
 ```bash
-git tag 2.0.0
-git push origin 2.0.0
-# or: Actions → Release → Run workflow → tag 2.0.0
+git tag 2.0.5
+git push origin 2.0.5
+# or: Actions → Release → run workflow → tag 2.0.5
 
 # A build to try out first: "test" in the tag makes it a pre-release that no
 # one gets automatically. Install it by hand; Settings → Updates lists its

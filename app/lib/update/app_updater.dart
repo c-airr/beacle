@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../user_config.dart';
 
-const appVersion = '2.0.0';
+const appVersion = '2.0.5';
 
 /// The commit this build was made from, stamped in by the release workflow
 /// (--dart-define=BEACLE_COMMIT). Fixes are republished under the same
