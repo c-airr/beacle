@@ -183,7 +183,9 @@ class TerminalScreenState extends State<TerminalScreen> {
     return _usersLoading[vpsId] ??= () async {
       var u = const TerminalUsers([], '');
       try {
-        u = await api.terminalUsers(vpsId);
+        // An agent from before this route never answers it (the panel gives
+        // up after 30 s); a shell should not wait that long to open.
+        u = await api.terminalUsers(vpsId).timeout(const Duration(seconds: 5));
       } catch (_) {
         // An older agent: root only, as before.
       }

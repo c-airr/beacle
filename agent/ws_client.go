@@ -599,15 +599,9 @@ func (c *WSClient) runCommand(ctx context.Context, cmd shared.AgentCommand, writ
 		body = []byte(cmd.Body)
 	}
 	code, resp := c.api.Dispatch(cmd.Method, cmd.Path, body)
-	out, err := json.Marshal(shared.AgentWSMessage{
-		Type: shared.AgentWSCommandResult,
-		Result: &shared.AgentCommandResult{
-			RequestID:  cmd.RequestID,
-			StatusCode: code,
-			Body:       json.RawMessage(resp),
-		},
-	})
+	out, err := commandResult(cmd.RequestID, code, resp)
 	if err != nil {
+		log.Printf("command %s %s: result not sent: %v", cmd.Method, cmd.Path, err)
 		return
 	}
 	// Waiting is fine here, off the read loop; dropping a result left the
@@ -620,6 +614,26 @@ func (c *WSClient) runCommand(ctx context.Context, cmd shared.AgentCommand, writ
 	if isMutatingMethod(cmd.Method) && code >= 200 && code < 300 {
 		sync.RequestRefresh()
 	}
+}
+
+// commandResult frames a route's answer for the panel. Body travels as raw
+// JSON, and not every answer is JSON: the mux's own "404 page not found" and
+// "405 method not allowed" are plain text. Marshalling those failed, the
+// result was never sent, and the panel waited out its 30 s for a route an
+// older agent simply does not have. They go as a JSON string now, which the
+// app reads as "this agent does not know that".
+func commandResult(requestID string, code int, resp []byte) ([]byte, error) {
+	if !json.Valid(resp) {
+		resp, _ = json.Marshal(strings.TrimSpace(string(resp)))
+	}
+	return json.Marshal(shared.AgentWSMessage{
+		Type: shared.AgentWSCommandResult,
+		Result: &shared.AgentCommandResult{
+			RequestID:  requestID,
+			StatusCode: code,
+			Body:       json.RawMessage(resp),
+		},
+	})
 }
 
 func isMutatingMethod(method string) bool {

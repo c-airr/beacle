@@ -93,6 +93,11 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 
 ### Fixed
 
+- The agent never answered a request for something it does not have (a
+  route from a newer panel): the plain-text "404 page not found" could not
+  be packed into a reply, so the reply was dropped and the panel waited 30
+  seconds for a 502. Files froze like that on older agents. It answers at
+  once now, and the app says the agent needs an update.
 - Every server's process table showed `ps -eo pid,user,pcpu,...` at close to
   100% CPU. That was the agent's own listing: a process 20 ms old that spent
   them all working averages ~100%, and with no earlier sample to compare it
