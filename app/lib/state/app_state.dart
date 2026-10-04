@@ -238,7 +238,7 @@ class AppState extends ChangeNotifier {
         banner = null;
       }
     }
-    if (availableUpdate?.version != banner?.version) {
+    if (availableUpdate?.label != banner?.label) {
       availableUpdate = banner;
       notifyListeners();
     }

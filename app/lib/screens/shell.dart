@@ -471,7 +471,7 @@ class AppShellState extends State<AppShell> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l.f('stUpdateBanner', {'v': info.version, 'cur': appVersion}),
+                    context.l.f('stUpdateBanner', {'v': info.label, 'cur': info.rebuild ? appLabel : appVersion}),
                     style: TextStyle(fontSize: 11, color: BeacleColors.text, height: 1.2),
                     overflow: TextOverflow.ellipsis,
                   ),

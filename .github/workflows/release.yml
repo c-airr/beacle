@@ -107,7 +107,7 @@ jobs:
 
       - name: Build Flutter Windows app
         working-directory: app
-        run: flutter build windows --release
+        run: flutter build windows --release --dart-define=BEACLE_COMMIT=${{ github.sha }}
 
       - name: Assemble Windows zip
         shell: pwsh
@@ -165,7 +165,7 @@ jobs:
 
       - name: Build Flutter Linux app
         working-directory: app
-        run: flutter build linux --release
+        run: flutter build linux --release --dart-define=BEACLE_COMMIT=${{ github.sha }}
 
       - name: Assemble Linux tarball
         run: |
@@ -211,7 +211,7 @@ jobs:
 
       - name: Build Flutter macOS app
         working-directory: app
-        run: flutter build macos --release
+        run: flutter build macos --release --dart-define=BEACLE_COMMIT=${{ github.sha }}
 
       - name: Assemble macOS archive
         run: |

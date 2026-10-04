@@ -385,7 +385,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       available = info;
                       updateStatus = info == null
                           ? L.read(context).t('stLatest')
-                          : L.read(context).f('stVersionAvailable', {'v': info.version});
+                          : L.read(context).f('stVersionAvailable', {'v': info.label});
                     });
                   } catch (e) {
                     setState(() => updateStatus = L.read(context).f('stCheckFailed', {'e': e}));
@@ -406,7 +406,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: BeacleColors.border),
                           ),
-                          child: Text('v$appVersion', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                          child: Text('v${available!.rebuild ? appLabel : appVersion}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                         ),
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 6),
@@ -419,7 +419,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: BeacleColors.ok.withValues(alpha: 0.4)),
                           ),
-                          child: Text('v${available!.version}', style: const TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
+                          child: Text('v${available!.label}', style: const TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
                         ),
                       ],
                     ),
@@ -438,7 +438,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       if (!mounted) return;
                       setState(() {
                         staged = available;
-                        updateStatus = L.read(context).f('stStaged', {'v': staged!.version});
+                        updateStatus = L.read(context).f('stStaged', {'v': staged!.label});
                       });
                     } catch (e) {
                       setState(() => updateStatus = '$e');

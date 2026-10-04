@@ -6,6 +6,17 @@ import 'package:http/http.dart' as http;
 import '../user_config.dart';
 
 const appVersion = '2.0.0';
+
+/// The commit this build was made from, stamped in by the release workflow
+/// (--dart-define=BEACLE_COMMIT). Fixes are republished under the same
+/// version number, so the number alone cannot tell this build from a newer
+/// one. Empty in local builds, which never look for a rebuild.
+const appCommit = String.fromEnvironment('BEACLE_COMMIT');
+
+String _short(String sha) => sha.length > 7 ? sha.substring(0, 7) : sha;
+
+/// appVersion, with the commit when there is one: "2.0.0 (1f1952d)".
+String get appLabel => appCommit.isEmpty ? appVersion : '$appVersion (${_short(appCommit)})';
 // Same repo as config.dart's agent release — kept here too so the updater
 // does not need a cross-file import just to read a constant.
 const githubRepo = 'c-airr/beacle';
@@ -14,7 +25,16 @@ class UpdateInfo {
   final String version;
   final String assetUrl;
   final String notes;
-  UpdateInfo(this.version, this.assetUrl, this.notes);
+
+  /// The commit the release was built from (its target_commitish).
+  final String commit;
+
+  /// Same version as this app, built from a newer commit.
+  final bool rebuild;
+  UpdateInfo(this.version, this.assetUrl, this.notes, {this.commit = '', this.rebuild = false});
+
+  /// "2.0.1", or "2.0.0 (4c235d8)" for a rebuild of the version you have.
+  String get label => rebuild ? '$version (${_short(commit)})' : version;
 }
 
 /// Desktop app self-update via GitHub Releases.
@@ -68,7 +88,8 @@ class AppUpdater {
       if (tag.isEmpty) continue;
       for (final a in ((r['assets'] as List?) ?? []).cast<Map<String, dynamic>>()) {
         if ((a['name'] as String? ?? '').toLowerCase().contains(plat)) {
-          out.add(UpdateInfo(tag, a['browser_download_url'] as String, r['body'] as String? ?? ''));
+          out.add(UpdateInfo(tag, a['browser_download_url'] as String, r['body'] as String? ?? '',
+              commit: r['target_commitish'] as String? ?? ''));
           break;
         }
       }
@@ -77,9 +98,23 @@ class AppUpdater {
   }
 
   /// Detection only, nothing is fetched. null keeps the Update button grey.
-  static Future<UpdateInfo?> availableUpdate() async {
-    for (final r in await releases()) {
-      if (isNewer(r.version, appVersion)) return r;
+  static Future<UpdateInfo?> availableUpdate() async => pickUpdate(await releases(), appVersion, appCommit);
+
+  /// A newer version, or else the same version rebuilt from another commit:
+  /// a fix republished as 2.0.0 is still a fix you do not have. A build
+  /// that does not know its commit only ever looks for newer versions.
+  static UpdateInfo? pickUpdate(List<UpdateInfo> releases, String version, String commit) {
+    for (final r in releases) {
+      if (isNewer(r.version, version)) return r;
+    }
+    for (final r in releases) {
+      if (compareVersions(r.version, version) == 0 &&
+          commit.isNotEmpty &&
+          r.commit.length >= 7 &&
+          !r.commit.startsWith(commit) &&
+          !commit.startsWith(r.commit)) {
+        return UpdateInfo(r.version, r.assetUrl, r.notes, commit: r.commit, rebuild: true);
+      }
     }
     return null;
   }

@@ -40,6 +40,11 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
 - **Reinstall** — "Install a specific version" (app) and the agent version
   picker offer the installed version as a reinstall, to pick up a build
   republished under the same version.
+- **Rebuilds are offered as updates** — the app knows the commit it was
+  built from, so a fix republished under the same version number shows up
+  in the update banner and Settings as e.g. "2.0.0 (4c235d8)" instead of
+  going unnoticed. Builds from before this change do not know their commit
+  and have to be reinstalled once by hand.
 - **Test releases** — a tag or release title with "test" (also beta, rc,
   alpha), e.g. `2.0.1-test1`, is published as a pre-release. The app's
   auto-update, GitHub's Latest and the agents' default update skip it; the
