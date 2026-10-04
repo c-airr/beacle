@@ -271,14 +271,25 @@ func (p *linuxPTY) Wait() int {
 
 // Hangup sends SIGHUP to the shell's whole session, like closing an SSH
 // connection, then SIGKILL for anything that ignored it.
+//
+// The SIGKILL goes to the processes that were in the session when it was
+// hung up, each pinned to its start time — not to the group number three
+// seconds later. Once the shell exits its number is free, and a container
+// starting in the meantime (runc makes every one a session leader) could be
+// handed it; kill(-pgid) would then have taken that container down.
 func (p *linuxPTY) Hangup() {
 	if p.cmd.Process == nil {
 		return
 	}
-	pgid := p.cmd.Process.Pid // pty.Start makes the shell a session leader
-	_ = syscall.Kill(-pgid, syscall.SIGHUP)
+	sid := p.cmd.Process.Pid // pty.Start makes the shell a session leader
+	members := membersOf(sid, true)
+	for _, m := range members {
+		m.signal(syscall.SIGHUP)
+	}
 	go func() {
 		time.Sleep(3 * time.Second)
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		for _, m := range members {
+			m.signal(syscall.SIGKILL)
+		}
 	}()
 }

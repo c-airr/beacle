@@ -21,7 +21,9 @@ import (
 // a record of each one. Without it a job started from the panel would be
 // unfindable the moment the page refreshed — the exact dead end screen sessions
 // used to have, where you could start something and never stop it.
-const (
+//
+// Variables rather than constants so tests can point them at a temp dir.
+var (
 	nohupStateDir = "/var/lib/beacle/nohup"
 	nohupLogDir   = "/var/log/beacle"
 )
@@ -63,7 +65,7 @@ func (c *linuxCollector) NohupJobs() ([]shared.NohupJob, error) {
 		if json.Unmarshal(b, &j) != nil {
 			continue
 		}
-		j.Running = pidAlive(j.PID)
+		j.Running = jobProcess(j) != nil
 		jobs = append(jobs, j)
 	}
 	sort.Slice(jobs, func(i, k int) bool { return jobs[i].Name < jobs[k].Name })
@@ -133,6 +135,10 @@ func (c *linuxCollector) NohupStart(req shared.NohupStartRequest) (shared.NohupJ
 		Started: time.Now().UTC().Format(time.RFC3339),
 		Running: true,
 	}
+	if st, ok := readProcStat(pid); ok {
+		job.BootID = currentBootID()
+		job.StartTicks = st.startTicks
+	}
 	data, _ := json.Marshal(job)
 	if err := os.WriteFile(nohupStatePath(name), data, 0o644); err != nil {
 		// The job is running but unrecorded, which is worse than not starting:
@@ -158,21 +164,56 @@ func (c *linuxCollector) NohupStop(name string) error {
 		return fmt.Errorf("job %q has an unreadable record", name)
 	}
 
-	if pidAlive(j.PID) {
-		// Negative PID targets the process group setsid created, so children
-		// go with it — a job that spawned workers should not leave them behind.
-		_ = exec.Command("kill", "-TERM", "--", "-"+strconv.Itoa(j.PID)).Run()
-		_ = exec.Command("kill", "-TERM", strconv.Itoa(j.PID)).Run()
-		for i := 0; i < 20 && pidAlive(j.PID); i++ {
+	// Only a PID that is still this job is signalled. It used to be "any
+	// process with that number": a job that had ended — or a record from
+	// before a reboot — pointed at whatever the kernel gave the number to
+	// next, and Stop took that process down with its whole process group.
+	// After a reboot that is dockerd or containerd.
+	if leader := jobProcess(j); leader != nil {
+		// The process group setsid created, so children go with the job —
+		// a job that spawned workers should not leave them behind. Each
+		// member is pinned to its start time, so a member that exits during
+		// the grace period cannot have its number reused under the KILL.
+		group := []procRef{*leader}
+		if st, ok := readProcStat(leader.pid); ok && st.pgid == leader.pid {
+			group = membersOf(leader.pid, false)
+		}
+		for _, p := range group {
+			p.signal(syscall.SIGTERM)
+		}
+		for i := 0; i < 20 && leader.still(); i++ {
 			time.Sleep(100 * time.Millisecond)
 		}
-		if pidAlive(j.PID) {
-			_ = exec.Command("kill", "-KILL", "--", "-"+strconv.Itoa(j.PID)).Run()
-			_ = exec.Command("kill", "-KILL", strconv.Itoa(j.PID)).Run()
+		for _, p := range group {
+			p.signal(syscall.SIGKILL)
 		}
 	}
 	// The log stays: it is usually the reason someone wanted the job stopped.
 	return os.Remove(nohupStatePath(name))
+}
+
+// jobProcess is the job's process if its PID still names it, else nil.
+//
+// Records since 2.1 pin the process by boot and start time. Older ones only
+// have the PID, so they are matched on what the job's process always has:
+// its output redirected to the job's log file — a stranger that inherited
+// the number does not write to /var/log/beacle/<job>.log.
+func jobProcess(j shared.NohupJob) *procRef {
+	if !pidAlive(j.PID) {
+		return nil
+	}
+	st, ok := readProcStat(j.PID)
+	if !ok {
+		return nil
+	}
+	if j.StartTicks != 0 {
+		if j.BootID != currentBootID() || st.startTicks != j.StartTicks {
+			return nil
+		}
+	} else if !fdPointsAt(j.PID, j.LogFile) {
+		return nil
+	}
+	return &procRef{pid: j.PID, start: st.startTicks}
 }
 
 func (c *linuxCollector) NohupLogs(name string) (string, error) {

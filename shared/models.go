@@ -612,6 +612,13 @@ type NohupJob struct {
 	LogFile string `json:"log_file"`
 	Started string `json:"started"`
 	Running bool   `json:"running"`
+
+	// Which process PID was: the boot it started in and its start time in
+	// clock ticks after boot. A PID is reused once its process exits, so the
+	// agent signals PID only while both still match. Empty in records
+	// written before 2.1.
+	BootID     string `json:"boot_id,omitempty"`
+	StartTicks uint64 `json:"start_ticks,omitempty"`
 }
 
 type NohupStartRequest struct {

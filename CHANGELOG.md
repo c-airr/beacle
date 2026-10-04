@@ -38,6 +38,25 @@ eyes, and search for everything behind Ctrl+K.
   open in its own window picks up a language or theme change at once
   instead of at its next start.
 
+### Fixed
+
+- **Stopping a session could kill Docker.** The agent remembered nohup
+  jobs by PID only. Once a job ended — or the server rebooted — the number
+  went to whatever started next, often dockerd or containerd, so the
+  Services → nohup tab showed the old job as still running, and Stop sent
+  SIGTERM and then SIGKILL to that process and its whole process group.
+  Jobs are now pinned to their start time (older records: to their log
+  file), a stranger with the same number is left alone and the record shows
+  as exited.
+- Closing an SSH tab sent a SIGKILL to the shell's group number three
+  seconds later, by which time the number could belong to a freshly started
+  container. It now goes only to the processes that were in that shell's
+  session, each checked to still be the same process.
+- screen commands name the session exactly (`pid.name`); a bare name is
+  matched as a prefix, so "web" could hit "webapp".
+
+**Update the agents** (Settings → Updates): the fix is in the agent.
+
 ## 2.0.5 — 2026-10-04
 
 Log in to the terminal as the server's own account, a folder tree in Files,

@@ -403,7 +403,7 @@ func (c *linuxCollector) ScreenStart(req shared.ScreenStartRequest) error {
 		// a failed cd swallow the command, and any typo in one became a typo
 		// in the whole line.
 		for _, line := range screenLines(dir, req.Command) {
-			out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", line+"\n").CombinedOutput()
+			out, err := exec.Command("screen", "-S", screenTarget(s), "-p", "0", "-X", "stuff", line+"\n").CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("screen stuff: %s", strings.TrimSpace(string(out)))
 			}
@@ -428,6 +428,13 @@ func (c *linuxCollector) ScreenStart(req shared.ScreenStartRequest) error {
 	return nil
 }
 
+// screenTarget names exactly one session for `screen -S`. A bare name is
+// matched as a prefix, so with sessions "web" and "webapp" the command could
+// land on the wrong one, or fail as ambiguous; "pid.name" cannot.
+func screenTarget(s shared.ScreenSession) string {
+	return strconv.Itoa(s.PID) + "." + s.Name
+}
+
 func (c *linuxCollector) ScreenStop(name string) error {
 	if _, err := screenName(name); err != nil {
 		return err
@@ -442,7 +449,7 @@ func (c *linuxCollector) ScreenStop(name string) error {
 		}
 		// \003 is Ctrl+C: ask the payload to stop the way a person at the
 		// terminal would, instead of killing the session outright.
-		out, err := exec.Command("screen", "-S", name, "-p", "0", "-X", "stuff", "\003").CombinedOutput()
+		out, err := exec.Command("screen", "-S", screenTarget(s), "-p", "0", "-X", "stuff", "\003").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("screen stuff ctrl-c: %s", strings.TrimSpace(string(out)))
 		}
@@ -459,17 +466,17 @@ func (c *linuxCollector) ScreenKill(name string) error {
 		return err
 	}
 	sessions, _ := c.ScreenSessions()
-	found := false
+	var target string
 	for _, s := range sessions {
 		if s.Name == name {
-			found = true
+			target = screenTarget(s)
 			break
 		}
 	}
-	if !found {
+	if target == "" {
 		return fmt.Errorf("session %q not found", name)
 	}
-	out, err := exec.Command("screen", "-S", name, "-X", "quit").CombinedOutput()
+	out, err := exec.Command("screen", "-S", target, "-X", "quit").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("screen quit: %s", strings.TrimSpace(string(out)))
 	}
