@@ -445,7 +445,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                               padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
                               child: Text(
                                 context.l.t('mapContinents'),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 1.2,
@@ -460,7 +460,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                 selected: selectedContinent == c.name,
                                 onTap: () => _selectContinent(c.name, mapSize),
                               ),
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               child: Divider(height: 1, color: BeacleColors.border),
                             ),
@@ -595,27 +595,27 @@ class _VpsMapCard extends StatelessWidget {
                     child: Text(vps.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 16, color: BeacleColors.textDim),
+                    icon: Icon(Icons.close, size: 16, color: BeacleColors.textDim),
                     visualDensity: VisualDensity.compact,
                     onPressed: onClose,
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: BeacleColors.border),
+            Divider(height: 1, color: BeacleColors.border),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(vps.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                  Text(vps.host, style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                   if (vps.publicIp.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(context.l.f('mapPublic', {'ip': vps.publicIp}), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                    Text(context.l.f('mapPublic', {'ip': vps.publicIp}), style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                   ],
                   if (vps.location.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(vps.location, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                    Text(vps.location, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   ],
                   const SizedBox(height: 14),
                   if (m != null) ...[
@@ -629,10 +629,10 @@ class _VpsMapCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(
                       '${context.l.f('srvCoresLoad', {'n': m.cpuCores, 'load': m.load1.toStringAsFixed(2)})} · ${context.l.f('mapUp', {'t': context.l.uptime(m.uptimeSeconds)})}',
-                      style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                      style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                     ),
                   ] else
-                    Text(context.l.t('svcWaiting'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    Text(context.l.t('svcWaiting'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 ],
               ),
             ),
@@ -690,18 +690,18 @@ class _MapPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(r, const Radius.circular(40)),
         Paint()
-          ..color = const Color(0x14FFFFFF)
+          ..color = BeacleColors.palette.mapFocus
           ..style = PaintingStyle.fill,
       );
     }
 
     // Land fill
-    canvas.drawPath(geo.landPath, Paint()..color = const Color(0xFF111111));
+    canvas.drawPath(geo.landPath, Paint()..color = BeacleColors.palette.mapLand);
     // Coastline / land outline sketches
     canvas.drawPath(
       geo.landPath,
       Paint()
-        ..color = const Color(0xFF555555)
+        ..color = BeacleColors.palette.mapCoast
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.15 / camera.scale
         ..isAntiAlias = true,
@@ -709,7 +709,7 @@ class _MapPainter extends CustomPainter {
     canvas.drawPath(
       geo.landPath,
       Paint()
-        ..color = const Color(0xFF2E2E2E)
+        ..color = BeacleColors.palette.mapCoastInner
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.55 / camera.scale
         ..isAntiAlias = true,
@@ -719,7 +719,7 @@ class _MapPainter extends CustomPainter {
     canvas.drawPath(
       geo.borderPath,
       Paint()
-        ..color = const Color(0xFF3A3A3A)
+        ..color = BeacleColors.palette.mapBorder
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.55 / camera.scale
         ..strokeCap = StrokeCap.round
@@ -735,7 +735,7 @@ class _MapPainter extends CustomPainter {
         canvas.drawCircle(
           cluster.center,
           cluster.radius + 8,
-          Paint()..color = const Color(0x73141414),
+          Paint()..color = BeacleColors.palette.mapClusterBg,
         );
 
         // Orbit ring
@@ -743,14 +743,14 @@ class _MapPainter extends CustomPainter {
           cluster.center,
           cluster.radius,
           Paint()
-            ..color = const Color(0x38FFFFFF)
+            ..color = BeacleColors.palette.mapRing
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.0,
         );
 
         // Connecting spoke lines
         final spokePaint = Paint()
-          ..color = const Color(0x28FFFFFF)
+          ..color = BeacleColors.palette.mapSpoke
           ..strokeWidth = 0.8;
         for (final item in cluster.items) {
           canvas.drawLine(cluster.center, item.position, spokePaint);
@@ -817,7 +817,7 @@ class _MapPainter extends CustomPainter {
       final textPainter = TextPainter(
         text: TextSpan(
           text: text,
-          style: const TextStyle(
+          style: TextStyle(
             color: BeacleColors.text,
             fontSize: 11,
             fontWeight: FontWeight.w500,
@@ -842,7 +842,7 @@ class _MapPainter extends CustomPainter {
 
       canvas.drawRRect(
         tipRRect,
-        Paint()..color = const Color(0xEB1E1E1E),
+        Paint()..color = BeacleColors.palette.mapTip,
       );
       canvas.drawRRect(
         tipRRect,

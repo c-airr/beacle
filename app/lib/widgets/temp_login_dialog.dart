@@ -147,7 +147,7 @@ class _TempLoginDialogState extends State<_TempLoginDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l.t('tlIntro'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
+              Text(l.t('tlIntro'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
               const SizedBox(height: 16),
               if (c == null) ...[
                 Row(children: [
@@ -192,12 +192,12 @@ class _TempLoginDialogState extends State<_TempLoginDialog> {
                 _field(l.t('tlUser'), c.user),
                 _field(l.t('tlPassword'), c.password),
                 Text('${l.f('tlExpires', {'at': _at(c.expiresAt)})}${c.sudo ? ' · sudo' : ''}',
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 const SizedBox(height: 4),
-                Text(l.t('tlOnce'), style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+                Text(l.t('tlOnce'), style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
                 if (c.warning.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(c.warning, style: const TextStyle(fontSize: 12, color: BeacleColors.warn, height: 1.4)),
+                  Text(c.warning, style: TextStyle(fontSize: 12, color: BeacleColors.warn, height: 1.4)),
                 ],
                 if (Platform.isWindows) ...[
                   const SizedBox(height: 12),
@@ -206,27 +206,27 @@ class _TempLoginDialogState extends State<_TempLoginDialog> {
               ],
               if (_error != null) ...[
                 const SizedBox(height: 10),
-                Text(_error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                Text(_error!, style: TextStyle(fontSize: 12, color: BeacleColors.err)),
               ],
               const SizedBox(height: 18),
               Text(l.t('tlActive').toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.9, color: BeacleColors.textDim)),
               const SizedBox(height: 6),
               if (_active.isEmpty)
-                Text(l.t('tlNone'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                Text(l.t('tlNone'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
               else
                 for (final a in _active)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Row(children: [
-                      const Icon(Icons.person_outline, size: 15, color: BeacleColors.textDim),
+                      Icon(Icons.person_outline, size: 15, color: BeacleColors.textDim),
                       const SizedBox(width: 8),
                       Text(a.user, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text('${l.f('tlExpires', {'at': _at(a.expiresAt)})}${a.sudo ? ' · sudo' : ''}',
-                            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                            style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                       ),
                       SmallButton(l.t('tlDelete'), color: BeacleColors.err, onPressed: () => _delete(a.user)),
                     ]),
@@ -252,7 +252,7 @@ class _TempLoginDialogState extends State<_TempLoginDialog> {
   Widget _field(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+          Text(label, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
           const SizedBox(height: 4),
           CopyField(value),
         ]),

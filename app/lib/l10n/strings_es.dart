@@ -240,7 +240,7 @@ const _es = <String, String>{
   // settings
   'stAppearance': 'APARIENCIA',
   'stTheme': 'Tema',
-  'stThemeDetail': 'La paleta está compilada como constantes, así que un tema claro supone rehacer cada pantalla, no activar una opción.',
+  'stThemeDetail': 'El claro es un gris suave en lugar de blanco, descansado para la vista. Sistema sigue a tu equipo y cambia con él.',
   'stDark': 'Oscuro',
   'stStartup': 'INICIO',
   'stAutostartWinOnly': 'El inicio con la sesión solo está disponible en Windows.',
@@ -876,4 +876,7 @@ const _es = <String, String>{
   'upDH': '{d} d {h} h',
   'upHM': '{h} h {m} min',
   'upM': '{m} min',
+  // theme
+  'stLight': 'Claro',
+  'stSystem': 'Sistema',
 };

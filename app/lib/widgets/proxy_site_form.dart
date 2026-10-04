@@ -272,7 +272,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                               size: 16, color: BeacleColors.textDim),
                           const SizedBox(width: 6),
                           Text(context.l.t('psfAdvanced'),
-                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, letterSpacing: 0.3)),
+                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, letterSpacing: 0.3)),
                         ]),
                       ),
                     ),
@@ -321,7 +321,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                     const SizedBox(height: 16),
                     Row(children: [
                       Text(context.l.t(_raw ? 'psfSiteConfig' : 'psfGenerated'),
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 11,
                               color: BeacleColors.textDim,
                               fontWeight: FontWeight.w600,
@@ -374,7 +374,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
 
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
+              Text(_error!, style: TextStyle(color: BeacleColors.err, fontSize: 12)),
             ],
             const SizedBox(height: 16),
             Row(
@@ -465,7 +465,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
               children: [
                 Text(label, style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 2),
-                Text(detail, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.35)),
+                Text(detail, style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.35)),
               ],
             ),
           ),
@@ -514,7 +514,7 @@ class _HeaderEditorState extends State<_HeaderEditor> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(context.l.t('psfHeaders'),
-            style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+            style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
         const SizedBox(height: 8),
         for (final e in widget.headers.entries)
           Padding(
@@ -526,7 +526,7 @@ class _HeaderEditorState extends State<_HeaderEditor> {
                     overflow: TextOverflow.ellipsis),
               ),
               IconButton(
-                icon: const Icon(Icons.close, size: 14, color: BeacleColors.err),
+                icon: Icon(Icons.close, size: 14, color: BeacleColors.err),
                 onPressed: () {
                   final next = {...widget.headers}..remove(e.key);
                   widget.onChanged(next);

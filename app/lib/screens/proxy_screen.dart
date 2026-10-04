@@ -25,7 +25,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
     final state = context.watch<AppState>();
     final withAgent = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (withAgent.isEmpty) {
-      return Center(child: Text(context.l.t('dockerNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('dockerNoVps'), style: TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= withAgent.first.id;
     final vps = withAgent.where((v) => v.id == selectedId).firstOrNull ?? withAgent.first;
@@ -41,7 +41,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
                 child: DropdownButton<String>(
                   value: vps.id,
                   dropdownColor: BeacleColors.surfaceHi,
-                  style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                  style: TextStyle(fontSize: 13, color: BeacleColors.text),
                   items: [
                     for (final v in withAgent)
                       DropdownMenuItem(
@@ -128,7 +128,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
         const SizedBox(width: 6),
         Text(label, style: TextStyle(fontSize: 12, color: color)),
         if (_hasProvider(proxy) && !proxy.running)
-          Text('  (${context.l.t('pxNotRunning')})', style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+          Text('  (${context.l.t('pxNotRunning')})', style: TextStyle(fontSize: 12, color: BeacleColors.err)),
       ]),
     );
   }
@@ -137,17 +137,17 @@ class _ProxyScreenState extends State<ProxyScreen> {
     if (proxy.provider == 'none') {
       return Center(
         child: Text(context.l.t('pxInstallProvider'),
-            textAlign: TextAlign.center, style: const TextStyle(color: BeacleColors.textDim)),
+            textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
       );
     }
     if (!_hasProvider(proxy)) {
       return Center(
         child: Text(context.l.t('pxWaitingData'),
-            textAlign: TextAlign.center, style: const TextStyle(color: BeacleColors.textDim)),
+            textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
       );
     }
     if (proxy.sites.isEmpty) {
-      return Center(child: Text(context.l.t('pxNoSites'), style: const TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('pxNoSites'), style: TextStyle(color: BeacleColors.textDim)));
     }
     return SmoothListView(
       padding: const EdgeInsets.all(16),
@@ -156,7 +156,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Text(context.l.f('pxProviderError', {'e': proxy.lastError}),
-                style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
+                style: TextStyle(color: BeacleColors.err, fontSize: 12)),
           ),
         for (final s in proxy.sites)
           Padding(
@@ -183,11 +183,11 @@ class _ProxyScreenState extends State<ProxyScreen> {
                       ]),
                       const SizedBox(height: 2),
                       Text(_targetLine(s),
-                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                       if (_optionSummary(s).isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Text(_optionSummary(s),
-                            style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                            style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
                       ],
                     ]),
                   ),
@@ -212,7 +212,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
                     onPressed: () => _openSiteForm(state, vps, existing: s),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 16, color: BeacleColors.err),
+                    icon: Icon(Icons.delete_outline, size: 16, color: BeacleColors.err),
                     tooltip: s.managed ? context.l.t('delete') : context.l.t('pxOnlyManaged'),
                     onPressed: !s.managed
                         ? null
@@ -307,7 +307,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: BeacleColors.border),
         ),
-        child: Text(label, style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+        child: Text(label, style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
       ),
     );
   }
@@ -430,7 +430,7 @@ class _PortCheckerState extends State<_PortChecker> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(context.l.t('pxPortChecker'),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
@@ -449,7 +449,7 @@ class _PortCheckerState extends State<_PortChecker> {
           ]),
           if (error != null) ...[
             const SizedBox(height: 10),
-            Text(error!, style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
+            Text(error!, style: TextStyle(color: BeacleColors.err, fontSize: 12)),
           ],
           if (result != null) ...[
             const SizedBox(height: 16),
@@ -488,7 +488,7 @@ class _PortCheckerState extends State<_PortChecker> {
   Widget _kv(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 76, child: Text(k, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))),
+          SizedBox(width: 76, child: Text(k, style: TextStyle(fontSize: 12, color: BeacleColors.textDim))),
           Expanded(child: SelectableText(v, style: const TextStyle(fontSize: 12))),
         ]),
       );

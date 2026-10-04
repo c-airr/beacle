@@ -232,7 +232,7 @@ class _WireGuardSwitchPanelState extends State<WireGuardSwitchPanel> {
     final selected = servers.where((v) => _row(v.id).selected && _row(v.id).step != _Step.done).length;
 
     final intro = Text(l.t('wgSwitchIntro'),
-        style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45));
+        style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45));
     if (servers.isEmpty) {
       return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         intro,
@@ -256,7 +256,7 @@ class _WireGuardSwitchPanelState extends State<WireGuardSwitchPanel> {
         Row(children: [
           Expanded(
             child: Text(l.t('wgSwitchFootnote'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
           ),
           const SizedBox(width: 12),
           FilledButton.icon(
@@ -281,14 +281,14 @@ class _WireGuardSwitchPanelState extends State<WireGuardSwitchPanel> {
     switch (r.step) {
       case _Step.idle:
         status = blocker != null
-            ? Text(blocker, style: const TextStyle(fontSize: 11, color: BeacleColors.warn))
+            ? Text(blocker, style: TextStyle(fontSize: 11, color: BeacleColors.warn))
             : Text(
                 r.probing
                     ? l.t('wgRowChecking')
                     : r.probe?.reason == 'ping_blocked'
                         ? l.t('wgRowReadyNoPing')
                         : l.t('wgRowReady'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim));
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim));
       case _Step.switching:
       case _Step.waiting:
         status = Row(mainAxisSize: MainAxisSize.min, children: [
@@ -296,13 +296,13 @@ class _WireGuardSwitchPanelState extends State<WireGuardSwitchPanel> {
           const SizedBox(width: 6),
           Text(
             l.t(r.step == _Step.switching ? 'wgRowSwitching' : 'wgRowWaiting'),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
         ]);
       case _Step.done:
-        status = Text(l.t('wgRowDone'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok));
+        status = Text(l.t('wgRowDone'), style: TextStyle(fontSize: 11, color: BeacleColors.ok));
       case _Step.failed:
-        status = Text(r.error ?? '', style: const TextStyle(fontSize: 11, color: BeacleColors.err));
+        status = Text(r.error ?? '', style: TextStyle(fontSize: 11, color: BeacleColors.err));
     }
 
     return Container(
@@ -328,7 +328,7 @@ class _WireGuardSwitchPanelState extends State<WireGuardSwitchPanel> {
                 ),
                 const SizedBox(width: 8),
                 Text(v.publicIp.isNotEmpty ? v.publicIp : v.host,
-                    style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'monospace')),
+                    style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'monospace')),
               ]),
               const SizedBox(height: 2),
               status,

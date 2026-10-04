@@ -49,7 +49,7 @@ class OverviewScreen extends StatelessWidget {
       children: [
         Text(
           l.t('ovTagline'),
-          style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
+          style: TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
         ),
         const SizedBox(height: 14),
 
@@ -110,8 +110,8 @@ class OverviewScreen extends StatelessWidget {
         _SectionHeader(
           title: l.t('ovAttention'),
           trailing: attention.isEmpty
-              ? Text(l.t('ovAllClear'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok))
-              : Text('${attention.length}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              ? Text(l.t('ovAllClear'), style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+              : Text('${attention.length}', style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         ),
         const SizedBox(height: 10),
         if (attention.isEmpty)
@@ -169,7 +169,7 @@ class OverviewScreen extends StatelessWidget {
                     child: state.actions.isEmpty
                         ? Padding(
                             padding: const EdgeInsets.symmetric(vertical: 18),
-                            child: Text(l.t('ovNoActions'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                            child: Text(l.t('ovNoActions'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                           )
                         : Column(
                             children: [
@@ -191,7 +191,7 @@ class OverviewScreen extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 8),
                                       Text(l.ago(a.createdAt),
-                                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                                     ],
                                   ),
                                 ),
@@ -207,7 +207,7 @@ class OverviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionHeader(title: l.t('ovCharts'), trailing: const Text('24h', style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
+                  _SectionHeader(title: l.t('ovCharts'), trailing: Text('24h', style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                   const SizedBox(height: 10),
                   PanelCard(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -242,7 +242,7 @@ class OverviewScreen extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 10),
                             child: Text(
                               l.t('ovChartsFill'),
-                              style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
+                              style: TextStyle(fontSize: 10, color: BeacleColors.textDim),
                             ),
                           ),
                       ],
@@ -364,7 +364,7 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       children: [
         Text(title,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: BeacleColors.textDim)),
         const Spacer(),
         if (trailing != null) trailing!,
@@ -387,7 +387,7 @@ class _EmptyBand extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+      child: Text(text, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
     );
   }
 }
@@ -420,12 +420,12 @@ class _KpiTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 0.8, color: BeacleColors.textDim)),
+          Text(label, style: TextStyle(fontSize: 10, letterSpacing: 0.8, color: BeacleColors.textDim)),
           const SizedBox(height: 6),
           Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: tone ?? BeacleColors.text)),
           if (hint != null) ...[
             const SizedBox(height: 4),
-            Text(hint!, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            Text(hint!, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
           ],
         ],
       ),
@@ -472,17 +472,17 @@ class _AttentionRow extends StatelessWidget {
             Expanded(
               child: RichText(
                 text: TextSpan(
-                  style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                  style: TextStyle(fontSize: 13, color: BeacleColors.text),
                   children: [
                     TextSpan(text: item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    const TextSpan(text: '  —  ', style: TextStyle(color: BeacleColors.textDim)),
-                    TextSpan(text: item.message, style: const TextStyle(color: BeacleColors.textDim)),
+                    TextSpan(text: '  —  ', style: TextStyle(color: BeacleColors.textDim)),
+                    TextSpan(text: item.message, style: TextStyle(color: BeacleColors.textDim)),
                   ],
                 ),
               ),
             ),
             if (item.vpsId != null)
-              const Icon(Icons.chevron_right, size: 16, color: BeacleColors.textDim),
+              Icon(Icons.chevron_right, size: 16, color: BeacleColors.textDim),
           ],
         ),
       ),
@@ -536,7 +536,7 @@ class _InfraCard extends StatelessWidget {
               vps.location.isNotEmpty ? vps.location : (vps.host.isEmpty ? '—' : vps.host),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
             ),
             const SizedBox(height: 12),
             Row(
@@ -554,7 +554,7 @@ class _InfraCard extends StatelessWidget {
                     docker == null || !docker.available
                         ? 'Docker —'
                         : 'Docker $running/$total',
-                    style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                    style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                   ),
                 ),
                 Text(
@@ -585,7 +585,7 @@ class _MiniStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+          Text(label, style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
           const SizedBox(height: 2),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ],
@@ -617,7 +617,7 @@ class _ChartBlock extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            Text(label, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const Spacer(),
             Text(shown, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
           ],

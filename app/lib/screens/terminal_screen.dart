@@ -120,30 +120,60 @@ final _shortcuts = Platform.isMacOS
             const PasteTextIntent(SelectionChangedCause.keyboard),
       };
 
-const _theme = TerminalTheme(
-  cursor: Color(0xCCF4F4F5),
-  selection: Color(0x55A1A1AA),
-  foreground: BeacleColors.text,
-  background: BeacleColors.bg,
-  black: Color(0xFF18181B),
-  red: Color(0xFFF87171),
-  green: Color(0xFF4ADE80),
-  yellow: Color(0xFFFBBF24),
-  blue: Color(0xFF60A5FA),
-  magenta: Color(0xFFC084FC),
-  cyan: Color(0xFF22D3EE),
-  white: Color(0xFFE4E4E7),
-  brightBlack: Color(0xFF71717A),
-  brightRed: Color(0xFFFCA5A5),
-  brightGreen: Color(0xFF86EFAC),
-  brightYellow: Color(0xFFFDE68A),
-  brightBlue: Color(0xFF93C5FD),
-  brightMagenta: Color(0xFFD8B4FE),
-  brightCyan: Color(0xFF67E8F9),
-  brightWhite: Color(0xFFFFFFFF),
-  searchHitBackground: Color(0xFFFBBF24),
-  searchHitBackgroundCurrent: Color(0xFF4ADE80),
-  searchHitForeground: Color(0xFF000000),
+TerminalTheme get _theme => BeacleColors.isDark ? _darkTheme : _lightTheme;
+
+final _darkTheme = TerminalTheme(
+  cursor: const Color(0xCCF4F4F5),
+  selection: const Color(0x55A1A1AA),
+  foreground: BeaclePalette.dark.text,
+  background: BeaclePalette.dark.bg,
+  black: const Color(0xFF18181B),
+  red: const Color(0xFFF87171),
+  green: const Color(0xFF4ADE80),
+  yellow: const Color(0xFFFBBF24),
+  blue: const Color(0xFF60A5FA),
+  magenta: const Color(0xFFC084FC),
+  cyan: const Color(0xFF22D3EE),
+  white: const Color(0xFFE4E4E7),
+  brightBlack: const Color(0xFF71717A),
+  brightRed: const Color(0xFFFCA5A5),
+  brightGreen: const Color(0xFF86EFAC),
+  brightYellow: const Color(0xFFFDE68A),
+  brightBlue: const Color(0xFF93C5FD),
+  brightMagenta: const Color(0xFFD8B4FE),
+  brightCyan: const Color(0xFF67E8F9),
+  brightWhite: const Color(0xFFFFFFFF),
+  searchHitBackground: const Color(0xFFFBBF24),
+  searchHitBackgroundCurrent: const Color(0xFF4ADE80),
+  searchHitForeground: const Color(0xFF000000),
+);
+
+/// ANSI colours dark enough to read on a pale background — the bright
+/// variants of a dark-theme palette would vanish on it.
+const _lightTheme = TerminalTheme(
+  cursor: Color(0xCC24292F),
+  selection: Color(0x4D6E7781),
+  foreground: Color(0xFF24292F),
+  background: Color(0xFFF3F4F6),
+  black: Color(0xFF24292F),
+  red: Color(0xFFCF222E),
+  green: Color(0xFF116329),
+  yellow: Color(0xFF7D4E00),
+  blue: Color(0xFF0969DA),
+  magenta: Color(0xFF8250DF),
+  cyan: Color(0xFF1B7C83),
+  white: Color(0xFF6E7781),
+  brightBlack: Color(0xFF57606A),
+  brightRed: Color(0xFFA40E26),
+  brightGreen: Color(0xFF1A7F37),
+  brightYellow: Color(0xFF633C01),
+  brightBlue: Color(0xFF218BFF),
+  brightMagenta: Color(0xFFA475F9),
+  brightCyan: Color(0xFF3192AA),
+  brightWhite: Color(0xFF8C959F),
+  searchHitBackground: Color(0xFFFFDF5D),
+  searchHitBackgroundCurrent: Color(0xFF4AC26B),
+  searchHitForeground: Color(0xFF24292F),
 );
 
 /// The SSH tab: shells on your servers, one per tab.
@@ -266,7 +296,7 @@ class TerminalScreenState extends State<TerminalScreen> {
         Container(
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BeacleColors.border))),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: BeacleColors.border))),
           child: Row(
             children: [
               Expanded(
@@ -330,7 +360,7 @@ class TerminalScreenState extends State<TerminalScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
           child: Text(context.l.t(Platform.isMacOS ? 'sshHintMac' : 'sshHint'),
-              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         ),
       ],
     );
@@ -367,7 +397,7 @@ class TerminalScreenState extends State<TerminalScreen> {
             InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: () => _closeTab(i),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.all(3),
                 child: Icon(Icons.close, size: 13, color: BeacleColors.textDim),
               ),
@@ -390,7 +420,7 @@ class TerminalScreenState extends State<TerminalScreen> {
     final users = _users[v.id]?.users ?? const <String>[];
     final current = _userFor(v.id);
     final label = Text(current.isEmpty ? 'root' : current,
-        style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.text));
+        style: TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.text));
     if (users.length < 2 || !v.online) {
       return Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: label);
     }
@@ -408,7 +438,7 @@ class TerminalScreenState extends State<TerminalScreen> {
               Text(u, style: const TextStyle(fontFamily: 'Consolas', fontSize: 13)),
               if (u == 'root') ...[
                 const SizedBox(width: 8),
-                Text(context.l.t('sshAsRoot'), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                Text(context.l.t('sshAsRoot'), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
               ],
             ]),
           ),
@@ -420,10 +450,10 @@ class TerminalScreenState extends State<TerminalScreen> {
           border: Border.all(color: BeacleColors.border),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.person_outline, size: 13, color: BeacleColors.textDim),
+          Icon(Icons.person_outline, size: 13, color: BeacleColors.textDim),
           const SizedBox(width: 4),
           label,
-          const Icon(Icons.arrow_drop_down, size: 16, color: BeacleColors.textDim),
+          Icon(Icons.arrow_drop_down, size: 16, color: BeacleColors.textDim),
         ]),
       ),
     );
@@ -445,14 +475,14 @@ class TerminalScreenState extends State<TerminalScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.terminal, size: 28, color: BeacleColors.textDim),
+            Icon(Icons.terminal, size: 28, color: BeacleColors.textDim),
             const SizedBox(height: 12),
             Text(context.l.t('sshPickTitle'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text(context.l.t('sshPickBody'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
+            Text(context.l.t('sshPickBody'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
             const SizedBox(height: 16),
             if (hosts.isEmpty)
-              Text(context.l.t('fsNoServers'), style: const TextStyle(color: BeacleColors.textDim))
+              Text(context.l.t('fsNoServers'), style: TextStyle(color: BeacleColors.textDim))
             else
               for (final v in hosts)
                 HoverRow(
@@ -463,7 +493,7 @@ class TerminalScreenState extends State<TerminalScreen> {
                       StatusDot(v.status),
                       const SizedBox(width: 10),
                       Expanded(child: Text(v.name, style: const TextStyle(fontSize: 13))),
-                      Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                      Text(v.host, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                       const SizedBox(width: 8),
                       _userChip(v),
                       const SizedBox(width: 4),

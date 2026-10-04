@@ -9,6 +9,7 @@ import '../api/api_client.dart';
 import '../config.dart';
 import '../l10n/language.dart';
 import '../models/models.dart';
+import '../theme.dart';
 import '../tray.dart';
 import '../update/app_updater.dart';
 import '../user_config.dart';
@@ -108,6 +109,36 @@ class AppState extends ChangeNotifier {
     language = l;
     _settings.raw['language'] = l.wire;
     _settings.save();
+    notifyListeners();
+  }
+
+  /// Dark, light or following the OS. Stored in settings.json next to the
+  /// language, and read before the first frame so the panel never flashes
+  /// the wrong palette.
+  late AppThemeMode themeMode = AppThemeModeWire.fromWire(_settings.raw['theme'] as String?);
+
+  void setThemeMode(AppThemeMode m) {
+    if (themeMode == m) return;
+    themeMode = m;
+    _settings.raw['theme'] = m.wire;
+    _settings.save();
+    applyThemeMode();
+    notifyListeners();
+  }
+
+  /// Puts the palette for [themeMode] on screen. Called again when the OS
+  /// switches between light and dark, which only matters for `system`.
+  void applyThemeMode() {
+    if (applyPalette(paletteFor(themeMode))) notifyListeners();
+  }
+
+  /// A tool window's settings changed in the main window: read the language
+  /// and theme again.
+  void reloadAppearance() {
+    _settings.raw = UserSettings.load().raw;
+    language = AppLanguageWire.fromWire(_settings.raw['language'] as String?);
+    themeMode = AppThemeModeWire.fromWire(_settings.raw['theme'] as String?);
+    applyThemeMode();
     notifyListeners();
   }
 

@@ -288,7 +288,7 @@ class AppShellState extends State<AppShell> {
         Expanded(child: stack),
         Container(
           width: _splitWidth,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: BeacleColors.bg,
             border: Border(left: BorderSide(color: BeacleColors.border)),
           ),
@@ -297,7 +297,7 @@ class AppShellState extends State<AppShell> {
               Container(
                 height: 36,
                 padding: const EdgeInsets.only(left: 14, right: 4),
-                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: BeacleColors.border))),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: BeacleColors.border))),
                 child: Row(children: [
                   Icon(toolItems[split].$1, size: 15, color: BeacleColors.textDim),
                   const SizedBox(width: 8),
@@ -330,7 +330,7 @@ class AppShellState extends State<AppShell> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(20, 22, 20, 28),
             child: Text(
               'BEACLE',
@@ -389,7 +389,7 @@ class AppShellState extends State<AppShell> {
                 Expanded(
                   child: Text(
                     state.connected ? context.l.t('connected') : context.l.t('offline'),
-                    style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                    style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                   ),
                 ),
               ],
@@ -418,12 +418,12 @@ class AppShellState extends State<AppShell> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.vpn_key_outlined, size: 16, color: BeacleColors.ok),
+            Icon(Icons.vpn_key_outlined, size: 16, color: BeacleColors.ok),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 context.l.t('wgMigrateBanner'),
-                style: const TextStyle(fontSize: 12.5, color: BeacleColors.text, height: 1.2),
+                style: TextStyle(fontSize: 12.5, color: BeacleColors.text, height: 1.2),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -505,7 +505,7 @@ class AppShellState extends State<AppShell> {
               'on': state.vpsList.where((v) => v.online).length,
               'total': state.vpsList.length,
             }),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -534,7 +534,8 @@ class AppShellState extends State<AppShell> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child:
-                        Text('${state.activeAlerts}', style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700)),
+                        Text('${state.activeAlerts}',
+                            style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
                 ),
             ],
@@ -605,7 +606,7 @@ class _NavItemState extends State<_NavItem> {
                     color: BeacleColors.err.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text('${widget.badge}', style: const TextStyle(fontSize: 9, color: BeacleColors.err)),
+                  child: Text('${widget.badge}', style: TextStyle(fontSize: 9, color: BeacleColors.err)),
                 ),
             ],
           ),
@@ -639,7 +640,7 @@ class _AlertToast extends StatelessWidget {
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
           ),
           const SizedBox(height: 4),
-          Text(alertMessage(context.l, alert), style: const TextStyle(fontSize: 13, color: BeacleColors.text, height: 1.3)),
+          Text(alertMessage(context.l, alert), style: TextStyle(fontSize: 13, color: BeacleColors.text, height: 1.3)),
         ],
       ),
     );

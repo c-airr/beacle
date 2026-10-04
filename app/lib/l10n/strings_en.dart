@@ -240,7 +240,7 @@ const _en = <String, String>{
   // settings
   'stAppearance': 'APPEARANCE',
   'stTheme': 'Theme',
-  'stThemeDetail': 'The palette is compiled in as constants, so a light theme is a rework of every screen rather than a flag.',
+  'stThemeDetail': 'Light is a soft grey rather than white, easy on the eyes. System follows your computer and switches with it.',
   'stDark': 'Dark',
   'stStartup': 'STARTUP',
   'stAutostartWinOnly': 'Launch at login is only wired up for Windows.',
@@ -876,4 +876,7 @@ const _en = <String, String>{
   'upDH': '{d}d {h}h',
   'upHM': '{h}h {m}m',
   'upM': '{m}m',
+  // theme
+  'stLight': 'Light',
+  'stSystem': 'System',
 };

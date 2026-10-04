@@ -202,12 +202,12 @@ class _OsUpdatesDialogState extends State<_OsUpdatesDialog> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(context.l.t('osRebootRequired'),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.err)),
               ),
             if (u.packages.isEmpty)
               Text(context.l.t('osUpToDate'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
             else
               Flexible(
                 child: Container(
@@ -235,7 +235,7 @@ class _OsUpdatesDialogState extends State<_OsUpdatesDialog> {
                                           fontSize: 12, fontWeight: FontWeight.w600)),
                                   Text(
                                     p.current.isEmpty ? p.latest : '${p.current} → ${p.latest}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 11,
                                         fontFamily: 'Consolas',
                                         color: BeacleColors.textDim),
@@ -251,7 +251,7 @@ class _OsUpdatesDialogState extends State<_OsUpdatesDialog> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(context.l.t('osSecurity'),
-                                    style: const TextStyle(fontSize: 10, color: BeacleColors.err)),
+                                    style: TextStyle(fontSize: 10, color: BeacleColors.err)),
                               ),
                           ],
                         ),
@@ -264,7 +264,7 @@ class _OsUpdatesDialogState extends State<_OsUpdatesDialog> {
               const SizedBox(height: 10),
               Text(
                 context.l.f('osHeld', {'n': u.held.length, 'names': u.held.map((p) => p.name).join(', ')}),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4),
               ),
             ],
             if (running) ...[
@@ -275,7 +275,7 @@ class _OsUpdatesDialogState extends State<_OsUpdatesDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                     child: Text(context.l.t('osUpgrading'),
-                        style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))),
+                        style: TextStyle(fontSize: 12, color: BeacleColors.textDim))),
               ]),
             ],
             if (job != null && job.hasRun && !running && job.output.isNotEmpty) ...[

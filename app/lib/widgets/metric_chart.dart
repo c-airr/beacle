@@ -200,7 +200,7 @@ class _MetricChartState extends State<MetricChart> {
         Row(
           children: [
             Text(widget.title,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11,
                     color: BeacleColors.textDim,
                     fontWeight: FontWeight.w600,
@@ -215,7 +215,7 @@ class _MetricChartState extends State<MetricChart> {
                     Container(width: 14, height: 2, color: s.color),
                     const SizedBox(width: 5),
                     Text(s.label,
-                        style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
                     const SizedBox(width: 12),
                   ],
                 ],
@@ -357,7 +357,7 @@ class _ChartPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: const TextStyle(fontSize: 9, color: BeacleColors.textDim),
+          style: TextStyle(fontSize: 9, color: BeacleColors.textDim),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -504,7 +504,7 @@ class _ChartPainter extends CustomPainter {
         final tp = TextPainter(
           text: TextSpan(
             text: label,
-            style: const TextStyle(fontSize: 9, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 9, color: BeacleColors.textDim),
           ),
           textDirection: TextDirection.ltr,
         )..layout();
@@ -568,7 +568,7 @@ class _ChartPainter extends CustomPainter {
     final spans = <TextSpan>[
       TextSpan(
         text: when,
-        style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
+        style: TextStyle(fontSize: 10, color: BeacleColors.textDim),
       ),
     ];
     for (final ser in series) {
@@ -576,12 +576,12 @@ class _ChartPainter extends CustomPainter {
       if (v == null) continue;
       spans.add(TextSpan(
         text: '\n${ser.format(v)}  ',
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 11, color: BeacleColors.text, fontWeight: FontWeight.w600),
       ));
       spans.add(TextSpan(
         text: ser.label,
-        style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
+        style: TextStyle(fontSize: 10, color: BeacleColors.textDim),
       ));
     }
 

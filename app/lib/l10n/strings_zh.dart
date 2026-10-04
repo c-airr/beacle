@@ -240,7 +240,7 @@ const _zh = <String, String>{
   // settings
   'stAppearance': '外观',
   'stTheme': '主题',
-  'stThemeDetail': '调色板以常量形式编译在程序中，因此浅色主题意味着重做每个界面，而不是一个开关。',
+  'stThemeDetail': '浅色是柔和的灰色而不是纯白，不刺眼。“跟随系统”会随电脑设置自动切换。',
   'stDark': '深色',
   'stStartup': '启动',
   'stAutostartWinOnly': '登录时启动目前仅支持 Windows。',
@@ -876,4 +876,7 @@ const _zh = <String, String>{
   'upDH': '{d} 天 {h} 小时',
   'upHM': '{h} 小时 {m} 分钟',
   'upM': '{m} 分钟',
+  // theme
+  'stLight': '浅色',
+  'stSystem': '跟随系统',
 };

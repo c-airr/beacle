@@ -163,7 +163,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
             const SizedBox(height: 4),
             Text(
               context.l.t('swIntro'),
-              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
             ),
             const SizedBox(height: 16),
 
@@ -253,7 +253,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                           initialValue: _restart,
                           decoration: InputDecoration(labelText: context.l.t('swIfExits')),
                           dropdownColor: BeacleColors.surfaceHi,
-                          style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                          style: TextStyle(fontSize: 13, color: BeacleColors.text),
                           items: [
                             DropdownMenuItem(value: 'always', child: Text(context.l.t('swAlways'))),
                             DropdownMenuItem(value: 'on-failure', child: Text(context.l.t('swOnFailure'))),
@@ -297,7 +297,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                     const SizedBox(height: 16),
                     Row(children: [
                       Text(context.l.t('swUnitFile'),
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 11,
                               color: BeacleColors.textDim,
                               fontWeight: FontWeight.w600,
@@ -348,7 +348,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
 
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
+              Text(_error!, style: TextStyle(color: BeacleColors.err, fontSize: 12)),
             ],
             const SizedBox(height: 16),
             Row(
@@ -391,7 +391,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                         fontSize: 13, color: danger ? BeacleColors.warn : BeacleColors.text)),
                 const SizedBox(height: 2),
                 Text(detail,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 11, color: BeacleColors.textDim, height: 1.35)),
               ],
             ),
@@ -442,7 +442,7 @@ class _EnvEditorState extends State<_EnvEditor> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(context.l.t('swEnv'),
-            style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+            style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
         const SizedBox(height: 8),
         for (final e in widget.env.entries)
           Padding(
@@ -454,7 +454,7 @@ class _EnvEditorState extends State<_EnvEditor> {
                     overflow: TextOverflow.ellipsis),
               ),
               IconButton(
-                icon: const Icon(Icons.close, size: 14, color: BeacleColors.err),
+                icon: Icon(Icons.close, size: 14, color: BeacleColors.err),
                 onPressed: () {
                   final next = {...widget.env}..remove(e.key);
                   widget.onChanged(next);

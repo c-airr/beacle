@@ -240,7 +240,7 @@ const _pl = <String, String>{
   // settings
   'stAppearance': 'WYGLĄD',
   'stTheme': 'Motyw',
-  'stThemeDetail': 'Paleta jest wkompilowana na stałe, więc jasny motyw to przeróbka każdego ekranu, a nie przełącznik.',
+  'stThemeDetail': 'Jasny to łagodna szarość zamiast bieli — nie męczy oczu. Systemowy podąża za ustawieniem komputera i przełącza się razem z nim.',
   'stDark': 'Ciemny',
   'stStartup': 'URUCHAMIANIE',
   'stAutostartWinOnly': 'Uruchamianie po zalogowaniu działa na razie tylko na Windows.',
@@ -876,4 +876,7 @@ const _pl = <String, String>{
   'upDH': '{d} d {h} godz.',
   'upHM': '{h} godz. {m} min',
   'upM': '{m} min',
+  // theme
+  'stLight': 'Jasny',
+  'stSystem': 'Systemowy',
 };

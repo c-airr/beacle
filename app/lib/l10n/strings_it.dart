@@ -240,7 +240,7 @@ const _it = <String, String>{
   // settings
   'stAppearance': 'ASPETTO',
   'stTheme': 'Tema',
-  'stThemeDetail': 'La tavolozza è compilata come costanti, quindi un tema chiaro significa rifare ogni schermata, non attivare un’opzione.',
+  'stThemeDetail': 'Il chiaro è un grigio morbido invece del bianco, riposante per gli occhi. Sistema segue il computer e cambia insieme a lui.',
   'stDark': 'Scuro',
   'stStartup': 'AVVIO',
   'stAutostartWinOnly': 'L’avvio all’accesso è disponibile solo su Windows.',
@@ -876,4 +876,7 @@ const _it = <String, String>{
   'upDH': '{d} g {h} h',
   'upHM': '{h} h {m} min',
   'upM': '{m} min',
+  // theme
+  'stLight': 'Chiaro',
+  'stSystem': 'Sistema',
 };

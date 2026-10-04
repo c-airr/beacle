@@ -117,7 +117,7 @@ class _UploadDialogState extends State<_UploadDialog> {
           children: [
             _label(l.t('fsUploadFiles')),
             if (_files.isEmpty)
-              Text(l.t('fsUploadNoFiles'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+              Text(l.t('fsUploadNoFiles'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
             else
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 120),
@@ -126,10 +126,10 @@ class _UploadDialogState extends State<_UploadDialog> {
                   children: [
                     for (final f in _files)
                       Row(children: [
-                        const Icon(Icons.insert_drive_file_outlined, size: 14, color: BeacleColors.textDim),
+                        Icon(Icons.insert_drive_file_outlined, size: 14, color: BeacleColors.textDim),
                         const SizedBox(width: 8),
                         Expanded(child: Text(_base(f), style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
-                        Text(_size(f), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        Text(_size(f), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                         IconButton(
                           icon: const Icon(Icons.close, size: 14),
                           visualDensity: VisualDensity.compact,
@@ -197,7 +197,7 @@ class _UploadDialogState extends State<_UploadDialog> {
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Text(_error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                        child: Text(_error!, style: TextStyle(fontSize: 12, color: BeacleColors.err)),
                       ),
                     )
                   : dir == null
@@ -210,7 +210,7 @@ class _UploadDialogState extends State<_UploadDialog> {
                             if (folders.isEmpty && dir.parent.isEmpty)
                               Padding(
                                 padding: const EdgeInsets.all(8),
-                                child: Text(l.t('fsEmpty'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                                child: Text(l.t('fsEmpty'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                               ),
                           ],
                         ),
@@ -245,7 +245,7 @@ class _UploadDialogState extends State<_UploadDialog> {
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text.toUpperCase(),
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.9, color: BeacleColors.textDim)),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.9, color: BeacleColors.textDim)),
       );
 
   Widget _folderRow(String name, VoidCallback onTap, {bool up = false}) => HoverRow(

@@ -45,7 +45,7 @@ class AlertsPanel extends StatelessWidget {
         color: BeacleColors.surfaceHi,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: BeacleColors.border),
-        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 20)],
+        boxShadow: [BoxShadow(color: BeacleColors.shadow, blurRadius: 20)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -60,7 +60,7 @@ class AlertsPanel extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: BeacleColors.err.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
-                    child: Text(context.l.f('alNActive', {'n': active.length}), style: const TextStyle(fontSize: 11, color: BeacleColors.err)),
+                    child: Text(context.l.f('alNActive', {'n': active.length}), style: TextStyle(fontSize: 11, color: BeacleColors.err)),
                   ),
                 const Spacer(),
                 IconButton(icon: const Icon(Icons.close, size: 16), onPressed: onClose),
@@ -72,7 +72,7 @@ class AlertsPanel extends StatelessWidget {
             child: state.alerts.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.all(32),
-                    child: Text(context.l.t('alNone'), style: const TextStyle(color: BeacleColors.textDim)),
+                    child: Text(context.l.t('alNone'), style: TextStyle(color: BeacleColors.textDim)),
                   )
                 : SmoothListView(
                     shrinkWrap: true,
@@ -82,7 +82,7 @@ class AlertsPanel extends StatelessWidget {
                       if (resolved.isNotEmpty) ...[
                         Padding(
                           padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
-                          child: Text(context.l.t('alResolvedHeader'), style: const TextStyle(fontSize: 10, color: BeacleColors.textDim, letterSpacing: 1)),
+                          child: Text(context.l.t('alResolvedHeader'), style: TextStyle(fontSize: 10, color: BeacleColors.textDim, letterSpacing: 1)),
                         ),
                         for (final a in resolved) _AlertRow(alert: a, icon: _icon(a.type)),
                       ],
@@ -132,7 +132,7 @@ class _AlertRow extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                               decoration: alert.resolved ? TextDecoration.lineThrough : null)),
                     ),
-                    Text(time, style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                    Text(time, style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
                   ]),
                   const SizedBox(height: 2),
                   Text(
@@ -148,7 +148,7 @@ class _AlertRow extends StatelessWidget {
             ),
             if (!alert.resolved)
               IconButton(
-                icon: const Icon(Icons.check, size: 14, color: BeacleColors.textDim),
+                icon: Icon(Icons.check, size: 14, color: BeacleColors.textDim),
                 tooltip: context.l.t('alResolve'),
                 onPressed: () => state.resolveAlert(alert.id),
               ),

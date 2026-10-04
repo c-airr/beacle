@@ -53,7 +53,7 @@ class ServersScreenState extends State<ServersScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     if (state.vpsList.isEmpty) {
-      return Center(child: Text(context.l.t('srvNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('srvNoVps'), style: TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= state.vpsList.first.id;
     // All distinct tags across the fleet, first-seen casing kept for display.
@@ -85,7 +85,7 @@ class ServersScreenState extends State<ServersScreen> {
                 child: Row(
                   children: [
                     Text(context.l.t('navServers'),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.tune, size: 16),
@@ -133,10 +133,10 @@ class ServersScreenState extends State<ServersScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(v.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                    Text(v.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                                    Text(v.host, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                                     if (v.tags.isNotEmpty)
                                       Text(v.tags.map((t) => '#$t').join('  '),
-                                          style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
+                                          style: TextStyle(fontSize: 10, color: BeacleColors.textDim),
                                           overflow: TextOverflow.ellipsis),
                                   ],
                                 ),
@@ -144,7 +144,7 @@ class ServersScreenState extends State<ServersScreen> {
                               if (state.snapshots[v.id]?.metrics != null && v.online)
                                 Text(
                                   '${state.snapshots[v.id]!.metrics.cpuPercent.toStringAsFixed(0)}%',
-                                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                                 ),
                             ],
                           ),
@@ -215,19 +215,19 @@ class _PendingView extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 vps.tailscaleName.isNotEmpty ? 'Tailscale: ${vps.tailscaleName} · ${vps.host}' : vps.host,
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim, fontFamily: 'Consolas'),
               ),
               if (stale) ...[
                 const SizedBox(height: 12),
                 Text(
                   context.l.f('srvLastUpdate', {'ago': context.l.ago(vps.lastSeen)}),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.warn, height: 1.45),
+                  style: TextStyle(fontSize: 12, color: BeacleColors.warn, height: 1.45),
                 ),
               ] else ...[
                 const SizedBox(height: 12),
                 Text(
                   context.l.t('srvRunInstall'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
                 ),
                 const SizedBox(height: 10),
                 const AddVpsCommand(),
@@ -271,10 +271,10 @@ class _ServerStats extends StatelessWidget {
               const SizedBox(width: 10),
               Text(vps.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(width: 12),
-              Text(vps.host, style: const TextStyle(color: BeacleColors.textDim)),
+              Text(vps.host, style: TextStyle(color: BeacleColors.textDim)),
               const SizedBox(width: 12),
               Text(context.l.f('srvUpdated', {'ago': context.l.ago(vps.lastSeen)}),
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             ]),
             Wrap(spacing: 8, runSpacing: 8, children: [
               SmallButton(context.l.t('sshConnectButton'),
@@ -314,7 +314,7 @@ class _ServerStats extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           context.l.t('srvStatsHint'),
-          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+          style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
         ),
         const SizedBox(height: 12),
         OsUpdatesBanner(vps: vps),
@@ -350,7 +350,7 @@ class _ServerStats extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (m.disks.isEmpty)
-                        Text(context.l.t('srvNoDisk'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                        Text(context.l.t('srvNoDisk'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
                       else
                         for (final d in m.disks)
                           Padding(
@@ -374,7 +374,7 @@ class _ServerStats extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (m.network.isEmpty)
-                        Text(context.l.t('srvNoNet'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                        Text(context.l.t('srvNoNet'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
                       else
                         for (final n in m.network)
                           Padding(
@@ -422,7 +422,7 @@ class _ServerStats extends StatelessWidget {
   Widget _info(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 80, child: Text(k, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))),
+          SizedBox(width: 80, child: Text(k, style: TextStyle(fontSize: 12, color: BeacleColors.textDim))),
           Expanded(child: Text(v.isEmpty ? '-' : v, style: const TextStyle(fontSize: 12))),
         ]),
       );
@@ -445,7 +445,7 @@ class _CpuSummary extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             context.l.f('srvCoresLoad', {'n': m.cpuCores, 'load': m.load1.toStringAsFixed(2)}),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(height: 12),
           MetricBar(label: context.l.t('srvOverall'), percent: m.cpuPercent),
@@ -470,11 +470,11 @@ class _UptimePanel extends StatelessWidget {
         children: [
           Text(context.l.uptime(m.uptimeSeconds), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          Text(context.l.f('srvAgentV', {'v': vps.agentVersion}), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+          Text(context.l.f('srvAgentV', {'v': vps.agentVersion}), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
           const SizedBox(height: 4),
           Text(
             context.l.f('srvLoad', {'v': '${m.load1.toStringAsFixed(2)} / ${m.load5.toStringAsFixed(2)} / ${m.load15.toStringAsFixed(2)}'}),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
         ],
       ),
@@ -500,7 +500,7 @@ class _CoresPanel extends StatelessWidget {
 
     return PanelCard(
       title: context.l.t('srvCpuCores'),
-      trailing: Text('${cores.length}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+      trailing: Text('${cores.length}', style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
       child: dual
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -552,7 +552,7 @@ class _RamPanel extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             context.l.f('srvMemUsed', {'v': '${fmtBytes(m.memUsedBytes)} / ${fmtBytes(m.memTotalBytes)}'}),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(height: 12),
           MetricBar(
@@ -570,7 +570,7 @@ class _RamPanel extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Text(context.l.t('srvCacheBuffers'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                Text(context.l.t('srvCacheBuffers'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 const Spacer(),
                 Text(fmtBytes(m.memCachedBytes), style: const TextStyle(fontSize: 12)),
               ],
@@ -579,7 +579,7 @@ class _RamPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             context.l.f('srvSwap', {'v': '${fmtBytes(m.swapUsed)} / ${fmtBytes(m.swapTotal)}'}),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
         ],
       ),

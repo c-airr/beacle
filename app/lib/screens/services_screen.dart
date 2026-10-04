@@ -529,7 +529,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final state = context.watch<AppState>();
     final withAgent = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (withAgent.isEmpty) {
-      return Center(child: Text(context.l.t('dockerNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('dockerNoVps'), style: TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= withAgent.first.id;
     final vps = withAgent.where((v) => v.id == selectedId).firstOrNull ?? withAgent.first;
@@ -550,17 +550,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 width: 220,
                 child: _isFleetTab
                     ? Row(children: [
-                        const Icon(Icons.dns_outlined, size: 15, color: BeacleColors.textDim),
+                        Icon(Icons.dns_outlined, size: 15, color: BeacleColors.textDim),
                         const SizedBox(width: 8),
                         Text(context.l.f('svcAllServers', {'n': withAgent.length}),
-                            style: const TextStyle(fontSize: 13, color: BeacleColors.text)),
+                            style: TextStyle(fontSize: 13, color: BeacleColors.text)),
                       ])
                     : DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           isExpanded: true,
                           value: vps.id,
                           dropdownColor: BeacleColors.surfaceHi,
-                          style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                          style: TextStyle(fontSize: 13, color: BeacleColors.text),
                           items: [
                             for (final v in withAgent)
                               DropdownMenuItem(
@@ -707,7 +707,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             Expanded(
               child: Text(
                 context.l.t('svcSystemdIntro'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
             ),
             SmallButton(context.l.t('svcNewService'), icon: Icons.add, onPressed: live ? newService : null),
@@ -716,7 +716,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         if (units.isEmpty)
           Expanded(
             child: Center(
-              child: Text(context.l.t('svcNoServices'), style: const TextStyle(color: BeacleColors.textDim)),
+              child: Text(context.l.t('svcNoServices'), style: TextStyle(color: BeacleColors.textDim)),
             ),
           )
         else
@@ -759,10 +759,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ),
                 SizedBox(
                   width: 70,
-                  child: Text(u.enabled, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  child: Text(u.enabled, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                 ),
                 Expanded(
-                  child: Text(u.description, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim), overflow: TextOverflow.ellipsis),
+                  child: Text(u.description, style: TextStyle(fontSize: 12, color: BeacleColors.textDim), overflow: TextOverflow.ellipsis),
                 ),
                 IconButton(
                   icon: const Icon(Icons.play_arrow, size: 16),
@@ -799,7 +799,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   /// so the table says how it is ordered without a legend.
   Widget _sortHeader(String label, SortKey key, {TextAlign align = TextAlign.left}) {
     final active = sortKey == key;
-    const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
+    final hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return InkWell(
       onTap: () => _sortBy(key),
       child: Padding(
@@ -825,7 +825,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return Center(
         child: Text(
           state.isReportStale(vps) ? context.l.t('svcStale') : context.l.t('svcWaiting'),
-          style: const TextStyle(color: BeacleColors.textDim),
+          style: TextStyle(color: BeacleColors.textDim),
         ),
       );
     }
@@ -834,12 +834,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return Center(
         child: Text(
           loadingProcs ? context.l.t('svcLoading') : (filter.isEmpty ? context.l.t('svcNothingRunning') : context.l.t('svcNothingMatches')),
-          style: const TextStyle(color: BeacleColors.textDim),
+          style: TextStyle(color: BeacleColors.textDim),
         ),
       );
     }
 
-    const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
+    final hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return Column(
       children: [
         Padding(
@@ -891,7 +891,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         Expanded(
                           flex: 3,
                           child: Text(r.detail,
-                              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                              style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                               overflow: TextOverflow.ellipsis),
                         ),
                         SizedBox(
@@ -906,7 +906,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           width: 62,
                           child: Text(r.pid == 0 ? '—' : '${r.pid}',
                               textAlign: TextAlign.right,
-                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                         ),
                         SizedBox(
                           width: 66,
@@ -963,7 +963,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return Center(
         child: Text(
           state.isReportStale(vps) ? context.l.t('svcStale') : context.l.t('svcWaiting'),
-          style: const TextStyle(color: BeacleColors.textDim),
+          style: TextStyle(color: BeacleColors.textDim),
         ),
       );
     }
@@ -982,13 +982,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
           loadingProcs
               ? context.l.t('svcLoading')
               : (filter.isEmpty ? context.l.t('svcNoProcData') : context.l.t('svcNothingMatches')),
-          style: const TextStyle(color: BeacleColors.textDim),
+          style: TextStyle(color: BeacleColors.textDim),
         ),
       );
     }
     rows = _sortedProcs(rows);
 
-    const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
+    final hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return Column(
       children: [
         Padding(
@@ -1024,7 +1024,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         SizedBox(
                           width: 60,
                           child: Text('${p.pid}',
-                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                         ),
                         Expanded(
                           flex: 2,
@@ -1035,13 +1035,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         SizedBox(
                           width: 90,
                           child: Text(p.user,
-                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
                               overflow: TextOverflow.ellipsis),
                         ),
                         SizedBox(
                           width: 60,
                           child: Text(p.state,
-                              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                         ),
                         SizedBox(
                           width: 70,
@@ -1129,7 +1129,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(force ? context.l.t('killForce') : context.l.t('killTerminate'),
-                style: const TextStyle(color: BeacleColors.err)),
+                style: TextStyle(color: BeacleColors.err)),
           ),
         ],
       ),
@@ -1152,7 +1152,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return Center(
         child: Text(
           state.isReportStale(vps) ? context.l.t('svcStale') : context.l.t('svcWaiting'),
-          style: const TextStyle(color: BeacleColors.textDim),
+          style: TextStyle(color: BeacleColors.textDim),
         ),
       );
     }
@@ -1166,12 +1166,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
     if (loadingLogs && logFiles.isEmpty) {
       return Center(
-        child: Text(context.l.t('svcLoading'), style: const TextStyle(color: BeacleColors.textDim)),
+        child: Text(context.l.t('svcLoading'), style: TextStyle(color: BeacleColors.textDim)),
       );
     }
     if (logFiles.isEmpty) {
       return Center(
-        child: Text(context.l.t('logsNoFiles'), style: const TextStyle(color: BeacleColors.textDim)),
+        child: Text(context.l.t('logsNoFiles'), style: TextStyle(color: BeacleColors.textDim)),
       );
     }
     final current =
@@ -1186,7 +1186,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 child: DropdownButton<String>(
                   value: current.id,
                   dropdownColor: BeacleColors.surfaceHi,
-                  style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                  style: TextStyle(fontSize: 13, color: BeacleColors.text),
                   items: [
                     for (final f in logFiles) DropdownMenuItem(value: f.id, child: Text(f.label)),
                   ],
@@ -1203,7 +1203,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(current.path,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
                     overflow: TextOverflow.ellipsis),
               ),
@@ -1249,7 +1249,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (c == null) {
       return Center(
         child: Text(!live ? context.l.t('svcStale') : context.l.t('cronLoadFailed'),
-            style: const TextStyle(color: BeacleColors.textDim)),
+            style: TextStyle(color: BeacleColors.textDim)),
       );
     }
     bool matches(CronEntry e) {
@@ -1277,7 +1277,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           ),
           if (!c.cronAvailable)
             Text(context.l.t('cronNoCron'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
           const SizedBox(width: 8),
           SmallButton(context.l.t('cronNew'),
               icon: Icons.add,
@@ -1288,7 +1288,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(context.l.t('cronEmpty'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
           ),
         for (final e in mine) _cronEntryCard(state, vps, e, live),
         if (system.isNotEmpty) ...[
@@ -1331,7 +1331,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         Text(
                           '${context.l.t('cronNext')}: ${t.next.isEmpty ? '—' : t.next}   ·   '
                           '${context.l.t('cronLast')}: ${t.last.isEmpty ? '—' : t.last}',
-                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                         ),
                       ],
                     ),
@@ -1364,7 +1364,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 const SizedBox(height: 3),
                 Text(
                   '${e.schedule}${e.user.isNotEmpty ? '   ·   ${e.user}' : ''}   ·   ${e.source}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
                 ),
               ],
@@ -1400,7 +1400,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (f == null) {
       return Center(
         child: Text(!live ? context.l.t('svcStale') : context.l.t('fwLoadFailed'),
-            style: const TextStyle(color: BeacleColors.textDim)),
+            style: TextStyle(color: BeacleColors.textDim)),
       );
     }
     bool matches(FirewallRule r) {
@@ -1437,7 +1437,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             chip(f.backend, BeacleColors.text),
             if (f.backendDetail.isNotEmpty)
               Text(f.backendDetail,
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             chip(
                 f.enabled ? context.l.t('fwEnabled') : context.l.t('fwDisabled'),
                 f.enabled ? BeacleColors.ok : BeacleColors.warn),
@@ -1453,7 +1453,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(f.note,
-                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
           ),
         const SizedBox(height: 12),
         Row(children: [
@@ -1474,7 +1474,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(context.l.t('fwEmpty'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
           ),
         for (final r in rules)
           Padding(
@@ -1513,19 +1513,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
                         ),
                         if (r.protected) ...[
                           const SizedBox(width: 8),
-                          const Icon(Icons.shield_outlined,
+                          Icon(Icons.shield_outlined,
                               size: 13, color: BeacleColors.accent),
                         ],
                       ]),
                       const SizedBox(height: 2),
                       SelectableText(r.raw,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 11,
                               color: BeacleColors.textDim,
                               fontFamily: 'Consolas')),
                       if (r.comment.isNotEmpty)
                         Text(r.comment,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 11, color: BeacleColors.textDim)),
                     ],
                   ),
@@ -1557,7 +1557,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 Expanded(
                   child: Text(
                     p.processName.isEmpty ? '—' : p.processName,
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1732,14 +1732,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     size: 11, color: BeacleColors.err),
                 const SizedBox(width: 5),
                 Text(context.l.t(vps.status == 'agent_down' ? 'svcAgentDown' : 'svcOfflineLower'),
-                    style: const TextStyle(fontSize: 10, color: BeacleColors.err)),
+                    style: TextStyle(fontSize: 10, color: BeacleColors.err)),
               ]),
             ),
             const SizedBox(width: 10),
           ],
           Expanded(
             child: Text(detail,
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 overflow: TextOverflow.ellipsis),
           ),
           ...actions,
@@ -1776,14 +1776,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
             context.l.t('svcScreenIntro'),
-            style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
           ),
         ),
         if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 40),
             child: Center(
-              child: Text(context.l.t('svcNothingMatches'), style: const TextStyle(color: BeacleColors.textDim)),
+              child: Text(context.l.t('svcNothingMatches'), style: TextStyle(color: BeacleColors.textDim)),
             ),
           ),
         for (var i = 0; i < shown.length; i++) ...[
@@ -1811,7 +1811,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
                     child: Text(live ? context.l.t('svcNoScreens') : context.l.t('svcNothingLastSeen'),
-                        style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                   )
                 else
                   for (final s in sessions) _screenSessionCard(state, vps, s, live),
@@ -1822,7 +1822,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         Padding(
           padding: const EdgeInsets.only(top: 14),
           child: Text(context.l.t('svcReattach'),
-              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         ),
       ],
     );
@@ -1842,7 +1842,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(width: 10),
                 if (s.attached)
-                  Text(context.l.t('svcAttached'), style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                  Text(context.l.t('svcAttached'), style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
               ]),
               const SizedBox(height: 2),
               Text(
@@ -1857,7 +1857,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               const SizedBox(height: 2),
               Text(
                 'PID ${s.pid}${s.running ? ' · ${context.l.f('svcChild', {'pid': s.childPid})}' : ''} · ${context.l.f('svcCreated', {'t': s.created})}',
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
               ),
             ]),
           ),
@@ -1929,7 +1929,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             Expanded(
               child: Text(
                 context.l.t('svcNohupIntro'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
             ),
             SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadNohup),
@@ -1939,7 +1939,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 40),
             child: Center(
-              child: Text(context.l.t('svcNothingMatches'), style: const TextStyle(color: BeacleColors.textDim)),
+              child: Text(context.l.t('svcNothingMatches'), style: TextStyle(color: BeacleColors.textDim)),
             ),
           ),
         for (var i = 0; i < shown.length; i++) ...[
@@ -1967,7 +1967,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
                     child: Text(live ? context.l.t('svcNoNohup') : context.l.t('svcNothingLastSeen'),
-                        style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                   )
                 else
                   for (final j in jobs) _nohupJobCard(state, vps, j, live),
@@ -1998,7 +1998,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               const SizedBox(height: 2),
               Text(
                 'PID ${j.pid}${j.dir.isEmpty ? '' : ' · ${j.dir}'} · ${context.l.f('svcStartedAt', {'t': j.started})}',
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 overflow: TextOverflow.ellipsis,
               ),
             ]),

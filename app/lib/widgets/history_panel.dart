@@ -205,7 +205,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
             _sync
                 ? context.l.t('hpLiveHelp')
                 : context.l.f('hpShowingHelp', {'range': _fmtRange(_from, _to)}),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           // Only worth explaining when there is a grey band on screen to
           // explain. Saying it unconditionally would be noise on the ordinary
@@ -214,12 +214,12 @@ class _HistoryPanelState extends State<HistoryPanel> {
           if ((_history?.spikes ?? const []).isNotEmpty) ...[
             const SizedBox(height: 5),
             Row(children: [
-              const Icon(Icons.bolt, size: 13, color: BeacleColors.warn),
+              Icon(Icons.bolt, size: 13, color: BeacleColors.warn),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   context.l.t('hpMarks'),
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 ),
               ),
             ]),
@@ -239,7 +239,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
               Expanded(
                 child: Text(
                   context.l.t('hpGrey'),
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 ),
               ),
             ]),
@@ -255,14 +255,14 @@ class _HistoryPanelState extends State<HistoryPanel> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(context.l.f('hpUnavailable', {'e': _error}),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                  style: TextStyle(fontSize: 12, color: BeacleColors.err)),
             )
           else if (samples.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 30),
               child: Text(
                 context.l.t('hpEmpty'),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
               ),
             )
           else ...[
@@ -342,7 +342,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
                 Expanded(
                   child: Text(
                     context.l.t('hpShaded'),
-                    style: const TextStyle(fontSize: 10, color: BeacleColors.textDim, height: 1.4),
+                    style: TextStyle(fontSize: 10, color: BeacleColors.textDim, height: 1.4),
                   ),
                 ),
               ],

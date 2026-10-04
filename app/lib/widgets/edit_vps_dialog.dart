@@ -138,7 +138,7 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text(context.l.t('thresholdsHint'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -175,7 +175,7 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+        Text(label, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
         const SizedBox(height: 4),
         TextField(
           controller: c,
@@ -194,7 +194,7 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+        Text(label, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
         const SizedBox(height: 4),
         TextField(
           controller: c,

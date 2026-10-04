@@ -178,7 +178,7 @@ class _CronEditorDialogState extends State<_CronEditorDialog> {
                       children: [
                         Text(labels[i],
                             style:
-                                const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                                TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                         const SizedBox(height: 4),
                         TextField(
                           controller: ctrls[i],
@@ -200,11 +200,11 @@ class _CronEditorDialogState extends State<_CronEditorDialog> {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(hint,
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.ok)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.ok)),
               ),
             const SizedBox(height: 10),
             Text(context.l.t('cronCommand'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const SizedBox(height: 4),
             TextField(
               controller: _command,
@@ -220,7 +220,7 @@ class _CronEditorDialogState extends State<_CronEditorDialog> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(_error!,
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.err)),
               ),
           ],
         ),

@@ -240,7 +240,7 @@ const _fr = <String, String>{
   // settings
   'stAppearance': 'APPARENCE',
   'stTheme': 'Thème',
-  'stThemeDetail': 'La palette est compilée sous forme de constantes, donc un thème clair implique de reprendre chaque écran, pas d’activer une option.',
+  'stThemeDetail': 'Le clair est un gris doux plutôt que du blanc, reposant pour les yeux. Système suit votre ordinateur et change avec lui.',
   'stDark': 'Sombre',
   'stStartup': 'DÉMARRAGE',
   'stAutostartWinOnly': 'Le lancement à l’ouverture de session n’existe que sous Windows.',
@@ -876,4 +876,7 @@ const _fr = <String, String>{
   'upDH': '{d} j {h} h',
   'upHM': '{h} h {m} min',
   'upM': '{m} min',
+  // theme
+  'stLight': 'Clair',
+  'stSystem': 'Système',
 };

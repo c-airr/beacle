@@ -10,6 +10,7 @@ import 'screens/files_screen.dart';
 import 'screens/terminal_screen.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
+import 'widgets/themed_app.dart';
 import 'window_control.dart';
 
 /// "Separate window" mode for SSH and Files.
@@ -20,6 +21,7 @@ import 'window_control.dart';
 /// keeps the process and sends it commands on stdin, one per line:
 ///   `open <vpsId>`  open a shell on that server (SSH)
 ///   `focus`         bring the window to the front
+///   `appearance`    the language or theme changed; read settings again
 /// When stdin closes — the main window quit — the tool window quits too.
 class ToolWindows {
   ToolWindows._();
@@ -52,6 +54,16 @@ class ToolWindows {
     }));
   }
 
+  /// Tells every open tool window that the language or theme changed, so it
+  /// follows the main window instead of waiting for a restart.
+  static void appearanceChanged() {
+    for (final p in _running.values) {
+      try {
+        p.stdin.writeln('appearance');
+      } catch (_) {}
+    }
+  }
+
   /// Closes every tool window (the main window is quitting).
   static void closeAll() {
     for (final p in _running.values) {
@@ -71,16 +83,11 @@ String? argValue(List<String> args, String name) {
 
 /// Entry point of a tool window process.
 void runToolWindow(String tool, String? vpsId) {
-  final state = AppState();
+  final state = AppState()..applyThemeMode();
   unawaited(state.startViewer());
   runApp(ChangeNotifierProvider.value(
     value: state,
-    child: MaterialApp(
-      title: 'Beacle',
-      debugShowCheckedModeBanner: false,
-      theme: beacleTheme(),
-      home: _ToolWindow(tool: tool, initialVps: vpsId),
-    ),
+    child: BeacleMaterialApp(home: _ToolWindow(tool: tool, initialVps: vpsId)),
   ));
 }
 
@@ -128,6 +135,8 @@ class _ToolWindowState extends State<_ToolWindow> {
         WindowControl.focus();
       case 'focus':
         WindowControl.focus();
+      case 'appearance':
+        context.read<AppState>().reloadAppearance();
     }
   }
 

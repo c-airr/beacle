@@ -48,7 +48,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           children: [
             Text(
               context.l.t('alTagline'),
-              style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
+              style: TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
             ),
             const Spacer(),
             IconButton(
@@ -96,7 +96,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
               ),
               Text(
                 '${AlertSound.volumePercent}%',
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
               ),
             ],
             const SizedBox(width: 4),
@@ -153,7 +153,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   const SizedBox(height: 10),
                   Text(
                     active.isEmpty ? context.l.t('ovAllClear') : context.l.t('alNoMatch'),
-                    style: const TextStyle(color: BeacleColors.textDim, fontSize: 14),
+                    style: TextStyle(color: BeacleColors.textDim, fontSize: 14),
                   ),
                 ],
               ),
@@ -187,7 +187,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   const SizedBox(width: 6),
                   Text(
                     context.l.f('alResolvedN', {'n': resolved.length}),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: BeacleColors.textDim,
@@ -219,7 +219,7 @@ class _GroupHeader extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Text(
           '$label ($count)',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: BeacleColors.textDim,
@@ -265,7 +265,7 @@ class _SeverityChip extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 label,
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, letterSpacing: 0.4),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim, letterSpacing: 0.4),
               ),
               const Spacer(),
               Text(
@@ -342,7 +342,7 @@ class _AlertRow extends StatelessWidget {
                         const SizedBox(width: 10),
                         Text(
                           alertTypeLabel(context.l, alert.type),
-                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                         ),
                       ],
                     ),
@@ -358,7 +358,7 @@ class _AlertRow extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       context.l.f(alert.resolved ? 'alResolvedStarted' : 'alSince', {'ago': context.l.ago(alert.createdAt)}),
-                      style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                      style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                     ),
                   ],
                 ),

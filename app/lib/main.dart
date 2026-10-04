@@ -8,9 +8,10 @@ import 'paths.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/shell.dart';
 import 'state/app_state.dart';
-import 'theme.dart';
 import 'tool_window.dart';
+import 'theme.dart';
 import 'user_config.dart';
+import 'widgets/themed_app.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,8 @@ void main(List<String> args) async {
   }
 
   await EmbeddedBackend.instance.ensureRunning();
+  // The saved theme, before the first frame, so it never flashes dark.
+  applyPalette(paletteFor(AppThemeModeWire.fromWire(UserSettings.load().raw['theme'] as String?)));
   runApp(const BeacleApp());
 }
 
@@ -84,10 +87,7 @@ class _BeacleAppState extends State<BeacleApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: state,
-      child: MaterialApp(
-        title: 'Beacle',
-        debugShowCheckedModeBanner: false,
-        theme: beacleTheme(),
+      child: BeacleMaterialApp(
         home: userConfig.onboardingComplete ? const AppShell() : const OnboardingScreen(),
       ),
     );

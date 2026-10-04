@@ -98,7 +98,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 8),
         Text(
           context.l.t('obLanguageBody'),
-          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+          style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
         ),
         const SizedBox(height: 16),
         // Two columns: eight languages in one would push Continue off a
@@ -155,14 +155,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('BEACLE', style: TextStyle(fontSize: 12, letterSpacing: 4, color: BeacleColors.textDim)),
+        Text('BEACLE', style: TextStyle(fontSize: 12, letterSpacing: 4, color: BeacleColors.textDim)),
         const SizedBox(height: 12),
         Text(context.l.t('obWelcomeTitle'),
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
         const SizedBox(height: 12),
         Text(
           context.l.t('obWelcomeBody'),
-          style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.5),
+          style: TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.5),
         ),
         const SizedBox(height: 28),
         Row(
@@ -187,7 +187,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 8),
         Text(
           context.l.t('obSshBody'),
-          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+          style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
         ),
         const SizedBox(height: 16),
         _modeGroup(context.l.t('navSsh'), Icons.terminal, sshMode, (m) => setState(() => sshMode = m)),
@@ -213,7 +213,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Row(children: [
           Icon(icon, size: 14, color: BeacleColors.textDim),
           const SizedBox(width: 6),
-          Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
+          Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
         ]),
         const SizedBox(height: 4),
         _modeTile(context.l.t('obSshSeparate'), SshDisplayMode.separateWindow, value, onPick),
@@ -262,27 +262,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 16),
         if (_servers.isEmpty)
           Text(context.l.t('obNoServers'),
-              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+              style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
         else ...[
           for (final s in _servers) ...[
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.dns_outlined, size: 14, color: BeacleColors.textDim),
+                  Icon(Icons.dns_outlined, size: 14, color: BeacleColors.textDim),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(s.name, style: const TextStyle(fontSize: 13)),
-                        Text(s.tailscaleIp, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                        Text(s.tailscaleIp, style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                       ],
                     ),
                   ),
                   IconButton(
                     tooltip: context.l.t('obRemove'),
-                    icon: const Icon(Icons.close, size: 16, color: BeacleColors.textDim),
+                    icon: Icon(Icons.close, size: 16, color: BeacleColors.textDim),
                     onPressed: _finishing
                         ? null
                         : () async {
@@ -301,7 +301,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ],
         if (_error != null) ...[
           const SizedBox(height: 8),
-          Text(_error!, style: const TextStyle(fontSize: 11, color: BeacleColors.err)),
+          Text(_error!, style: TextStyle(fontSize: 11, color: BeacleColors.err)),
         ],
         const SizedBox(height: 12),
         SmallButton(context.l.t('addVps'), icon: Icons.add, onPressed: _finishing ? null : () => _showAddVps()),
@@ -361,7 +361,7 @@ class _InstallBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(context.l.t('obInstallCmd'),
-              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
           const SizedBox(height: 6),
           const AddVpsCommand(),
         ],

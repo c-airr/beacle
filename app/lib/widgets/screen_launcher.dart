@@ -161,7 +161,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
             const SizedBox(height: 4),
             Text(
               l == null ? '' : l.path,
-              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
             ),
             const SizedBox(height: 12),
 
@@ -176,7 +176,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(20),
-                          child: Text(error!, style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
+                          child: Text(error!, style: TextStyle(color: BeacleColors.err, fontSize: 12)),
                         ),
                       )
                     : loading
@@ -187,7 +187,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                               if (l != null && l.parent.isNotEmpty)
                                 HoverRow(
                                   onTap: () => _browse(l.parent),
-                                  child: const Padding(
+                                  child: Padding(
                                     padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                     child: Row(children: [
                                       Icon(Icons.arrow_upward, size: 15, color: BeacleColors.textDim),
@@ -216,7 +216,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                                         ),
                                         if (!e.isDir)
                                           Text(fmtBytes(e.size),
-                                              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                                              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                                       ],
                                     ),
                                   ),

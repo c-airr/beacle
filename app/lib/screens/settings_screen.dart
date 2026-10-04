@@ -14,6 +14,7 @@ import '../models/models.dart';
 import '../paths.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../tool_window.dart';
 import '../tray.dart';
 import '../update/agent_updater.dart';
 import '../update/app_updater.dart';
@@ -155,14 +156,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // One option each for now, but presented as choices: the point of
-              // a picker is that it says what the alternatives will be.
               _choice(
                 label: context.l.t('stTheme'),
                 detail: context.l.t('stThemeDetail'),
-                value: 'dark',
-                options: {'dark': context.l.t('stDark')},
-                onChanged: (_) {},
+                value: state.themeMode.wire,
+                options: {
+                  AppThemeMode.dark.wire: context.l.t('stDark'),
+                  AppThemeMode.light.wire: context.l.t('stLight'),
+                  AppThemeMode.system.wire: context.l.t('stSystem'),
+                },
+                onChanged: (v) {
+                  state.setThemeMode(AppThemeModeWire.fromWire(v));
+                  ToolWindows.appearanceChanged();
+                },
               ),
               const Divider(height: 24),
               _choice(
@@ -170,7 +176,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 detail: context.l.t('setLanguageDetail'),
                 value: state.language.wire,
                 options: {for (final l in AppLanguage.values) l.wire: l.label},
-                onChanged: (v) => state.setLanguage(AppLanguageWire.fromWire(v)),
+                onChanged: (v) {
+                  state.setLanguage(AppLanguageWire.fromWire(v));
+                  ToolWindows.appearanceChanged();
+                },
               ),
               const Divider(height: 24),
               _choice(
@@ -200,7 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               if (!Autostart.supported)
                 Text(
                   context.l.t('stAutostartWinOnly'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
                 )
               else ...[
                 _toggle(
@@ -260,13 +269,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 const SizedBox(height: 12),
                 Text(
                   context.l.t('stTrayWinOnly'),
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
                 ),
               ] else ...[
                 const SizedBox(height: 12),
                 Text(
                   context.l.t('stTrayHint'),
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
                 ),
               ],
             ],
@@ -301,7 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             children: [
               Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
               const SizedBox(height: 3),
-              Text(detail, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+              Text(detail, style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
             ],
           ),
         ),
@@ -310,7 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           child: DropdownButton<String>(
             value: options.containsKey(value) ? value : options.keys.first,
             dropdownColor: BeacleColors.surfaceHi,
-            style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+            style: TextStyle(fontSize: 13, color: BeacleColors.text),
             items: [
               for (final e in options.entries)
                 DropdownMenuItem(value: e.key, child: Text(e.value)),
@@ -338,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             children: [
               Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
               const SizedBox(height: 3),
-              Text(detail, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+              Text(detail, style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
             ],
           ),
         ),
@@ -362,7 +371,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               AppUpdater.selfUpdateSupported
                   ? context.l.t('stUpdatesFrom')
                   : context.l.t('stUpdatesManual'),
-              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+              style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
             const SizedBox(height: 14),
             // The forward flow is Check → Update → Apply. Check only looks at
@@ -406,9 +415,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: BeacleColors.border),
                           ),
-                          child: Text('v${available!.rebuild ? appLabel : appVersion}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                          child: Text('v${available!.rebuild ? appLabel : appVersion}', style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                         ),
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.symmetric(horizontal: 6),
                           child: Icon(Icons.arrow_forward, size: 16, color: BeacleColors.ok),
                         ),
@@ -419,7 +428,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: BeacleColors.ok.withValues(alpha: 0.4)),
                           ),
-                          child: Text('v${available!.label}', style: const TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
+                          child: Text('v${available!.label}', style: TextStyle(fontSize: 11, color: BeacleColors.ok, fontWeight: FontWeight.w500)),
                         ),
                       ],
                     ),
@@ -473,7 +482,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             if (updateStatus != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
-                child: Text(updateStatus!, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                child: Text(updateStatus!, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
               ),
           ]),
         ),
@@ -483,7 +492,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
               context.l.t('stAgentUpdatesBody'),
-              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+              style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -519,11 +528,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             if (agentUpdateStatus != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(agentUpdateStatus!, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                child: Text(agentUpdateStatus!, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
               ),
             const SizedBox(height: 12),
             if (state.vpsList.isEmpty)
-              Text(context.l.t('stNoVps'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+              Text(context.l.t('stNoVps'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
             else
               for (final v in state.vpsList)
                 Padding(
@@ -536,7 +545,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       StatusDot(v.status, size: 8),
                       SizedBox(width: 140, child: Text(v.name, style: const TextStyle(fontSize: 13))),
                       Text('v${v.agentVersion.isEmpty ? '?' : v.agentVersion}',
-                          style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                          style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                       if (_agentUpdateAvailable(v))
                         SmallButton(
                           agentUpdating.contains(v.id) ? context.l.t('stUpdating') : context.l.t('stUpdate'),
@@ -569,7 +578,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: BeacleColors.border),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+      child: Text(label, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
     );
   }
 
@@ -682,7 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             children: [
               Text(
                 ctx.l.f('stUpdateAllBody', {'n': targets.length}),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
               ),
               const SizedBox(height: 10),
               for (final v in targets)
@@ -786,7 +795,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     style: TextStyle(fontSize: 11, color: r.prerelease ? BeacleColors.warn : BeacleColors.textDim),
                   ),
                   trailing: r.version != null && r.version == v.agentVersion
-                      ? Text(ctx.l.t('stReinstallTag'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      ? Text(ctx.l.t('stReinstallTag'), style: TextStyle(fontSize: 11, color: BeacleColors.ok))
                       : null,
                   onTap: () => Navigator.of(ctx).pop(r),
                 ),
@@ -851,11 +860,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       : Text(r.notes.trim().split('\n').first,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   // A release can be rebuilt under the same tag, so the
                   // running version is a reinstall, not a dead end.
                   trailing: r.version == appVersion
-                      ? Text(ctx.l.t('stReinstallTag'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok))
+                      ? Text(ctx.l.t('stReinstallTag'), style: TextStyle(fontSize: 11, color: BeacleColors.ok))
                       : null,
                   onTap: () => Navigator.of(ctx).pop(r),
                 ),
@@ -913,7 +922,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       builder: (ctx) => AlertDialog(
         backgroundColor: BeacleColors.surface,
         title: Text(title, style: const TextStyle(fontSize: 15)),
-        content: Text(message, style: const TextStyle(fontSize: 13, color: BeacleColors.textDim)),
+        content: Text(message, style: TextStyle(fontSize: 13, color: BeacleColors.textDim)),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(ctx.l.t('cancel'))),
           TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(ctx.l.t('continueBtn'))),
@@ -925,16 +934,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: BeacleColors.surface,
-        title: Text(ctx.l.t('stConfirmDowngrade'), style: const TextStyle(fontSize: 15, color: BeacleColors.warn)),
+        title: Text(ctx.l.t('stConfirmDowngrade'), style: TextStyle(fontSize: 15, color: BeacleColors.warn)),
         content: Text(
           '${downgradeMessage ?? ctx.l.t('stOlderVersion')}\n\n${ctx.l.t('stSure')}',
-          style: const TextStyle(fontSize: 13, color: BeacleColors.textDim),
+          style: TextStyle(fontSize: 13, color: BeacleColors.textDim),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(ctx.l.t('cancel'))),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.l.t('stYesDowngrade'), style: const TextStyle(color: BeacleColors.warn)),
+            child: Text(ctx.l.t('stYesDowngrade'), style: TextStyle(color: BeacleColors.warn)),
           ),
         ],
       ),
@@ -951,7 +960,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         children: [
           SizedBox(
             width: 170,
-            child: Text(label, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+            child: Text(label, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
           ),
           Expanded(
             child: SelectableText(
@@ -1158,14 +1167,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(context.l.t('whExplainer'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
               const SizedBox(height: 10),
               if (whLoading && webhooks == null)
                 const SizedBox(
                     width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               else if (webhooks?.primary == null)
                 Text(context.l.t('whNoWatchers'),
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.warn))
+                    style: TextStyle(fontSize: 12, color: BeacleColors.warn))
               else ...[
                 _field(context.l.t('whPrimary'), webhooks!.primary!.name,
                     tone: BeacleColors.ok),
@@ -1187,7 +1196,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Text(context.l.t('whEmpty'),
                       style:
-                          const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                          TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 ),
               for (var i = 0; i < whEdit.length; i++) _webhookEditor(i),
               Wrap(
@@ -1227,7 +1236,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(whStatus!,
                       style:
-                          const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                          TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 ),
             ],
           ),
@@ -1256,7 +1265,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               child: DropdownButton<String>(
                 value: t.kind,
                 dropdownColor: BeacleColors.surfaceHi,
-                style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                style: TextStyle(fontSize: 13, color: BeacleColors.text),
                 items: const [
                   DropdownMenuItem(value: 'discord', child: Text('Discord')),
                   DropdownMenuItem(value: 'ntfy', child: Text('ntfy')),
@@ -1281,7 +1290,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   : t.kind == 'ntfy'
                       ? context.l.t('whNtfyUrl')
                       : context.l.t('whDiscordUrl'),
-              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
           const SizedBox(height: 4),
           TextFormField(
             key: ValueKey('${t.id}-$i-url'),
@@ -1303,7 +1312,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           if (isTelegram) ...[
             const SizedBox(height: 8),
             Text(context.l.t('whChatId'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const SizedBox(height: 4),
             TextFormField(
               key: ValueKey('${t.id}-$i-chat'),
@@ -1335,7 +1344,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         PanelCard(
           title: context.l.t('wgOnTitle'),
           child: onWg.isEmpty
-              ? Text(context.l.t('wgOnNone'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+              ? Text(context.l.t('wgOnNone'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
               : Column(
                   children: [
                     for (final v in onWg)
@@ -1348,7 +1357,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             child: Text(v.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                           ),
                           Text(v.wgEndpoint,
-                              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                              style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                           const SizedBox(width: 12),
                           SmallButton(context.l.t('wgSwitchBack'),
                               icon: Icons.undo, onPressed: () => _switchBack(state, v)),
@@ -1439,7 +1448,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(maintenanceStatus!,
-                      style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                      style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                 ),
             ],
           ),
@@ -1478,7 +1487,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     padding: const EdgeInsets.only(left: 170, bottom: 3),
                     child: Text(
                       '${p.name} · ${p.endpoint} · ${p.lastHandshake > 0 ? context.l.t('stHandshakeOk') : context.l.t('stNoHandshake')}',
-                      style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                      style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -1528,7 +1537,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text('${d.name}${d.ips.isEmpty ? '' : '  ${d.ips.first}'}',
-                            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                            style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
                             overflow: TextOverflow.ellipsis),
                       ),
                     ]),
@@ -1537,7 +1546,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   Padding(
                     padding: const EdgeInsets.only(left: 170, top: 2),
                     child: Text(context.l.f('stMore', {'n': peers.length - 12}),
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   ),
               ],
               const SizedBox(height: 12),

@@ -34,7 +34,7 @@ class _DockerScreenState extends State<DockerScreen> {
     final tabs = _tabLabels();
     final hosts = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (hosts.isEmpty) {
-      return Center(child: Text(context.l.t('dockerNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('dockerNoVps'), style: TextStyle(color: BeacleColors.textDim)));
     }
 
     var running = 0, total = 0;
@@ -52,7 +52,7 @@ class _DockerScreenState extends State<DockerScreen> {
             children: [
               Text(
                 context.l.f('dockerRunning', {'r': running, 't': total, 'h': hosts.length}),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
               const Spacer(),
               if (tab == 0)
@@ -154,14 +154,14 @@ class _VpsSectionHeader extends StatelessWidget {
           const SizedBox(width: 10),
           Text(vps.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
-          Text(vps.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+          Text(vps.host, style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
           const Spacer(),
           if (docker.available) ...[
             Text(context.l.f('dockerUp', {'r': run, 't': docker.containers.length}),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const SizedBox(width: 12),
             Text(context.l.f('dockerVersion', {'v': docker.version}),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.cleaning_services_outlined, size: 16),
@@ -176,7 +176,7 @@ class _VpsSectionHeader extends StatelessWidget {
             Flexible(
               child: Text(
                 docker.error.isEmpty ? context.l.t('dockerUnavailable') : docker.error,
-                style: const TextStyle(fontSize: 11, color: BeacleColors.err),
+                style: TextStyle(fontSize: 11, color: BeacleColors.err),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -304,7 +304,7 @@ class _ContainerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(container.image,
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas'),
                         overflow: TextOverflow.ellipsis),
                   ],
                 ),
@@ -364,7 +364,7 @@ class _Meta extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 9, letterSpacing: 0.6, color: BeacleColors.textDim)),
+          Text(label, style: TextStyle(fontSize: 9, letterSpacing: 0.6, color: BeacleColors.textDim)),
           const SizedBox(height: 3),
           Text(value,
               maxLines: 1,
@@ -389,7 +389,7 @@ class _Pill extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: BeacleColors.border),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+      child: Text(text, style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
     );
   }
 }
@@ -471,7 +471,7 @@ class _ActionBar extends StatelessWidget {
   Widget _statLine(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
-          SizedBox(width: 100, child: Text(k, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))),
+          SizedBox(width: 100, child: Text(k, style: TextStyle(fontSize: 12, color: BeacleColors.textDim))),
           Expanded(child: Text(v, style: const TextStyle(fontSize: 12))),
         ]),
       );
@@ -579,7 +579,7 @@ class _ExecDialogState extends State<_ExecDialog> {
           children: [
             Text(
               context.l.t('execBody'),
-              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
+              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
             ),
             const SizedBox(height: 12),
             Row(
@@ -614,7 +614,7 @@ class _ExecDialogState extends State<_ExecDialog> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text('${context.l.t('historyLabel')}:',
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   ),
                   for (final h in _history)
                     InkWell(
@@ -655,10 +655,10 @@ class _ExecDialogState extends State<_ExecDialog> {
                       child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
                   : _error != null
                       ? SelectableText(_error!,
-                          style: const TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4))
+                          style: TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4))
                       : res == null
                           ? Text(context.l.t('execEmpty'),
-                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
                           : SmoothSingleChildScrollView(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -676,7 +676,7 @@ class _ExecDialogState extends State<_ExecDialog> {
                                       if (res.truncated) ...[
                                         const SizedBox(width: 8),
                                         Text(context.l.t('truncatedNote'),
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                                 fontSize: 11, color: BeacleColors.warn)),
                                       ],
                                     ],
@@ -777,11 +777,11 @@ class _PruneDialogState extends State<_PruneDialog> {
           children: [
             Text(
               context.l.t('pruneBody'),
-              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
+              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4),
             ),
             const SizedBox(height: 12),
             if (_error != null)
-              Text(_error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4))
+              Text(_error!, style: TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4))
             else if (p == null)
               const Center(
                   child: Padding(
@@ -789,7 +789,7 @@ class _PruneDialogState extends State<_PruneDialog> {
                       child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))))
             else if (p.totalBytes == 0 && done == null)
               Text(context.l.t('pruneNone'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4))
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4))
             else ...[
               CheckboxListTile(
                 value: _images,
@@ -830,7 +830,7 @@ class _PruneDialogState extends State<_PruneDialog> {
                   'images': done.imagesDeleted,
                   'volumes': done.volumesDeleted,
                 }),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.ok, height: 1.4),
+                style: TextStyle(fontSize: 12, color: BeacleColors.ok, height: 1.4),
               ),
             ],
           ],
@@ -863,7 +863,7 @@ class _ImagesBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
     if (docker.images.isEmpty) return _EmptyNote(context.l.t('dockerNoImages'));
-    const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
+    final hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return PanelCard(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Column(
@@ -912,7 +912,7 @@ class _VolumesBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
     if (docker.volumes.isEmpty) return _EmptyNote(context.l.t('dockerNoVolumes'));
-    const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
+    final hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return PanelCard(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Column(
@@ -930,11 +930,11 @@ class _VolumesBlock extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Row(children: [
                 Expanded(flex: 2, child: _CopyText(v.name, style: const TextStyle(fontSize: 12))),
-                SizedBox(width: 80, child: Text(v.driver, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))),
+                SizedBox(width: 80, child: Text(v.driver, style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                 Expanded(
                     flex: 3,
                     child: _CopyText(v.mountpoint,
-                        style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
+                        style: TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
                         ellipsis: true)),
               ]),
             ),
@@ -952,7 +952,7 @@ class _NetworksBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!docker.available) return _EmptyNote(context.l.t('dockerUnavailable'));
     if (docker.networks.isEmpty) return _EmptyNote(context.l.t('dockerNoNetworks'));
-    const hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
+    final hdr = TextStyle(fontSize: 11, color: BeacleColors.textDim, fontWeight: FontWeight.w600);
     return PanelCard(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Column(
@@ -971,8 +971,8 @@ class _NetworksBlock extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Row(children: [
                 Expanded(flex: 2, child: _CopyText(n.name, style: const TextStyle(fontSize: 12))),
-                SizedBox(width: 80, child: Text(n.driver, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))),
-                SizedBox(width: 70, child: Text(n.scope, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim))),
+                SizedBox(width: 80, child: Text(n.driver, style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
+                SizedBox(width: 70, child: Text(n.scope, style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                 SizedBox(
                     width: 90,
                     child: Text('${n.containers}',
@@ -1093,9 +1093,9 @@ class _ComposeBlock extends StatelessWidget {
                       fontSize: 12, color: p.running == p.total ? BeacleColors.ok : BeacleColors.warn)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(context.l.f('dkDir', {'v': p.workingDir.isEmpty ? '-' : p.workingDir}),
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 Text(context.l.f('dkConfig', {'v': p.configFile.isEmpty ? '-' : p.configFile}),
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: 6, children: [
                   for (final s in p.services)
@@ -1129,7 +1129,7 @@ class _ComposeBlock extends StatelessWidget {
       icon: Icon(icon, size: 14, color: color),
       label: Text(label, style: TextStyle(fontSize: 12, color: color)),
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: BeacleColors.border),
+        side: BorderSide(color: BeacleColors.border),
         visualDensity: VisualDensity.compact,
       ),
       onPressed: onPressed,
@@ -1194,7 +1194,7 @@ class _CopyId extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Text(shown,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim)),
         ),
       ),
@@ -1210,7 +1210,7 @@ class _EmptyNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Text(text, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+      child: Text(text, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
     );
   }
 }

@@ -51,7 +51,7 @@ class PanelCard extends StatelessWidget {
             Row(children: [
               Expanded(
                 child: Text(title!,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 11, fontWeight: FontWeight.w600, color: BeacleColors.textDim, letterSpacing: 0.9)),
               ),
               if (trailing != null) trailing!,
@@ -136,7 +136,7 @@ class MetricBar extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+            Text(label, style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
             const Spacer(),
             Text(detail ?? '${percent.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12)),
           ],
@@ -210,7 +210,7 @@ class SmallButton extends StatelessWidget {
       icon: icon != null ? Icon(icon, size: 14, color: color ?? BeacleColors.text) : const SizedBox.shrink(),
       label: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: color ?? BeacleColors.text)),
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: BeacleColors.borderGlow),
+        side: BorderSide(color: BeacleColors.borderGlow),
         backgroundColor: BeacleColors.surfaceHi,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeacleRadius.control)),
@@ -232,7 +232,7 @@ class TabChip extends StatelessWidget {
   final VoidCallback onTap;
   const TabChip({super.key, required this.label, this.count, required this.selected, required this.onTap});
 
-  static const _countStyle = TextStyle(
+  static TextStyle get _countStyle => TextStyle(
     fontSize: 11,
     color: BeacleColors.textDim,
     fontFeatures: [FontFeature.tabularFigures()],
@@ -267,7 +267,7 @@ class TabChip extends StatelessWidget {
             if (count != null) ...[
               const SizedBox(width: 6),
               Stack(alignment: Alignment.center, children: [
-                const ExcludeSemantics(child: Opacity(opacity: 0, child: Text('888', style: _countStyle))),
+                ExcludeSemantics(child: Opacity(opacity: 0, child: Text('888', style: _countStyle))),
                 Text('$count', style: _countStyle),
               ]),
             ],
@@ -295,10 +295,10 @@ class CopyField extends StatelessWidget {
         children: [
           Expanded(
             child: SelectableText(value,
-                style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, color: BeacleColors.ok)),
+                style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: BeacleColors.ok)),
           ),
           IconButton(
-            icon: const Icon(Icons.copy, size: 14, color: BeacleColors.textDim),
+            icon: Icon(Icons.copy, size: 14, color: BeacleColors.textDim),
             tooltip: context.l.t('copy'),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: value));
@@ -344,10 +344,10 @@ class SecretCopyField extends StatelessWidget {
             children: [
               Expanded(
                 child: SelectableText(masked,
-                    style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, color: BeacleColors.ok)),
+                    style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: BeacleColors.ok)),
               ),
               IconButton(
-                icon: const Icon(Icons.copy, size: 14, color: BeacleColors.textDim),
+                icon: Icon(Icons.copy, size: 14, color: BeacleColors.textDim),
                 tooltip: context.l.t('copyFullCommand'),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: value));
@@ -364,7 +364,7 @@ class SecretCopyField extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(context.l.t('wgContainsSecret'),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.35)),
+            style: TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.35)),
       ],
     );
   }
@@ -475,7 +475,7 @@ class _LogsDialogState extends State<_LogsDialog> {
                     padding: EdgeInsets.only(right: 10),
                     child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
-                Text(context.l.f('fsLines', {'n': lines}), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                Text(context.l.f('fsLines', {'n': lines}), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                 const SizedBox(width: 10),
                 // Following is the default; turning it off lets you read
                 // scrollback while output keeps arriving.
@@ -516,7 +516,7 @@ class _LogsDialogState extends State<_LogsDialog> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: BeacleColors.bg, borderRadius: BorderRadius.circular(6)),
                   child: _error != null
-                      ? Center(child: Text(context.l.f('cmError', {'e': _error}), style: const TextStyle(color: BeacleColors.err)))
+                      ? Center(child: Text(context.l.f('cmError', {'e': _error}), style: TextStyle(color: BeacleColors.err)))
                       : NotificationListener<UserScrollNotification>(
                           // Scrolling up is how you say "stop jumping"; getting
                           // back to the bottom resumes following.

@@ -37,7 +37,7 @@ Future<void> showRebootDialog(BuildContext context, Vps vps, VpsSnapshot snap) a
                 title: Text(context.l.f('rebootRestore', {'n': screens}),
                     style: const TextStyle(fontSize: 13)),
                 subtitle: Text(context.l.t('rebootRestoreHint'),
-                    style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                    style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                 onChanged: (v) => setState(() => restore = v ?? true),
               ),
             ],

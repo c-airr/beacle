@@ -227,7 +227,7 @@ class _FirewallRuleDialogState extends State<_FirewallRuleDialog> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(_error!,
-                style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.err)),
           ),
       ],
     );
@@ -240,7 +240,7 @@ class _FirewallRuleDialogState extends State<_FirewallRuleDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(context.l.t('fwWillRun'),
-            style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         const SizedBox(height: 6),
         Container(
           width: double.infinity,
@@ -257,20 +257,20 @@ class _FirewallRuleDialogState extends State<_FirewallRuleDialog> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(dry.warning,
-                style: const TextStyle(fontSize: 12, color: BeacleColors.warn)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
           ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(_error!,
-                style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                style: TextStyle(fontSize: 12, color: BeacleColors.err)),
           ),
       ],
     );
   }
 
   Widget _label(String s) =>
-      Text(s, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim));
+      Text(s, style: TextStyle(fontSize: 11, color: BeacleColors.textDim));
 }
 
 class _FirewallDeleteDialog extends StatefulWidget {
@@ -357,7 +357,7 @@ class _FirewallDeleteDialogState extends State<_FirewallDeleteDialog> {
                   width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
             else if (dry != null) ...[
               Text(context.l.t('fwWillRun'),
-                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
               const SizedBox(height: 6),
               Container(
                 width: double.infinity,
@@ -386,7 +386,7 @@ class _FirewallDeleteDialogState extends State<_FirewallDeleteDialog> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(_error!,
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.err)),
               ),
           ],
         ),

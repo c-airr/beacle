@@ -162,7 +162,7 @@ class _FileEditorState extends State<_FileEditor> {
           TextButton(onPressed: () => Navigator.pop(ctx, 'reload'), child: Text(context.l.t('fsReload'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, 'overwrite'),
-              child: Text(context.l.t('fsOverwrite'), style: const TextStyle(color: BeacleColors.err))),
+              child: Text(context.l.t('fsOverwrite'), style: TextStyle(color: BeacleColors.err))),
         ],
       ),
     );
@@ -181,7 +181,7 @@ class _FileEditorState extends State<_FileEditor> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
             TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text(context.l.t('fsDiscard'), style: const TextStyle(color: BeacleColors.err))),
+                child: Text(context.l.t('fsDiscard'), style: TextStyle(color: BeacleColors.err))),
           ],
         ),
       );
@@ -213,7 +213,7 @@ class _FileEditorState extends State<_FileEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  const Icon(Icons.description_outlined, size: 16, color: BeacleColors.textDim),
+                  Icon(Icons.description_outlined, size: 16, color: BeacleColors.textDim),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(widget.path + (_dirty ? '  •' : ''),
@@ -226,7 +226,7 @@ class _FileEditorState extends State<_FileEditor> {
                     ),
                   if (!_loading && _error == null)
                     Text(context.l.f('fsLines', {'n': lines}),
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   const SizedBox(width: 10),
                   SmallButton(context.l.t('fsSave'),
                       icon: Icons.save_outlined,
@@ -245,7 +245,7 @@ class _FileEditorState extends State<_FileEditor> {
                             child: Padding(
                             padding: const EdgeInsets.all(24),
                             child: Text(_error!,
-                                textAlign: TextAlign.center, style: const TextStyle(color: BeacleColors.textDim)),
+                                textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
                           ))
                         : _loading
                             ? const SizedBox.shrink()
@@ -269,7 +269,7 @@ class _FileEditorState extends State<_FileEditor> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(context.l.t('fsEditorHint'), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                Text(context.l.t('fsEditorHint'), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
               ],
             ),
           ),

@@ -240,7 +240,7 @@ const _de = <String, String>{
   // settings
   'stAppearance': 'DARSTELLUNG',
   'stTheme': 'Design',
-  'stThemeDetail': 'Die Farbpalette ist als Konstanten einkompiliert, daher ist ein helles Design ein Umbau aller Bildschirme und kein Schalter.',
+  'stThemeDetail': 'Hell ist ein sanftes Grau statt Weiß und schont die Augen. System folgt deinem Computer und wechselt mit ihm.',
   'stDark': 'Dunkel',
   'stStartup': 'START',
   'stAutostartWinOnly': 'Start bei der Anmeldung gibt es bisher nur für Windows.',
@@ -876,4 +876,7 @@ const _de = <String, String>{
   'upDH': '{d} T. {h} h',
   'upHM': '{h} h {m} min',
   'upM': '{m} min',
+  // theme
+  'stLight': 'Hell',
+  'stSystem': 'System',
 };

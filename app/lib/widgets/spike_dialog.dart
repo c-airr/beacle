@@ -34,7 +34,7 @@ class SpikeDialog extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.bolt, size: 18, color: BeacleColors.warn),
+                  Icon(Icons.bolt, size: 18, color: BeacleColors.warn),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -55,7 +55,7 @@ class SpikeDialog extends StatelessWidget {
               // normally sits at 8%.
               Text(
                 l.f('spAgainst', {'v': spike.value.toStringAsFixed(0), 'b': spike.baseline.toStringAsFixed(0)}),
-                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
               const SizedBox(height: 14),
 
@@ -64,7 +64,7 @@ class SpikeDialog extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
                     l.t('spNoProcs'),
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
                   ),
                 )
               else ...[
@@ -90,7 +90,7 @@ class SpikeDialog extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 l.t('spSnapshot'),
-                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
               ),
             ],
           ),
@@ -156,16 +156,16 @@ class _ProcessRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text('pid ${proc.pid}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim)),
                     if (proc.user.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Text(proc.user,
-                          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                          style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                     ],
                     const SizedBox(width: 8),
                     Text('$otherLabel ${other.toStringAsFixed(1)}%',
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                   ],
                 ),
                 if (proc.command.isNotEmpty)
@@ -181,7 +181,7 @@ class _ProcessRow extends StatelessWidget {
                       },
                       child: Text(
                         proc.command,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

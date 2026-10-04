@@ -19,7 +19,7 @@ Widget tailscaleRequirementBanner() => Container(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BeacleColors.border),
       ),
-      child: const Text(
+      child: Text(
         tailscaleRequirement,
         style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.45),
       ),
@@ -159,7 +159,7 @@ class _AddServerDialogState extends State<_AddServerDialog> {
               tailscaleRequirementBanner(),
               const SizedBox(height: 14),
               if (devices.where((d) => !d.self).isEmpty)
-                const Text(tailscaleNoPeers,
+                Text(tailscaleNoPeers,
                     style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45))
               else
                 SmoothListView(
@@ -174,7 +174,7 @@ class _AddServerDialogState extends State<_AddServerDialog> {
                             if (!d.online) context.l.t('svcOfflineLower'),
                             d.os,
                           ].where((s) => s.isNotEmpty).join(' · '),
-                          style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
+                          style: TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
                         ),
                         onTap: () => Navigator.pop(ctx, d),
                       ),
@@ -219,7 +219,7 @@ class _AddServerDialogState extends State<_AddServerDialog> {
         title: Text(title, style: const TextStyle(fontSize: 13)),
         subtitle: Text(
           blocked != null ? context.l.f('methodUnavailable', {'reason': blocked}) : detail,
-          style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.35),
+          style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.35),
         ),
         onTap: !enabled || selected
             ? null
@@ -264,12 +264,12 @@ class _AddServerDialogState extends State<_AddServerDialog> {
               if (_probe != null) ...[
                 const SizedBox(height: 12),
                 Text('${_probe!.ip} · ${_probe!.ipClass}${_probe!.reason.isNotEmpty ? ' · ${_probe!.reason}' : ''}',
-                    style: const TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim)),
+                    style: TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.textDim)),
                 if (!_probe!.pingOk)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(l.t('pingWarn'),
-                        style: const TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.35)),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.35)),
                   ),
                 const SizedBox(height: 10),
                 if (_pickingMethod) ...[
@@ -288,7 +288,7 @@ class _AddServerDialogState extends State<_AddServerDialog> {
               ],
             ] else ...[
               Text(l.t('wgInstallBody'),
-                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45)),
+                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45)),
               const SizedBox(height: 10),
               if (_installCmd != null) SecretCopyField(_installCmd!),
               const SizedBox(height: 10),
@@ -296,11 +296,11 @@ class _AddServerDialogState extends State<_AddServerDialog> {
                 Row(children: [
                   const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
                   const SizedBox(width: 8),
-                  Text(l.t('wgWaiting'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                  Text(l.t('wgWaiting'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 ]),
-              if (_online) Text(l.t('wgConnected'), style: const TextStyle(fontSize: 12, color: BeacleColors.ok)),
+              if (_online) Text(l.t('wgConnected'), style: TextStyle(fontSize: 12, color: BeacleColors.ok)),
               if (_timedOut) ...[
-                Text(l.t('wgTimeout'), style: const TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4)),
+                Text(l.t('wgTimeout'), style: TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4)),
                 TextButton(
                   onPressed: () => setState(() {
                     _created = null;
@@ -314,7 +314,7 @@ class _AddServerDialogState extends State<_AddServerDialog> {
             ],
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4)),
+              Text(_error!, style: TextStyle(fontSize: 12, color: BeacleColors.err, height: 1.4)),
             ],
           ],
         ),
@@ -357,14 +357,14 @@ class _AddVpsCommandState extends State<AddVpsCommand> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     if (!state.connected) {
-      return Text(context.l.t('avBackendOffline'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim));
+      return Text(context.l.t('avBackendOffline'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim));
     }
     return FutureBuilder<String>(
       future: _cmd,
       builder: (ctx, snap) {
         if (snap.hasError) {
           final msg = snap.error is ApiException ? (snap.error as ApiException).message : '${snap.error}';
-          return Text(msg, style: const TextStyle(color: BeacleColors.err, fontSize: 12, height: 1.4));
+          return Text(msg, style: TextStyle(color: BeacleColors.err, fontSize: 12, height: 1.4));
         }
         if (!snap.hasData) return const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2));
         return CopyField(snap.data!);
@@ -380,7 +380,7 @@ Future<bool> confirmDeleteVps(BuildContext context, Vps vps) async {
       title: Text(context.l.t('avDeleteTitle')),
       content: Text(
         context.l.f('avDeleteBody', {'name': vps.name}),
-        style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.45),
+        style: TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.45),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),

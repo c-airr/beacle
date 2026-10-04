@@ -299,7 +299,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 SelectableText(e.path, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
                 const SizedBox(height: 10),
                 Text(context.l.t(e.isDir && e.link.isEmpty ? 'fsDeleteDirBody' : 'fsDeleteBody'),
-                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 if (e.isDir && e.link.isEmpty)
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
@@ -315,7 +315,7 @@ class _FilesScreenState extends State<FilesScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
             TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text(context.l.t('remove'), style: const TextStyle(color: BeacleColors.err))),
+                child: Text(context.l.t('remove'), style: TextStyle(color: BeacleColors.err))),
           ],
         ),
       ),
@@ -393,7 +393,7 @@ class _FilesScreenState extends State<FilesScreen> {
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('fsSkip'))),
               TextButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(context.l.t('fsOverwrite'), style: const TextStyle(color: BeacleColors.err))),
+                  child: Text(context.l.t('fsOverwrite'), style: TextStyle(color: BeacleColors.err))),
             ],
           ),
         );
@@ -462,7 +462,7 @@ class _FilesScreenState extends State<FilesScreen> {
     final state = context.watch<AppState>();
     final hosts = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (hosts.isEmpty) {
-      return Center(child: Text(context.l.t('fsNoServers'), style: const TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('fsNoServers'), style: TextStyle(color: BeacleColors.textDim)));
     }
     final vps = hosts.where((v) => v.id == selectedId).firstOrNull ?? hosts.first;
     if (selectedId != vps.id) {
@@ -488,7 +488,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 child: DropdownButton<String>(
                   value: vps.id,
                   dropdownColor: BeacleColors.surfaceHi,
-                  style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                  style: TextStyle(fontSize: 13, color: BeacleColors.text),
                   items: [
                     for (final v in hosts)
                       DropdownMenuItem(
@@ -574,12 +574,12 @@ class _FilesScreenState extends State<FilesScreen> {
               const Divider(height: 1),
               Expanded(
                 child: error != null && l == null
-                    ? Center(child: Text(error!, style: const TextStyle(color: BeacleColors.err)))
+                    ? Center(child: Text(error!, style: TextStyle(color: BeacleColors.err)))
                     : l == null
                         ? const SizedBox.shrink()
                         : shown.isEmpty
                             ? Center(
-                                child: Text(context.l.t('fsEmpty'), style: const TextStyle(color: BeacleColors.textDim)))
+                                child: Text(context.l.t('fsEmpty'), style: TextStyle(color: BeacleColors.textDim)))
                             : SmoothListView.builder(
                                 padding: const EdgeInsets.all(8),
                                 itemCount: shown.length,
@@ -591,7 +591,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   color: BeacleColors.card,
-                  child: Text(error!, style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
+                  child: Text(error!, style: TextStyle(fontSize: 12, color: BeacleColors.err)),
                 ),
               if (transfer != null) _transferStrip(transfer!),
             ]);
@@ -606,7 +606,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   onHorizontalDragUpdate: (d) =>
                       setState(() => _treeWidth = (_treeWidth + d.delta.dx).clamp(160, box.maxWidth / 2)),
                   onHorizontalDragEnd: (_) => _saveTree(),
-                  child: const SizedBox(
+                  child: SizedBox(
                     width: 5,
                     child: Center(child: VerticalDivider(width: 1, thickness: 1, color: BeacleColors.border)),
                   ),
@@ -630,13 +630,13 @@ class _FilesScreenState extends State<FilesScreen> {
         child: Row(children: [
           Expanded(
             child: Text(context.l.t('fsFolders').toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.9, color: BeacleColors.textDim)),
           ),
           IconButton(
             tooltip: context.l.t('fsCollapseAll'),
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.unfold_less, size: 16, color: BeacleColors.textDim),
+            icon: Icon(Icons.unfold_less, size: 16, color: BeacleColors.textDim),
             onPressed: () => setState(() => _treeOpen[vpsId] = {'/'}),
           ),
         ]),
@@ -698,7 +698,7 @@ class _FilesScreenState extends State<FilesScreen> {
           onTap: () => _open(vpsId, path),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Text(label, style: const TextStyle(fontSize: 13, color: BeacleColors.text)),
+            child: Text(label, style: TextStyle(fontSize: 13, color: BeacleColors.text)),
           ),
         );
     return SingleChildScrollView(
@@ -707,7 +707,7 @@ class _FilesScreenState extends State<FilesScreen> {
       child: Row(children: [
         crumb('/', '/'),
         for (var i = 0; i < parts.length; i++) ...[
-          if (i > 0) const Text('/', style: TextStyle(color: BeacleColors.textDim)),
+          if (i > 0) Text('/', style: TextStyle(color: BeacleColors.textDim)),
           crumb(parts[i], '/${parts.sublist(0, i + 1).join('/')}'),
         ],
       ]),
@@ -715,7 +715,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _row(String vpsId, FsEntry e, bool online) {
-    final dim = const TextStyle(fontSize: 11, color: BeacleColors.textDim);
+    final dim = TextStyle(fontSize: 11, color: BeacleColors.textDim);
     return HoverRow(
       onTap: () => e.isDir ? _open(vpsId, e.path) : (online ? _edit(vpsId, e) : null),
       child: Padding(
@@ -749,7 +749,7 @@ class _FilesScreenState extends State<FilesScreen> {
             SizedBox(width: 90, child: Text(e.mode, style: dim.copyWith(fontFamily: 'monospace'))),
             PopupMenuButton<String>(
               enabled: online,
-              icon: const Icon(Icons.more_horiz, size: 16, color: BeacleColors.textDim),
+              icon: Icon(Icons.more_horiz, size: 16, color: BeacleColors.textDim),
               tooltip: '',
               color: BeacleColors.surfaceHi,
               onSelected: (a) {
@@ -776,7 +776,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 PopupMenuItem(value: 'copyPath', child: Text(context.l.t('fsCopyPath'))),
                 PopupMenuItem(
                     value: 'delete',
-                    child: Text(context.l.t('remove'), style: const TextStyle(color: BeacleColors.err))),
+                    child: Text(context.l.t('remove'), style: TextStyle(color: BeacleColors.err))),
               ],
             ),
           ],
