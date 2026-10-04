@@ -80,7 +80,7 @@ class _DockerScreenState extends State<DockerScreen> {
               children: [
                 for (var i = 0; i < tabs.length; i++) ...[
                   if (i > 0) const SizedBox(width: 6),
-                  _TabChip(
+                  TabChip(
                     label: tabs[i],
                     selected: tab == i,
                     onTap: () => setState(() => tab = i),
@@ -129,40 +129,6 @@ class _DockerScreenState extends State<DockerScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TabChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _TabChip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? BeacleColors.glassHi : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? BeacleColors.text : BeacleColors.textDim,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

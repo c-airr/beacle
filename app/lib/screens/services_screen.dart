@@ -508,6 +508,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
   }
 
+  bool get _loadingTab => switch (tab) {
+        5 => loadingLogs,
+        6 => loadingCron,
+        7 => loadingFw,
+        _ => loadingProcs,
+      };
+
+  void _selectTab(int t) {
+    setState(() => tab = t);
+    if ((t == 0 || t == 2) && processes.isEmpty) _loadProcesses();
+    if (t == 4) _loadNohup();
+    if (t == 5) _loadLogFiles();
+    if (t == 6 && _cronHostId != selectedId) _loadCron();
+    if (t == 7 && _fwHostId != selectedId) _loadFw();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -530,33 +546,40 @@ class _ServicesScreenState extends State<ServicesScreen> {
             children: [
               // Picking a server would mean nothing on the fleet tabs, so the
               // dropdown is replaced by what is actually being shown.
-              if (_isFleetTab)
-                Row(children: [
-                  const Icon(Icons.dns_outlined, size: 15, color: BeacleColors.textDim),
-                  const SizedBox(width: 8),
-                  Text('All servers (${withAgent.length})',
-                      style: const TextStyle(fontSize: 13, color: BeacleColors.text)),
-                ])
-              else
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: vps.id,
-                    dropdownColor: BeacleColors.surfaceHi,
-                    style: const TextStyle(fontSize: 13, color: BeacleColors.text),
-                    items: [
-                      for (final v in withAgent)
-                        DropdownMenuItem(
-                            value: v.id,
-                            child: Row(children: [StatusDot(v.status, size: 7), const SizedBox(width: 8), Text(v.name)]))
-                    ],
-                    onChanged: (v) {
-                      setState(() => selectedId = v);
-                      if (tab == 5) _loadLogFiles();
-                      if (tab == 6) _loadCron();
-                      if (tab == 7) _loadFw();
-                    },
-                  ),
-                ),
+              SizedBox(
+                width: 220,
+                child: _isFleetTab
+                    ? Row(children: [
+                        const Icon(Icons.dns_outlined, size: 15, color: BeacleColors.textDim),
+                        const SizedBox(width: 8),
+                        Text('All servers (${withAgent.length})',
+                            style: const TextStyle(fontSize: 13, color: BeacleColors.text)),
+                      ])
+                    : DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: vps.id,
+                          dropdownColor: BeacleColors.surfaceHi,
+                          style: const TextStyle(fontSize: 13, color: BeacleColors.text),
+                          items: [
+                            for (final v in withAgent)
+                              DropdownMenuItem(
+                                  value: v.id,
+                                  child: Row(children: [
+                                    StatusDot(v.status, size: 7),
+                                    const SizedBox(width: 8),
+                                    Flexible(child: Text(v.name, overflow: TextOverflow.ellipsis)),
+                                  ]))
+                          ],
+                          onChanged: (v) {
+                            setState(() => selectedId = v);
+                            if (tab == 5) _loadLogFiles();
+                            if (tab == 6) _loadCron();
+                            if (tab == 7) _loadFw();
+                          },
+                        ),
+                      ),
+              ),
               const SizedBox(width: 16),
               SizedBox(
                 width: 240,
@@ -582,59 +605,47 @@ class _ServicesScreenState extends State<ServicesScreen> {
               ),
               if (_needsProcesses || tab == 5 || tab == 6 || tab == 7) ...[
                 const SizedBox(width: 12),
-                if ((tab == 5
-                        ? loadingLogs
-                        : tab == 6
-                            ? loadingCron
-                            : tab == 7
-                                ? loadingFw
-                                : loadingProcs))
-                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                else if (tab == 5)
-                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadLogs)
-                else if (tab == 6)
-                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadCron)
-                else if (tab == 7)
-                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadFw)
-                else
-                  SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadProcesses),
+                // The spinner sits over the button rather than in its place,
+                // so the row keeps its width while a list loads.
+                Stack(alignment: Alignment.center, children: [
+                  Visibility(
+                    visible: !_loadingTab,
+                    maintainSize: true,
+                    maintainAnimation: true,
+                    maintainState: true,
+                    child: SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: switch (tab) {
+                      5 => _loadLogs,
+                      6 => _loadCron,
+                      7 => _loadFw,
+                      _ => _loadProcesses,
+                    }),
+                  ),
+                  if (_loadingTab) const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                ]),
               ],
-              const Spacer(),
-              SegmentedButton<int>(
-                showSelectedIcon: false,
-                style: SegmentedButton.styleFrom(
-                    side: const BorderSide(color: BeacleColors.border), visualDensity: VisualDensity.compact),
-                segments: [
-                  ButtonSegment(
-                      value: 0,
-                      label: Text('all (${services.systemd.length + services.screen.length + processes.length})',
-                          style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 1, label: Text('systemd (${services.systemd.length})', style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 2, label: Text('processes (${processes.length})', style: const TextStyle(fontSize: 12))),
-                  // Fleet-wide counts, because these two tabs are fleet-wide.
-                  ButtonSegment(value: 3, label: Text('screen ($_fleetScreenCount)', style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 4, label: Text('nohup ($_fleetNohupCount)', style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(value: 5, label: Text('logs (${logFiles.length})', style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(
-                      value: 6,
-                      label: Text('cron (${(cron?.entries.length ?? 0) + (cron?.timers.length ?? 0)})',
-                          style: const TextStyle(fontSize: 12))),
-                  ButtonSegment(
-                      value: 7,
-                      label: Text('firewall (${fw?.rules.length ?? 0})',
-                          style: const TextStyle(fontSize: 12))),
-                ],
-                selected: {tab},
-                onSelectionChanged: (s) {
-                  setState(() => tab = s.first);
-                  if ((s.first == 0 || s.first == 2) && processes.isEmpty) _loadProcesses();
-                  if (s.first == 4) _loadNohup();
-                  if (s.first == 5) _loadLogFiles();
-                  if (s.first == 6 && _cronHostId != selectedId) _loadCron();
-                  if (s.first == 7 && _fwHostId != selectedId) _loadFw();
-                },
-              ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: SmoothSingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final (i, label, count) in [
+                (0, 'all', services.systemd.length + services.screen.length + processes.length),
+                (1, 'systemd', services.systemd.length),
+                (2, 'processes', processes.length),
+                // Fleet-wide counts, because these two tabs are fleet-wide.
+                (3, 'screen', _fleetScreenCount),
+                (4, 'nohup', _fleetNohupCount),
+                (5, 'logs', logFiles.length),
+                (6, 'cron', (cron?.entries.length ?? 0) + (cron?.timers.length ?? 0)),
+                (7, 'firewall', fw?.rules.length ?? 0),
+              ]) ...[
+                if (i > 0) const SizedBox(width: 6),
+                TabChip(label: label, count: count, selected: tab == i, onTap: () => _selectTab(i)),
+              ],
+            ]),
           ),
         ),
         const Divider(height: 1),

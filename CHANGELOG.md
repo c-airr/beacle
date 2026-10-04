@@ -91,6 +91,9 @@ other 2.0 tools need a 2.0 agent; older agents keep reporting as before.
   fell back to that average. It is left out now; the server was never busy.
   The process tab also no longer starts a new listing while the last one is
   still on its way.
+- Services: the tabs jumped and changed size at every click and every
+  refresh. They sit in their own row now and keep their width whatever is
+  selected, loading or counted; the same goes for the Docker tabs.
 - A slow command (an apt check, a docker call) froze the whole connection to
   that server: the agent ran commands one at a time on the loop that reads
   from the panel, so pings went unanswered and the server dropped offline,

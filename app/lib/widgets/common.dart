@@ -221,6 +221,63 @@ class SmallButton extends StatelessWidget {
   }
 }
 
+/// One tab in a row of tabs. Its width never changes: the label is laid out
+/// as wide as it is in bold even when not selected, and the count sits in a
+/// box made for three digits, so neither picking a tab nor a count ticking
+/// over shoves the tabs beside it along.
+class TabChip extends StatelessWidget {
+  final String label;
+  final int? count;
+  final bool selected;
+  final VoidCallback onTap;
+  const TabChip({super.key, required this.label, this.count, required this.selected, required this.onTap});
+
+  static const _countStyle = TextStyle(
+    fontSize: 11,
+    color: BeacleColors.textDim,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontSize: 12,
+      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      color: selected ? BeacleColors.text : BeacleColors.textDim,
+    );
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? BeacleColors.glassHi : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? BeacleColors.borderGlow : BeacleColors.border),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Stack(alignment: Alignment.center, children: [
+              ExcludeSemantics(
+                child: Opacity(opacity: 0, child: Text(label, style: style.copyWith(fontWeight: FontWeight.w600))),
+              ),
+              Text(label, style: style),
+            ]),
+            if (count != null) ...[
+              const SizedBox(width: 6),
+              Stack(alignment: Alignment.center, children: [
+                const ExcludeSemantics(child: Opacity(opacity: 0, child: Text('888', style: _countStyle))),
+                Text('$count', style: _countStyle),
+              ]),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
 class CopyField extends StatelessWidget {
   final String value;
   const CopyField(this.value, {super.key});
