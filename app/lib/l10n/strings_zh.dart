@@ -879,4 +879,23 @@ const _zh = <String, String>{
   // theme
   'stLight': '浅色',
   'stSystem': '跟随系统',
+  // search
+  'srchButton': '搜索…',
+  'srchTooltip': '搜索服务器、容器、服务和页面（{key}）',
+  'srchHint': '搜索服务器、容器、服务、站点…',
+  'srchNothing': '没有找到“{q}”',
+  'srchMove': '移动',
+  'srchOpen': '打开',
+  'srchCount': '结果：{n}',
+  'srchPage': '页面',
+  'srchAction': '操作',
+  'srchServer': '服务器',
+  'srchContainer': '容器',
+  'srchService': '服务',
+  'srchScreen': 'screen 会话',
+  'srchSite': '代理站点',
+  'srchAlert': '告警',
+  'srchSshTo': 'SSH 连接 {name}',
+  'srchLightTheme': '切换到浅色主题',
+  'srchDarkTheme': '切换到深色主题',
 };

@@ -879,4 +879,23 @@ const _en = <String, String>{
   // theme
   'stLight': 'Light',
   'stSystem': 'System',
+  // search
+  'srchButton': 'Search…',
+  'srchTooltip': 'Search servers, containers, services and pages ({key})',
+  'srchHint': 'Search servers, containers, services, sites…',
+  'srchNothing': 'Nothing found for "{q}"',
+  'srchMove': 'move',
+  'srchOpen': 'open',
+  'srchCount': 'results: {n}',
+  'srchPage': 'Page',
+  'srchAction': 'Action',
+  'srchServer': 'Server',
+  'srchContainer': 'Container',
+  'srchService': 'Service',
+  'srchScreen': 'Screen session',
+  'srchSite': 'Proxy site',
+  'srchAlert': 'Alert',
+  'srchSshTo': 'SSH to {name}',
+  'srchLightTheme': 'Switch to light theme',
+  'srchDarkTheme': 'Switch to dark theme',
 };

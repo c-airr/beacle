@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:xterm/xterm.dart' show TerminalView;
 
 import '../models/models.dart';
+import '../search/search_index.dart';
+import '../search/search_palette.dart';
 import '../l10n/alert_text.dart';
 import '../l10n/strings.dart';
 import '../state/app_state.dart';
@@ -43,6 +48,9 @@ class AppShellState extends State<AppShell> {
   final List<Alert> _toasts = [];
   StreamSubscription? _alertSub;
   final _serversKey = GlobalKey<ServersScreenState>();
+  final _dockerKey = GlobalKey<DockerScreenState>();
+  final _servicesKey = GlobalKey<ServicesScreenState>();
+  final _proxyKey = GlobalKey<ProxyScreenState>();
   final _terminalKey = GlobalKey<TerminalScreenState>();
   final _filesKey = GlobalKey();
 
@@ -100,9 +108,9 @@ class AppShellState extends State<AppShell> {
       const OverviewScreen(),
       const MapScreen(),
       ServersScreen(key: _serversKey),
-      const DockerScreen(),
-      const ServicesScreen(),
-      const ProxyScreen(),
+      DockerScreen(key: _dockerKey),
+      ServicesScreen(key: _servicesKey),
+      ProxyScreen(key: _proxyKey),
       const AlertsScreen(),
       const SettingsScreen(),
     ];
@@ -119,17 +127,103 @@ class AppShellState extends State<AppShell> {
         if (mounted) setState(() => _toasts.remove(a));
       });
     });
+    HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _alertSub?.cancel();
     super.dispose();
+  }
+
+  bool _searchOpen = false;
+
+  /// Ctrl+K (Cmd+K on macOS) opens search from anywhere in the main window —
+  /// except inside a shell, where Ctrl+K belongs to the shell (it cuts to
+  /// the end of the line), and over a dialog, which has the keyboard.
+  bool _onKey(KeyEvent e) {
+    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.keyK) return false;
+    final kb = HardwareKeyboard.instance;
+    final mod = Platform.isMacOS ? kb.isMetaPressed : kb.isControlPressed;
+    if (!mod || kb.isShiftPressed || kb.isAltPressed || _searchOpen || !mounted) return false;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus != null && focus.findAncestorWidgetOfExactType<TerminalView>() != null) return false;
+    openSearch();
+    return true;
+  }
+
+  /// Every sidebar entry's label key, main tabs then tools — the search
+  /// palette's "pages".
+  static List<String> get _pageKeys => [for (final i in items) i.$2, for (final t in toolItems) t.$2];
+
+  Future<void> openSearch() async {
+    if (_searchOpen) return;
+    _searchOpen = true;
+    context.read<AppState>().bumpActivity();
+    final target = await showSearchPalette(context, pageKeys: _pageKeys);
+    _searchOpen = false;
+    if (target == null || !mounted) return;
+    _openTarget(target);
+  }
+
+  void _goToMain(int i) {
+    context.read<AppState>().bumpActivity();
+    setState(() {
+      if (i != _tabServers) focusedVpsId = null;
+      index = i;
+      _lastMain = i;
+    });
+  }
+
+  void _openTarget(SearchTarget t) {
+    final state = context.read<AppState>();
+    switch (t.kind) {
+      case SearchKind.page:
+        if (t.tab < items.length) {
+          _goToMain(t.tab);
+        } else {
+          openTool(t.tab - items.length);
+        }
+      case SearchKind.action:
+        switch (t.action) {
+          case SearchAction.addVps:
+            showAddVpsDialog(context);
+          case SearchAction.ssh:
+            if (t.vpsId != null) openTerminal(t.vpsId!);
+          case SearchAction.lightTheme:
+          case SearchAction.darkTheme:
+            state.setThemeMode(t.action == SearchAction.lightTheme ? AppThemeMode.light : AppThemeMode.dark);
+            ToolWindows.appearanceChanged();
+          case null:
+            break;
+        }
+      case SearchKind.server:
+        goToServer(t.vpsId!);
+      case SearchKind.container:
+        _goToMain(_tabDocker);
+        _dockerKey.currentState?.showContainers(t.query);
+      case SearchKind.service:
+        _goToMain(_tabServices);
+        _servicesKey.currentState?.show(vpsId: t.vpsId!, t: ServicesScreenState.tabSystemd, query: t.query);
+      case SearchKind.screen:
+        _goToMain(_tabServices);
+        _servicesKey.currentState?.show(vpsId: t.vpsId!, t: ServicesScreenState.tabScreen, query: t.query);
+      case SearchKind.site:
+        _goToMain(_tabProxy);
+        _proxyKey.currentState?.selectVps(t.vpsId!);
+      case SearchKind.alert:
+        goToAlerts();
+    }
   }
 
   // Tab indices, kept next to _items so reordering the sidebar cannot silently
   // send a shortcut to the wrong screen.
   static const _tabServers = 2;
+  static const _tabDocker = 3;
+  static const _tabServices = 4;
+  static const _tabProxy = 5;
   static const _tabAlerts = 6;
 
   void goToServer(String vpsId) {
@@ -499,7 +593,19 @@ class AppShellState extends State<AppShell> {
         children: [
           Text(_label(context, index),
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
-          const Spacer(),
+          const SizedBox(width: 24),
+          // Takes the free width and sits at its right end, shrinking to the
+          // bare magnifier when the window is narrow.
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: SearchButton(onTap: openSearch),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
           Text(
             context.l.f('onlineOf', {
               'on': state.vpsList.where((v) => v.online).length,

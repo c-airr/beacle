@@ -879,4 +879,23 @@ const _it = <String, String>{
   // theme
   'stLight': 'Chiaro',
   'stSystem': 'Sistema',
+  // search
+  'srchButton': 'Cerca…',
+  'srchTooltip': 'Cerca server, container, servizi e pagine ({key})',
+  'srchHint': 'Cerca server, container, servizi, siti…',
+  'srchNothing': 'Nessun risultato per «{q}»',
+  'srchMove': 'sposta',
+  'srchOpen': 'apri',
+  'srchCount': 'risultati: {n}',
+  'srchPage': 'Pagina',
+  'srchAction': 'Azione',
+  'srchServer': 'Server',
+  'srchContainer': 'Container',
+  'srchService': 'Servizio',
+  'srchScreen': 'sessione screen',
+  'srchSite': 'Sito proxy',
+  'srchAlert': 'Avviso',
+  'srchSshTo': 'SSH su {name}',
+  'srchLightTheme': 'Passa al tema chiaro',
+  'srchDarkTheme': 'Passa al tema scuro',
 };

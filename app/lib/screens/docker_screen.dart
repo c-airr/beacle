@@ -13,12 +13,28 @@ class DockerScreen extends StatefulWidget {
   const DockerScreen({super.key});
 
   @override
-  State<DockerScreen> createState() => _DockerScreenState();
+  State<DockerScreen> createState() => DockerScreenState();
 }
 
-class _DockerScreenState extends State<DockerScreen> {
+class DockerScreenState extends State<DockerScreen> {
   int tab = 0; // containers, images, volumes, networks, compose
   String filter = '';
+  final _filterCtl = TextEditingController();
+
+  /// Shows the containers tab filtered to [query] (the search palette).
+  void showContainers(String query) {
+    _filterCtl.text = query;
+    setState(() {
+      tab = 0;
+      filter = query.trim().toLowerCase();
+    });
+  }
+
+  @override
+  void dispose() {
+    _filterCtl.dispose();
+    super.dispose();
+  }
 
   List<String> _tabLabels() => [
         context.l.t('dockerTabContainers'),
@@ -59,6 +75,7 @@ class _DockerScreenState extends State<DockerScreen> {
                 SizedBox(
                   width: 220,
                   child: TextField(
+                    controller: _filterCtl,
                     decoration: InputDecoration(
                       hintText: context.l.t('dockerFilterHint'),
                       prefixIcon: const Icon(Icons.search, size: 16),

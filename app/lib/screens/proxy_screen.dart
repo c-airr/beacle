@@ -14,11 +14,14 @@ class ProxyScreen extends StatefulWidget {
   const ProxyScreen({super.key});
 
   @override
-  State<ProxyScreen> createState() => _ProxyScreenState();
+  State<ProxyScreen> createState() => ProxyScreenState();
 }
 
-class _ProxyScreenState extends State<ProxyScreen> {
+class ProxyScreenState extends State<ProxyScreen> {
   String? selectedId;
+
+  /// Shows [vpsId]'s sites (the search palette).
+  void selectVps(String vpsId) => setState(() => selectedId = vpsId);
 
   @override
   Widget build(BuildContext context) {

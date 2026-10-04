@@ -21,7 +21,7 @@ class ServicesScreen extends StatefulWidget {
   const ServicesScreen({super.key});
 
   @override
-  State<ServicesScreen> createState() => _ServicesScreenState();
+  State<ServicesScreen> createState() => ServicesScreenState();
 }
 
 /// What a row in the unified list came from.
@@ -64,10 +64,24 @@ class RunRow {
 
 enum SortKey { cpu, mem, name, pid }
 
-class _ServicesScreenState extends State<ServicesScreen> {
+class ServicesScreenState extends State<ServicesScreen> {
   String? selectedId;
   int tab = 0; // 0 all, 1 systemd, 2 processes, 3 screen
   String filter = '';
+  final _filterCtl = TextEditingController();
+
+  static const tabSystemd = 1;
+  static const tabScreen = 3;
+
+  /// Opens tab [t] on [vpsId] filtered to [query] (the search palette).
+  void show({required String vpsId, required int t, String query = ''}) {
+    _filterCtl.text = query;
+    setState(() {
+      selectedId = vpsId;
+      filter = query.toLowerCase();
+    });
+    _selectTab(t);
+  }
 
   /// htop opens sorted by CPU because that is the question being asked nine
   /// times out of ten.
@@ -258,6 +272,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     _nohupTimer?.cancel();
     _logTimer?.cancel();
     _logDebounce?.cancel();
+    _filterCtl.dispose();
     super.dispose();
   }
 
@@ -584,6 +599,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               SizedBox(
                 width: 240,
                 child: TextField(
+                  controller: _filterCtl,
                   decoration: InputDecoration(
                     hintText: switch (tab) {
                       0 => context.l.t('svcFilterAll'),
