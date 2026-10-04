@@ -169,7 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 label: context.l.t('setLanguage'),
                 detail: context.l.t('setLanguageDetail'),
                 value: state.language.wire,
-                options: const {'en': 'English', 'pl': 'Polski'},
+                options: {for (final l in AppLanguage.values) l.wire: l.label},
                 onChanged: (v) => state.setLanguage(AppLanguageWire.fromWire(v)),
               ),
               const Divider(height: 24),

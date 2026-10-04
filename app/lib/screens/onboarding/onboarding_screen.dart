@@ -101,8 +101,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
         ),
         const SizedBox(height: 16),
-        _langTile(AppLanguage.en),
-        _langTile(AppLanguage.pl),
+        // Two columns: eight languages in one would push Continue off a
+        // small screen.
+        LayoutBuilder(
+          builder: (context, c) => Wrap(
+            spacing: 8,
+            children: [
+              for (final l in AppLanguage.values) SizedBox(width: (c.maxWidth - 8) / 2, child: _langTile(l)),
+            ],
+          ),
+        ),
         const SizedBox(height: 24),
         Align(
           alignment: Alignment.centerRight,
