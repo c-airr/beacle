@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/alert_text.dart';
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -52,13 +54,13 @@ class AlertsPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
             child: Row(
               children: [
-                const Text('Alerts', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text(context.l.t('alPanelTitle'), style: const TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(width: 8),
                 if (active.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: BeacleColors.err.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
-                    child: Text('${active.length} active', style: const TextStyle(fontSize: 11, color: BeacleColors.err)),
+                    child: Text(context.l.f('alNActive', {'n': active.length}), style: const TextStyle(fontSize: 11, color: BeacleColors.err)),
                   ),
                 const Spacer(),
                 IconButton(icon: const Icon(Icons.close, size: 16), onPressed: onClose),
@@ -68,9 +70,9 @@ class AlertsPanel extends StatelessWidget {
           const Divider(height: 1),
           Flexible(
             child: state.alerts.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text('No alerts', style: TextStyle(color: BeacleColors.textDim)),
+                ? Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(context.l.t('alNone'), style: const TextStyle(color: BeacleColors.textDim)),
                   )
                 : SmoothListView(
                     shrinkWrap: true,
@@ -78,9 +80,9 @@ class AlertsPanel extends StatelessWidget {
                     children: [
                       for (final a in active) _AlertRow(alert: a, icon: _icon(a.type)),
                       if (resolved.isNotEmpty) ...[
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(8, 12, 8, 4),
-                          child: Text('RESOLVED', style: TextStyle(fontSize: 10, color: BeacleColors.textDim, letterSpacing: 1)),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+                          child: Text(context.l.t('alResolvedHeader'), style: const TextStyle(fontSize: 10, color: BeacleColors.textDim, letterSpacing: 1)),
                         ),
                         for (final a in resolved) _AlertRow(alert: a, icon: _icon(a.type)),
                       ],
@@ -124,7 +126,7 @@ class _AlertRow extends StatelessWidget {
                 children: [
                   Row(children: [
                     Expanded(
-                      child: Text('${alert.vpsName} - ${alert.type}',
+                      child: Text('${alert.vpsName} - ${alertTypeLabel(context.l, alert.type)}',
                           style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -134,7 +136,7 @@ class _AlertRow extends StatelessWidget {
                   ]),
                   const SizedBox(height: 2),
                   Text(
-                    alert.message,
+                    alertMessage(context.l, alert),
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.35,
@@ -147,7 +149,7 @@ class _AlertRow extends StatelessWidget {
             if (!alert.resolved)
               IconButton(
                 icon: const Icon(Icons.check, size: 14, color: BeacleColors.textDim),
-                tooltip: 'Resolve',
+                tooltip: context.l.t('alResolve'),
                 onPressed: () => state.resolveAlert(alert.id),
               ),
           ],

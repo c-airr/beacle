@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../theme.dart';
 import 'common.dart';
@@ -16,10 +17,10 @@ class SpikeDialog extends StatelessWidget {
   const SpikeDialog({super.key, required this.spike});
 
   bool get _isMem => spike.metric == 'mem';
-  String get _metricLabel => _isMem ? 'Memory' : 'CPU';
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l;
     final at = spike.at.toLocal();
     return Dialog(
       backgroundColor: BeacleColors.surface,
@@ -37,14 +38,14 @@ class SpikeDialog extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '$_metricLabel spike · ${_fmtTime(at)}',
+                      l.f(_isMem ? 'spMemSpike' : 'spCpuSpike', {'t': _fmtTime(l, at)}),
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: () => Navigator.pop(context),
-                    tooltip: 'Close',
+                    tooltip: l.t('close'),
                   ),
                 ],
               ),
@@ -53,23 +54,22 @@ class SpikeDialog extends StatelessWidget {
               // said out loud: 30% means nothing until you know the machine
               // normally sits at 8%.
               Text(
-                '${spike.value.toStringAsFixed(0)}%, against a usual '
-                '${spike.baseline.toStringAsFixed(0)}% for this server.',
+                l.f('spAgainst', {'v': spike.value.toStringAsFixed(0), 'b': spike.baseline.toStringAsFixed(0)}),
                 style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
               const SizedBox(height: 14),
 
               if (spike.top.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
-                    'No process list was captured for this one.',
-                    style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                    l.t('spNoProcs'),
+                    style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
                   ),
                 )
               else ...[
                 Text(
-                  'Running at the time, busiest first:',
+                  l.t('spRunning'),
                   style: TextStyle(
                       fontSize: 11,
                       color: BeacleColors.textDim,
@@ -88,9 +88,9 @@ class SpikeDialog extends StatelessWidget {
               ],
 
               const SizedBox(height: 12),
-              const Text(
-                'A snapshot from that minute — these processes may be long gone.',
-                style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
+              Text(
+                l.t('spSnapshot'),
+                style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
               ),
             ],
           ),
@@ -99,14 +99,14 @@ class SpikeDialog extends StatelessWidget {
     );
   }
 
-  static String _fmtTime(DateTime t) {
+  static String _fmtTime(L l, DateTime t) {
     final now = DateTime.now();
     final sameDay = t.year == now.year && t.month == now.month && t.day == now.day;
     final hm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    if (sameDay) return 'today $hm';
+    if (sameDay) return l.f('spToday', {'t': hm});
     final yesterday = now.subtract(const Duration(days: 1));
     if (t.year == yesterday.year && t.month == yesterday.month && t.day == yesterday.day) {
-      return 'yesterday $hm';
+      return l.f('spYesterday', {'t': hm});
     }
     return '${t.day.toString().padLeft(2, '0')}.${t.month.toString().padLeft(2, '0')} $hm';
   }
@@ -172,12 +172,12 @@ class _ProcessRow extends StatelessWidget {
                   // Clickable because the command line is what you paste into
                   // a terminal next, and it is usually too long to retype.
                   Tooltip(
-                    message: 'Click to copy · ${proc.command}',
+                    message: context.l.f('dkClickCopy', {'v': proc.command}),
                     waitDuration: const Duration(milliseconds: 600),
                     child: InkWell(
                       onTap: () {
                         Clipboard.setData(ClipboardData(text: proc.command));
-                        showToast(context, 'Copied');
+                        showToast(context, context.l.t('copied'));
                       },
                       child: Text(
                         proc.command,

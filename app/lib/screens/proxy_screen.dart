@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -24,7 +25,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
     final state = context.watch<AppState>();
     final withAgent = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (withAgent.isEmpty) {
-      return const Center(child: Text('No VPS with agent data', style: TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('dockerNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= withAgent.first.id;
     final vps = withAgent.where((v) => v.id == selectedId).firstOrNull ?? withAgent.first;
@@ -53,23 +54,23 @@ class _ProxyScreenState extends State<ProxyScreen> {
               const SizedBox(width: 16),
               _providerBadge(proxy),
               const Spacer(),
-              SmallButton('Validate config', icon: Icons.rule, onPressed: () async {
+              SmallButton(context.l.t('pxValidate'), icon: Icons.rule, onPressed: () async {
                 try {
                   state.onUserAction();
                   final r = await state.api.proxyValidate(vps.id);
                   if (!context.mounted) return;
-                  showToast(context, r['valid'] == true ? 'Config valid: ${r['output']}' : 'Invalid: ${r['output']}',
+                  showToast(context, context.l.f(r['valid'] == true ? 'pxValid' : 'pxInvalid', {'out': r['output']}),
                       error: r['valid'] != true);
                 } catch (e) {
                   if (context.mounted) showToast(context, '$e', error: true);
                 }
               }),
               const SizedBox(width: 8),
-              SmallButton('Reload', icon: Icons.refresh, onPressed: () async {
+              SmallButton(context.l.t('pxReload'), icon: Icons.refresh, onPressed: () async {
                 try {
                   state.onUserAction();
                   await state.api.proxyReload(vps.id);
-                  if (context.mounted) showToast(context, 'Proxy reloaded');
+                  if (context.mounted) showToast(context, context.l.t('pxReloaded'));
                 } catch (e) {
                   if (context.mounted) showToast(context, '$e', error: true);
                 }
@@ -78,7 +79,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
               FilledButton.icon(
                 onPressed: _hasProvider(proxy) ? () => _openSiteForm(state, vps) : null,
                 icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add site', style: TextStyle(fontSize: 12)),
+                label: Text(context.l.t('pxAddSite'), style: const TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -107,8 +108,8 @@ class _ProxyScreenState extends State<ProxyScreen> {
     final label = switch (proxy.provider) {
       'caddy' => 'Caddy ${proxy.version}',
       'npm' => 'Nginx Proxy Manager',
-      'none' => 'No provider detected',
-      _ => 'Waiting for agent data',
+      'none' => context.l.t('pxNoProvider'),
+      _ => context.l.t('pxWaitingAgent'),
     };
     final color = !_hasProvider(proxy)
         ? BeacleColors.textDim
@@ -127,26 +128,26 @@ class _ProxyScreenState extends State<ProxyScreen> {
         const SizedBox(width: 6),
         Text(label, style: TextStyle(fontSize: 12, color: color)),
         if (_hasProvider(proxy) && !proxy.running)
-          const Text('  (not running)', style: TextStyle(fontSize: 12, color: BeacleColors.err)),
+          Text('  (${context.l.t('pxNotRunning')})', style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
       ]),
     );
   }
 
   Widget _sitesList(AppState state, Vps vps, ProxyState proxy) {
     if (proxy.provider == 'none') {
-      return const Center(
-        child: Text('Install Caddy or Nginx Proxy Manager on this VPS\nto manage reverse proxy sites.',
-            textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
+      return Center(
+        child: Text(context.l.t('pxInstallProvider'),
+            textAlign: TextAlign.center, style: const TextStyle(color: BeacleColors.textDim)),
       );
     }
     if (!_hasProvider(proxy)) {
-      return const Center(
-        child: Text('Waiting for proxy data from the agent…',
-            textAlign: TextAlign.center, style: TextStyle(color: BeacleColors.textDim)),
+      return Center(
+        child: Text(context.l.t('pxWaitingData'),
+            textAlign: TextAlign.center, style: const TextStyle(color: BeacleColors.textDim)),
       );
     }
     if (proxy.sites.isEmpty) {
-      return const Center(child: Text('No sites configured yet', style: TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('pxNoSites'), style: const TextStyle(color: BeacleColors.textDim)));
     }
     return SmoothListView(
       padding: const EdgeInsets.all(16),
@@ -154,7 +155,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
         if (proxy.lastError.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: Text('Provider error: ${proxy.lastError}',
+            child: Text(context.l.f('pxProviderError', {'e': proxy.lastError}),
                 style: const TextStyle(color: BeacleColors.err, fontSize: 12)),
           ),
         for (final s in proxy.sites)
@@ -197,7 +198,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
                   if (s.rawConfig.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.code, size: 16),
-                      tooltip: 'View config',
+                      tooltip: context.l.t('pxViewConfig'),
                       onPressed: () => _showRawConfig(s),
                     ),
                   // Everything is editable now: what the form cannot model, the
@@ -206,24 +207,24 @@ class _ProxyScreenState extends State<ProxyScreen> {
                   IconButton(
                     icon: Icon(s.editable || s.managed ? Icons.edit_outlined : Icons.code, size: 16),
                     tooltip: s.editable || s.managed
-                        ? 'Edit'
-                        : 'Edit as config — ${s.readOnlyReason}',
+                        ? context.l.t('edit')
+                        : context.l.f('pxEditAsConfig', {'reason': s.readOnlyReason}),
                     onPressed: () => _openSiteForm(state, vps, existing: s),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 16, color: BeacleColors.err),
-                    tooltip: s.managed ? 'Delete' : 'Only Beacle-managed sites can be deleted here',
+                    tooltip: s.managed ? context.l.t('delete') : context.l.t('pxOnlyManaged'),
                     onPressed: !s.managed
                         ? null
                         : () async {
                       final ok = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          title: const Text('Delete site?'),
-                          content: Text('Remove ${s.domain} from the proxy config?'),
+                          title: Text(context.l.t('pxDeleteTitle')),
+                          content: Text(context.l.f('pxDeleteBody', {'domain': s.domain})),
                           actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+                            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l.t('delete'))),
                           ],
                         ),
                       );
@@ -231,7 +232,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
                         try {
                           state.onUserAction();
                           await state.api.proxyDeleteSite(vps.id, s.id);
-                          if (mounted) showToast(context, 'Site deleted');
+                          if (mounted) showToast(context, context.l.t('pxSiteDeleted'));
                           state.refreshAll();
                         } catch (e) {
                           if (mounted) showToast(context, '$e', error: true);
@@ -253,7 +254,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
   void _showRawConfig(ProxySite s) {
     showLogsDialog(
       context,
-      '${s.domain} — ${s.sourceFile.isEmpty ? 'Caddy config' : s.sourceFile}',
+      '${s.domain} — ${s.sourceFile.isEmpty ? context.l.t('pxCaddyConfig') : s.sourceFile}',
       () async => s.rawConfig,
     );
   }
@@ -261,7 +262,7 @@ class _ProxyScreenState extends State<ProxyScreen> {
   Future<void> _openSiteForm(AppState state, Vps vps, {ProxySite? existing}) async {
     final saved = await showProxySiteForm(context, state: state, vps: vps, existing: existing);
     if (!saved) return;
-    if (mounted) showToast(context, existing == null ? 'Site created' : 'Site updated');
+    if (mounted) showToast(context, context.l.t(existing == null ? 'pxSiteCreated' : 'pxSiteUpdated'));
     // The snapshot carries proxy state, but the next tick can be seconds out —
     // pull now so the new row (and its port check) appears immediately.
     await state.refreshAll();
@@ -271,11 +272,11 @@ class _ProxyScreenState extends State<ProxyScreen> {
   /// "→ " with nothing after it would look like a broken config.
   String _targetLine(ProxySite s) {
     if (s.upstream.isNotEmpty && s.kind == 'mixed') {
-      return 'static files + → ${s.upstream}';
+      return '${context.l.t('pxStaticFiles')} + → ${s.upstream}';
     }
     if (s.upstream.isNotEmpty) return '→ ${s.upstream}';
-    if (s.kind == 'static') return 'serves files from disk';
-    return 'no reverse_proxy in this block';
+    if (s.kind == 'static') return context.l.t('pxServesFiles');
+    return context.l.t('pxNoReverseProxy');
   }
 
   /// Distinguishes sites Beacle owns from ones parsed out of the hand-written
@@ -285,16 +286,14 @@ class _ProxyScreenState extends State<ProxyScreen> {
       if (!s.rawEdited) return const SizedBox.shrink();
       // A managed site written by hand is no longer generated from the form —
       // worth saying, because the form is what everything else here implies.
-      return _chip('hand-edited', 'This block was written in the raw editor. '
-          'Beacle saves it verbatim and does not regenerate it from the fields.');
+      return _chip(context.l.t('pxHandEdited'), context.l.t('pxHandEditedTip'));
     }
     final tls = s.tlsMode == 'internal' ? ' · tls internal' : '';
     return _chip(
-      s.editable ? 'Caddyfile$tls' : 'Caddyfile · config only$tls',
+      s.editable ? 'Caddyfile$tls' : 'Caddyfile · ${context.l.t('pxConfigOnly')}$tls',
       s.editable
-          ? 'Read from ${s.sourceFile}. Simple enough to edit here.'
-          : 'Read from ${s.sourceFile}. ${s.readOnlyReason} '
-              'The form cannot rebuild it, so editing opens the raw config instead.',
+          ? context.l.f('pxReadFromEditable', {'file': s.sourceFile})
+          : context.l.f('pxReadFromRaw', {'file': s.sourceFile, 'reason': s.readOnlyReason}),
     );
   }
 
@@ -317,12 +316,12 @@ class _ProxyScreenState extends State<ProxyScreen> {
   /// is configured without opening the form.
   String _optionSummary(ProxySite s) {
     final on = [
-      if (s.redirectWww) 'www redirect',
-      if (s.webSocket) 'websockets',
-      if (s.gzip) 'compression',
-      if (s.basicAuthUser.isNotEmpty) 'basic auth',
-      if (s.accessLog) 'access log',
-      if (s.headers.isNotEmpty) '${s.headers.length} header${s.headers.length == 1 ? '' : 's'}',
+      if (s.redirectWww) context.l.t('pxOptWww'),
+      if (s.webSocket) context.l.t('pxOptWs'),
+      if (s.gzip) context.l.t('pxOptGzip'),
+      if (s.basicAuthUser.isNotEmpty) context.l.t('pxOptAuth'),
+      if (s.accessLog) context.l.t('pxOptLog'),
+      if (s.headers.isNotEmpty) context.l.f('pxOptHeaders', {'n': s.headers.length}),
     ];
     return on.join(' · ');
   }
@@ -335,16 +334,16 @@ class _ProxyScreenState extends State<ProxyScreen> {
       return const SizedBox.shrink();
     }
     final (color, label, icon) = s.upstreamHealthy
-        ? (BeacleColors.ok, 'port ${s.upstreamPort} up', Icons.check_circle_outline)
+        ? (BeacleColors.ok, context.l.f('pxPortUp', {'p': s.upstreamPort}), Icons.check_circle_outline)
         : s.portInUse
-            ? (BeacleColors.warn, 'port ${s.upstreamPort} open', Icons.help_outline)
-            : (BeacleColors.err, 'port ${s.upstreamPort} dead', Icons.error_outline);
+            ? (BeacleColors.warn, context.l.f('pxPortOpen', {'p': s.upstreamPort}), Icons.help_outline)
+            : (BeacleColors.err, context.l.f('pxPortDead', {'p': s.upstreamPort}), Icons.error_outline);
     return Tooltip(
       message: s.upstreamHealthy
-          ? 'Something is listening on ${s.upstreamPort} and answering HTTP.'
+          ? context.l.f('pxPortUpTip', {'p': s.upstreamPort})
           : s.portInUse
-              ? 'Port ${s.upstreamPort} accepts connections but did not answer HTTP.'
-              : 'Nothing is listening on port ${s.upstreamPort} — this domain will return 502.',
+              ? context.l.f('pxPortOpenTip', {'p': s.upstreamPort})
+              : context.l.f('pxPortDeadTip', {'p': s.upstreamPort}),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
@@ -362,10 +361,10 @@ class _ProxyScreenState extends State<ProxyScreen> {
 
   Widget _sslBadge(String ssl) {
     final (color, label) = switch (ssl) {
-      'active' => (BeacleColors.ok, 'SSL active'),
-      'pending' => (BeacleColors.warn, 'SSL pending'),
-      'error' => (BeacleColors.err, 'SSL error'),
-      _ => (BeacleColors.textDim, 'HTTP only'),
+      'active' => (BeacleColors.ok, context.l.t('pxSslActive')),
+      'pending' => (BeacleColors.warn, context.l.t('pxSslPending')),
+      'error' => (BeacleColors.err, context.l.t('pxSslError')),
+      _ => (BeacleColors.textDim, context.l.t('pxHttpOnly')),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -401,7 +400,7 @@ class _PortCheckerState extends State<_PortChecker> {
   Future<void> _check() async {
     final port = int.tryParse(ctl.text.trim());
     if (port == null) {
-      setState(() => error = 'Enter a port number');
+      setState(() => error = context.l.t('pxEnterPort'));
       return;
     }
     setState(() {
@@ -430,14 +429,14 @@ class _PortCheckerState extends State<_PortChecker> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('PORT CHECKER',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
+          Text(context.l.t('pxPortChecker'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: BeacleColors.textDim)),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
               child: TextField(
                 controller: ctl,
-                decoration: const InputDecoration(hintText: 'Port, e.g. 3000'),
+                decoration: InputDecoration(hintText: context.l.t('pxPortHint')),
                 onSubmitted: (_) => _check(),
               ),
             ),
@@ -446,7 +445,7 @@ class _PortCheckerState extends State<_PortChecker> {
                 onPressed: busy ? null : _check,
                 child: busy
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Check')),
+                    : Text(context.l.t('pxCheck'))),
           ]),
           if (error != null) ...[
             const SizedBox(height: 10),
@@ -460,14 +459,14 @@ class _PortCheckerState extends State<_PortChecker> {
                   Icon(result!.pid > 0 ? Icons.settings_ethernet : Icons.block,
                       size: 16, color: result!.pid > 0 ? BeacleColors.text : BeacleColors.textDim),
                   const SizedBox(width: 8),
-                  Text('Port ${result!.port}/${result!.protocol}',
+                  Text(context.l.f('pxPortProto', {'p': result!.port, 'proto': result!.protocol}),
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                 ]),
                 const Divider(height: 20),
-                _kv('Process', result!.processName.isEmpty ? '(none)' : result!.processName),
+                _kv(context.l.t('pxProcess'), result!.processName.isEmpty ? context.l.t('pxNone') : result!.processName),
                 _kv('PID', result!.pid > 0 ? '${result!.pid}' : '-'),
-                _kv('Listen', result!.listenAddr),
-                _kv('Command', result!.commandLine.isEmpty ? '-' : result!.commandLine),
+                _kv(context.l.t('pxListen'), result!.listenAddr),
+                _kv(context.l.t('cronCommand'), result!.commandLine.isEmpty ? '-' : result!.commandLine),
                 const SizedBox(height: 8),
                 Row(children: [
                   Icon(result!.healthy ? Icons.check_circle : Icons.error,

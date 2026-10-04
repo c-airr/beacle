@@ -326,7 +326,7 @@ class _ContainerCard extends StatelessWidget {
                 label: context.l.t('dockerRam'),
                 value: stats == null ? '—' : '${fmtBytes(stats!.memUsage)} (${stats!.memPercent.toStringAsFixed(0)}%)',
               ),
-              _Meta(label: context.l.t('dockerUptime'), value: _uptimeLabel(container)),
+              _Meta(label: context.l.t('dockerUptime'), value: _uptimeLabel(context.l, container)),
             ],
           ),
           if (stats != null) ...[
@@ -337,7 +337,7 @@ class _ContainerCard extends StatelessWidget {
                 const SizedBox(width: 14),
                 Expanded(
                     child: MetricBar(
-                        label: 'MEM', percent: stats!.memPercent, detail: fmtBytes(stats!.memUsage))),
+                        label: context.l.t('dkMem'), percent: stats!.memPercent, detail: fmtBytes(stats!.memUsage))),
               ],
             ),
           ],
@@ -346,10 +346,10 @@ class _ContainerCard extends StatelessWidget {
     );
   }
 
-  static String _uptimeLabel(ContainerInfo c) {
+  static String _uptimeLabel(L l, ContainerInfo c) {
     // Docker Status is already human, e.g. "Up 3 hours" / "Exited (0) 2 days ago"
     if (c.status.toLowerCase().startsWith('up ')) return c.status;
-    if (c.running) return c.status.isEmpty ? 'running' : c.status;
+    if (c.running) return c.status.isEmpty ? l.t('svcRunning') : c.status;
     return c.status.isEmpty ? c.state : c.status;
   }
 }
@@ -868,12 +868,12 @@ class _ImagesBlock extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Column(
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             child: Row(children: [
-              Expanded(flex: 3, child: Text('TAGS', style: hdr)),
+              Expanded(flex: 3, child: Text(context.l.t('dkTags'), style: hdr)),
               Expanded(flex: 2, child: Text('ID', style: hdr)),
-              SizedBox(width: 100, child: Text('SIZE', style: hdr, textAlign: TextAlign.right)),
+              SizedBox(width: 100, child: Text(context.l.t('dkSize'), style: hdr, textAlign: TextAlign.right)),
             ]),
           ),
           for (final im in docker.images)
@@ -917,12 +917,12 @@ class _VolumesBlock extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Column(
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             child: Row(children: [
-              Expanded(flex: 2, child: Text('NAME', style: hdr)),
-              SizedBox(width: 80, child: Text('DRIVER', style: hdr)),
-              Expanded(flex: 3, child: Text('MOUNTPOINT', style: hdr)),
+              Expanded(flex: 2, child: Text(context.l.t('procName'), style: hdr)),
+              SizedBox(width: 80, child: Text(context.l.t('dkDriver'), style: hdr)),
+              Expanded(flex: 3, child: Text(context.l.t('dkMountpoint'), style: hdr)),
             ]),
           ),
           for (final v in docker.volumes)
@@ -957,13 +957,13 @@ class _NetworksBlock extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Column(
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             child: Row(children: [
-              Expanded(flex: 2, child: Text('NAME', style: hdr)),
-              SizedBox(width: 80, child: Text('DRIVER', style: hdr)),
-              SizedBox(width: 70, child: Text('SCOPE', style: hdr)),
-              SizedBox(width: 90, child: Text('CONTAINERS', style: hdr, textAlign: TextAlign.right)),
+              Expanded(flex: 2, child: Text(context.l.t('procName'), style: hdr)),
+              SizedBox(width: 80, child: Text(context.l.t('dkDriver'), style: hdr)),
+              SizedBox(width: 70, child: Text(context.l.t('dkScope'), style: hdr)),
+              SizedBox(width: 90, child: Text(context.l.t('dkContainers'), style: hdr, textAlign: TextAlign.right)),
             ]),
           ),
           for (final n in docker.networks)
@@ -1092,9 +1092,9 @@ class _ComposeBlock extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 12, color: p.running == p.total ? BeacleColors.ok : BeacleColors.warn)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('dir: ${p.workingDir.isEmpty ? '-' : p.workingDir}',
+                Text(context.l.f('dkDir', {'v': p.workingDir.isEmpty ? '-' : p.workingDir}),
                     style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
-                Text('config: ${p.configFile.isEmpty ? '-' : p.configFile}',
+                Text(context.l.f('dkConfig', {'v': p.configFile.isEmpty ? '-' : p.configFile}),
                     style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: 6, children: [
@@ -1154,12 +1154,12 @@ class _CopyText extends StatelessWidget {
   Widget build(BuildContext context) {
     if (text.isEmpty) return Text(text, style: style);
     return Tooltip(
-      message: 'Click to copy · $text',
+      message: context.l.f('dkClickCopy', {'v': text}),
       waitDuration: const Duration(milliseconds: 600),
       child: InkWell(
         onTap: () {
           Clipboard.setData(ClipboardData(text: text));
-          showToast(context, 'Copied $text');
+          showToast(context, context.l.f('dkCopied', {'v': text}));
         },
         borderRadius: BorderRadius.circular(3),
         child: Padding(
@@ -1183,12 +1183,12 @@ class _CopyId extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Click to copy full id · $full',
+      message: context.l.f('dkClickCopyId', {'v': full}),
       waitDuration: const Duration(milliseconds: 600),
       child: InkWell(
         onTap: () {
           Clipboard.setData(ClipboardData(text: full));
-          showToast(context, 'Copied id');
+          showToast(context, context.l.t('dkCopiedId'));
         },
         borderRadius: BorderRadius.circular(3),
         child: Padding(

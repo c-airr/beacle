@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -151,7 +152,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
           children: [
             Row(children: [
               Expanded(
-                child: Text('New service on ${widget.vps.name}',
+                child: Text(context.l.f('swTitle', {'name': widget.vps.name}),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               IconButton(
@@ -160,10 +161,9 @@ class _ServiceWizardState extends State<_ServiceWizard> {
               ),
             ]),
             const SizedBox(height: 4),
-            const Text(
-              'A systemd service starts on boot and is restarted if it dies — unlike a '
-              'screen session or a nohup job, which end with the machine.',
-              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+            Text(
+              context.l.t('swIntro'),
+              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
             ),
             const SizedBox(height: 16),
 
@@ -177,10 +177,10 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                         child: TextField(
                           controller: _name,
                           autofocus: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Service name',
+                          decoration: InputDecoration(
+                            labelText: context.l.t('swName'),
                             hintText: 'my-bot',
-                            helperText: 'Becomes my-bot.service',
+                            helperText: context.l.f('swNameHelp', {'unit': 'my-bot.service'}),
                           ),
                           onChanged: (_) => setState(_schedulePreview),
                         ),
@@ -190,9 +190,9 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                         flex: 2,
                         child: TextField(
                           controller: _description,
-                          decoration: const InputDecoration(
-                            labelText: 'Description',
-                            hintText: 'What this service is for',
+                          decoration: InputDecoration(
+                            labelText: context.l.t('swDescription'),
+                            hintText: context.l.t('swDescriptionHint'),
                           ),
                           onChanged: (_) => _schedulePreview(),
                         ),
@@ -204,10 +204,10 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                       Expanded(
                         child: TextField(
                           controller: _exec,
-                          decoration: const InputDecoration(
-                            labelText: 'Command',
+                          decoration: InputDecoration(
+                            labelText: context.l.t('cronCommand'),
                             hintText: '/usr/bin/python3 /srv/bot/main.py',
-                            helperText: 'Use absolute paths — systemd does not read your shell PATH.',
+                            helperText: context.l.t('swCommandHelp'),
                           ),
                           style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
                           onChanged: (_) => _schedulePreview(),
@@ -216,7 +216,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                       const SizedBox(width: 10),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 18),
-                        child: SmallButton('Browse', icon: Icons.folder_open, onPressed: _pickCommand),
+                        child: SmallButton(context.l.t('swBrowse'), icon: Icons.folder_open, onPressed: _pickCommand),
                       ),
                     ]),
                     const SizedBox(height: 14),
@@ -226,8 +226,8 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                         flex: 2,
                         child: TextField(
                           controller: _dir,
-                          decoration: const InputDecoration(
-                            labelText: 'Working directory',
+                          decoration: InputDecoration(
+                            labelText: context.l.t('swWorkdir'),
                             hintText: '/srv/bot',
                           ),
                           style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
@@ -238,10 +238,10 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                       Expanded(
                         child: TextField(
                           controller: _user,
-                          decoration: const InputDecoration(
-                            labelText: 'Run as user',
+                          decoration: InputDecoration(
+                            labelText: context.l.t('swUser'),
                             hintText: 'root',
-                            helperText: 'Blank means root.',
+                            helperText: context.l.t('swUserHelp'),
                           ),
                           onChanged: (_) => _schedulePreview(),
                         ),
@@ -251,13 +251,13 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                         width: 150,
                         child: DropdownButtonFormField<String>(
                           initialValue: _restart,
-                          decoration: const InputDecoration(labelText: 'If it exits'),
+                          decoration: InputDecoration(labelText: context.l.t('swIfExits')),
                           dropdownColor: BeacleColors.surfaceHi,
                           style: const TextStyle(fontSize: 13, color: BeacleColors.text),
-                          items: const [
-                            DropdownMenuItem(value: 'always', child: Text('Always restart')),
-                            DropdownMenuItem(value: 'on-failure', child: Text('Only on failure')),
-                            DropdownMenuItem(value: 'no', child: Text('Leave it stopped')),
+                          items: [
+                            DropdownMenuItem(value: 'always', child: Text(context.l.t('swAlways'))),
+                            DropdownMenuItem(value: 'on-failure', child: Text(context.l.t('swOnFailure'))),
+                            DropdownMenuItem(value: 'no', child: Text(context.l.t('swNo'))),
                           ],
                           onChanged: (v) {
                             setState(() => _restart = v ?? 'always');
@@ -277,16 +277,15 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                     ),
                     const SizedBox(height: 8),
 
-                    _toggle('Start on boot', 'Enables the unit, so it comes back after a reboot.',
+                    _toggle(context.l.t('swOnBoot'), context.l.t('swOnBootHelp'),
                         _enableAtBoot, (v) => setState(() => _enableAtBoot = v)),
-                    _toggle('Start now', 'Also starts it immediately after saving.', _startNow,
+                    _toggle(context.l.t('swStartNow'), context.l.t('swStartNowHelp'), _startNow,
                         (v) => setState(() => _startNow = v)),
 
                     if (p != null && p.exists)
                       _toggle(
-                        'Replace the existing service',
-                        '${p.path} already exists. Beacle will not overwrite a unit it did not '
-                            'write unless you say so here.',
+                        context.l.t('swReplace'),
+                        context.l.f('swReplaceHelp', {'path': p.path}),
                         _overwrite,
                         (v) {
                           setState(() => _overwrite = v);
@@ -297,8 +296,8 @@ class _ServiceWizardState extends State<_ServiceWizard> {
 
                     const SizedBox(height: 16),
                     Row(children: [
-                      const Text('UNIT FILE',
-                          style: TextStyle(
+                      Text(context.l.t('swUnitFile'),
+                          style: const TextStyle(
                               fontSize: 11,
                               color: BeacleColors.textDim,
                               fontWeight: FontWeight.w600,
@@ -306,7 +305,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                       const Spacer(),
                       if (p != null)
                         Text(
-                          p.valid ? 'systemd accepts this' : 'systemd rejects this',
+                          context.l.t(p.valid ? 'swAccepts' : 'swRejects'),
                           style: TextStyle(
                             fontSize: 11,
                             color: p.valid ? BeacleColors.ok : BeacleColors.err,
@@ -324,7 +323,7 @@ class _ServiceWizardState extends State<_ServiceWizard> {
                             color: p == null || p.valid ? BeacleColors.border : BeacleColors.err),
                       ),
                       child: SelectableText(
-                        p?.unit ?? 'Fill in a name and a command to see the unit file.',
+                        p?.unit ?? context.l.t('swFillIn'),
                         style: TextStyle(
                           fontFamily: 'Consolas',
                           fontSize: 11,
@@ -355,13 +354,13 @@ class _ServiceWizardState extends State<_ServiceWizard> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                SmallButton('Cancel', onPressed: _busy ? null : () => Navigator.pop(context, false)),
+                SmallButton(context.l.t('cancel'), onPressed: _busy ? null : () => Navigator.pop(context, false)),
                 const SizedBox(width: 10),
                 if (_busy)
                   const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 else
                   SmallButton(
-                    'Create service',
+                    context.l.t('swCreate'),
                     icon: Icons.check,
                     color: _valid ? BeacleColors.ok : null,
                     // Enabled on a valid form even before the preview lands, but
@@ -442,8 +441,8 @@ class _EnvEditorState extends State<_EnvEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Environment variables',
-            style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+        Text(context.l.t('swEnv'),
+            style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
         const SizedBox(height: 8),
         for (final e in widget.env.entries)
           Padding(
@@ -481,7 +480,7 @@ class _EnvEditorState extends State<_EnvEditor> {
             ),
           ),
           const SizedBox(width: 8),
-          SmallButton('Add', icon: Icons.add, onPressed: _add),
+          SmallButton(context.l.t('psfAdd'), icon: Icons.add, onPressed: _add),
         ]),
       ],
     );

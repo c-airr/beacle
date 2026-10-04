@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -151,7 +152,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
             Row(
               children: [
                 Expanded(
-                  child: Text(widget.forNohup ? 'Run detached with nohup' : 'Run in a screen session',
+                  child: Text(context.l.t(widget.forNohup ? 'slNohupTitle' : 'slScreenTitle'),
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
                 IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
@@ -233,7 +234,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                   child: TextField(
                     controller: _nameCtrl,
                     enabled: widget.fixedName == null,
-                    decoration: InputDecoration(labelText: widget.forNohup ? 'Job name' : 'Session name'),
+                    decoration: InputDecoration(labelText: context.l.t(widget.forNohup ? 'slJobName' : 'slSessionName')),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
@@ -241,8 +242,8 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
                 Expanded(
                   child: TextField(
                     controller: _dirCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Directory',
+                    decoration: InputDecoration(
+                      labelText: context.l.t('slDirectory'),
                       hintText: '~/',
                     ),
                     style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
@@ -254,8 +255,8 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _cmdCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Command',
+              decoration: InputDecoration(
+                labelText: context.l.t('cronCommand'),
                 hintText: 'python3 bot.py',
               ),
               style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
@@ -272,9 +273,7 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
               ),
               child: Text(
                 !_valid
-                    ? (widget.forNohup
-                        ? 'Name the job and enter a command.'
-                        : 'Name the session and enter a command.')
+                    ? context.l.t(widget.forNohup ? 'slNameJob' : 'slNameSession')
                     : widget.forNohup
                         ? '${_cdLine.isEmpty ? '' : '$_cdLine\n'}'
                             'nohup ${_cmdCtrl.text.trim()} '
@@ -294,10 +293,10 @@ class _ScreenLauncherDialogState extends State<_ScreenLauncherDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                SmallButton('Cancel', onPressed: () => Navigator.pop(context)),
+                SmallButton(context.l.t('cancel'), onPressed: () => Navigator.pop(context)),
                 const SizedBox(width: 10),
                 SmallButton(
-                  'Start',
+                  context.l.t('actStart'),
                   icon: Icons.play_arrow,
                   color: _valid ? BeacleColors.ok : null,
                   onPressed: !_valid

@@ -299,11 +299,11 @@ class CopyField extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.copy, size: 14, color: BeacleColors.textDim),
-            tooltip: 'Copy',
+            tooltip: context.l.t('copy'),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Copied to clipboard'),
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(context.l.t('cmCopiedClipboard')),
                 duration: Duration(seconds: 1),
                 width: 220,
                 behavior: SnackBarBehavior.floating,
@@ -475,14 +475,14 @@ class _LogsDialogState extends State<_LogsDialog> {
                     padding: EdgeInsets.only(right: 10),
                     child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
-                Text('$lines lines', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                Text(context.l.f('fsLines', {'n': lines}), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                 const SizedBox(width: 10),
                 // Following is the default; turning it off lets you read
                 // scrollback while output keeps arriving.
                 Tooltip(
-                  message: _follow ? 'Following new output' : 'Scroll position held',
+                  message: context.l.t(_follow ? 'cmFollowingOutput' : 'cmScrollHeld'),
                   child: SmallButton(
-                    _follow ? 'Follow' : 'Paused',
+                    context.l.t(_follow ? 'cmFollow' : 'hpPaused'),
                     icon: _follow ? Icons.vertical_align_bottom : Icons.pause,
                     color: _follow ? BeacleColors.ok : BeacleColors.textDim,
                     onPressed: () {
@@ -493,7 +493,7 @@ class _LogsDialogState extends State<_LogsDialog> {
                 ),
                 const SizedBox(width: 8),
                 SmallButton(
-                  'Copy',
+                  context.l.t('copy'),
                   icon: Icons.copy,
                   // Copying a 300-line journal by dragging the mouse is exactly
                   // what people give up on, so this grabs the whole buffer.
@@ -501,11 +501,11 @@ class _LogsDialogState extends State<_LogsDialog> {
                       ? null
                       : () {
                           Clipboard.setData(ClipboardData(text: _text));
-                          showToast(context, 'Copied $lines lines to clipboard');
+                          showToast(context, context.l.f('cmCopiedLines', {'n': lines}));
                         },
                 ),
                 const SizedBox(width: 8),
-                SmallButton('Reload', icon: Icons.refresh, onPressed: () => _load()),
+                SmallButton(context.l.t('fsReload'), icon: Icons.refresh, onPressed: () => _load()),
                 const SizedBox(width: 4),
                 IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
               ]),
@@ -516,7 +516,7 @@ class _LogsDialogState extends State<_LogsDialog> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: BeacleColors.bg, borderRadius: BorderRadius.circular(6)),
                   child: _error != null
-                      ? Center(child: Text('Error: $_error', style: const TextStyle(color: BeacleColors.err)))
+                      ? Center(child: Text(context.l.f('cmError', {'e': _error}), style: const TextStyle(color: BeacleColors.err)))
                       : NotificationListener<UserScrollNotification>(
                           // Scrolling up is how you say "stop jumping"; getting
                           // back to the bottom resumes following.
@@ -534,7 +534,7 @@ class _LogsDialogState extends State<_LogsDialog> {
                           child: SingleChildScrollView(
                             controller: _scroll,
                             child: SelectableText(
-                              _text.isEmpty ? (_loading ? 'Loading…' : '(no output)') : _text,
+                              _text.isEmpty ? (_loading ? context.l.t('svcLoading') : context.l.t('emptyOutput')) : _text,
                               style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, height: 1.4),
                             ),
                           ),

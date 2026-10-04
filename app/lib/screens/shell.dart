@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../l10n/alert_text.dart';
 import '../l10n/strings.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -634,11 +635,11 @@ class _AlertToast extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            alert.vpsName.isEmpty ? alert.type : '${alert.vpsName} · ${alert.type}',
+            alert.vpsName.isEmpty ? alertTypeLabel(context.l, alert.type) : '${alert.vpsName} · ${alertTypeLabel(context.l, alert.type)}',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
           ),
           const SizedBox(height: 4),
-          Text(alert.message, style: const TextStyle(fontSize: 13, color: BeacleColors.text, height: 1.3)),
+          Text(alertMessage(context.l, alert), style: const TextStyle(fontSize: 13, color: BeacleColors.text, height: 1.3)),
         ],
       ),
     );

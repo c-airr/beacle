@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/alert_text.dart';
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -39,14 +41,15 @@ class OverviewScreen extends StatelessWidget {
     final avgCpu = nOnline == 0 ? 0.0 : cpuSum / nOnline;
     final avgRam = nOnline == 0 ? 0.0 : ramSum / nOnline;
     final avgDisk = diskN == 0 ? 0.0 : diskSum / diskN;
-    final attention = _attentionItems(state);
+    final l = context.l;
+    final attention = _attentionItems(state, l);
 
     return SmoothListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       children: [
-        const Text(
-          'Is everything working?',
-          style: TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
+        Text(
+          l.t('ovTagline'),
+          style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
         ),
         const SizedBox(height: 14),
 
@@ -59,43 +62,43 @@ class OverviewScreen extends StatelessWidget {
             children: [
               _KpiTile(
                 width: (c.maxWidth - 10 * (cols - 1)) / cols,
-                label: 'ONLINE',
+                label: l.t('ovOnline'),
                 value: '$nOnline / ${state.vpsList.length}',
-                hint: offline > 0 ? '$offline offline' : 'all up',
+                hint: offline > 0 ? l.f('ovNOffline', {'n': offline}) : l.t('ovAllUp'),
                 tone: offline > 0 ? BeacleColors.warn : BeacleColors.ok,
               ),
               _KpiTile(
                 width: (c.maxWidth - 10 * (cols - 1)) / cols,
-                label: 'CPU AVG',
+                label: l.t('ovCpuAvg'),
                 value: '${avgCpu.toStringAsFixed(0)}%',
-                hint: nOnline == 0 ? '—' : 'fleet',
+                hint: nOnline == 0 ? '—' : l.t('ovFleet'),
                 tone: avgCpu >= 90 ? BeacleColors.err : (avgCpu >= 75 ? BeacleColors.warn : BeacleColors.text),
               ),
               _KpiTile(
                 width: (c.maxWidth - 10 * (cols - 1)) / cols,
-                label: 'RAM AVG',
+                label: l.t('ovRamAvg'),
                 value: '${avgRam.toStringAsFixed(0)}%',
-                hint: nOnline == 0 ? '—' : 'fleet',
+                hint: nOnline == 0 ? '—' : l.t('ovFleet'),
                 tone: avgRam >= 90 ? BeacleColors.err : (avgRam >= 75 ? BeacleColors.warn : BeacleColors.text),
               ),
               _KpiTile(
                 width: (c.maxWidth - 10 * (cols - 1)) / cols,
-                label: 'STORAGE',
+                label: l.t('ovStorage'),
                 value: '${avgDisk.toStringAsFixed(0)}%',
-                hint: diskN == 0 ? '—' : 'avg mount',
+                hint: diskN == 0 ? '—' : l.t('ovAvgMount'),
                 tone: avgDisk >= 90 ? BeacleColors.err : (avgDisk >= 80 ? BeacleColors.warn : BeacleColors.text),
               ),
               _KpiTile(
                 width: (c.maxWidth - 10 * (cols - 1)) / cols,
-                label: 'NETWORK',
+                label: l.t('ovNetwork'),
                 value: '↓${fmtBytes(netIn)}/s',
                 hint: '↑${fmtBytes(netOut)}/s',
               ),
               _KpiTile(
                 width: (c.maxWidth - 10 * (cols - 1)) / cols,
-                label: 'ALERTS',
+                label: l.t('ovAlerts'),
                 value: '${state.activeAlerts}',
-                hint: state.activeAlerts == 0 ? 'all clear' : 'active',
+                hint: state.activeAlerts == 0 ? l.t('ovAllClearLower') : l.t('ovActive'),
                 tone: state.activeAlerts > 0 ? BeacleColors.err : BeacleColors.ok,
                 onTap: () => AppShell.of(context).goToAlerts(),
               ),
@@ -105,14 +108,14 @@ class OverviewScreen extends StatelessWidget {
 
         const SizedBox(height: 22),
         _SectionHeader(
-          title: 'REQUIRES ATTENTION',
+          title: l.t('ovAttention'),
           trailing: attention.isEmpty
-              ? const Text('All clear', style: TextStyle(fontSize: 11, color: BeacleColors.ok))
+              ? Text(l.t('ovAllClear'), style: const TextStyle(fontSize: 11, color: BeacleColors.ok))
               : Text('${attention.length}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         ),
         const SizedBox(height: 10),
         if (attention.isEmpty)
-          const _EmptyBand('Nothing needs you right now.')
+          _EmptyBand(l.t('ovNothingNeeds'))
         else
           ...attention.take(12).map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -121,12 +124,12 @@ class OverviewScreen extends StatelessWidget {
 
         const SizedBox(height: 22),
         _SectionHeader(
-          title: 'INFRASTRUCTURE',
-          trailing: SmallButton('Add VPS', icon: Icons.add, onPressed: () => showAddVpsDialog(context)),
+          title: l.t('ovInfra'),
+          trailing: SmallButton(l.t('addVps'), icon: Icons.add, onPressed: () => showAddVpsDialog(context)),
         ),
         const SizedBox(height: 10),
         if (state.vpsList.isEmpty)
-          const _EmptyBand('No VPS yet — add one and run the install command.')
+          _EmptyBand(l.t('ovNoVps'))
         else
           LayoutBuilder(builder: (context, c) {
             final w = c.maxWidth;
@@ -159,14 +162,14 @@ class OverviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _SectionHeader(title: 'RECENT ACTIVITY'),
+                  _SectionHeader(title: l.t('ovRecent')),
                   const SizedBox(height: 10),
                   PanelCard(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     child: state.actions.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 18),
-                            child: Text('No actions yet', style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            child: Text(l.t('ovNoActions'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                           )
                         : Column(
                             children: [
@@ -187,7 +190,7 @@ class OverviewScreen extends StatelessWidget {
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(fmtAgo(a.createdAt),
+                                      Text(l.ago(a.createdAt),
                                           style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
                                     ],
                                   ),
@@ -204,7 +207,7 @@ class OverviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _SectionHeader(title: 'GLOBAL CHARTS', trailing: Text('24h', style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
+                  _SectionHeader(title: l.t('ovCharts'), trailing: const Text('24h', style: TextStyle(fontSize: 11, color: BeacleColors.textDim))),
                   const SizedBox(height: 10),
                   PanelCard(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -227,7 +230,7 @@ class OverviewScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                         _ChartBlock(
-                          label: 'NETWORK',
+                          label: l.t('ovNetwork'),
                           unit: '/s',
                           color: BeacleColors.ok,
                           values: state.fleetHistory.map((s) => s.netIn + s.netOut).toList(),
@@ -235,11 +238,11 @@ class OverviewScreen extends StatelessWidget {
                           format: fmtBytes,
                         ),
                         if (state.fleetHistory.length < 3)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 10),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
                             child: Text(
-                              'Charts fill as Beacle collects samples (≈1/min).',
-                              style: TextStyle(fontSize: 10, color: BeacleColors.textDim),
+                              l.t('ovChartsFill'),
+                              style: const TextStyle(fontSize: 10, color: BeacleColors.textDim),
                             ),
                           ),
                       ],
@@ -278,7 +281,7 @@ class _AttentionItem {
   });
 }
 
-List<_AttentionItem> _attentionItems(AppState state) {
+List<_AttentionItem> _attentionItems(AppState state, L l) {
   final out = <_AttentionItem>[];
   final seen = <String>{};
 
@@ -291,7 +294,7 @@ List<_AttentionItem> _attentionItems(AppState state) {
       _AttentionItem(
         severity: a.severity == 'critical' ? 'critical' : 'warning',
         title: a.vpsName,
-        message: a.message,
+        message: alertMessage(l, a),
         vpsId: a.vpsId.isEmpty ? null : a.vpsId,
       ),
       'alert:${a.id}',
@@ -304,7 +307,7 @@ List<_AttentionItem> _attentionItems(AppState state) {
         _AttentionItem(
           severity: 'critical',
           title: v.name,
-          message: state.isReportStale(v) && v.online ? 'Agent data outdated' : 'Offline',
+          message: state.isReportStale(v) && v.online ? l.t('ovAgentOutdated') : l.t('offline'),
           vpsId: v.id,
         ),
         'offline:${v.id}',
@@ -327,16 +330,16 @@ List<_AttentionItem> _attentionItems(AppState state) {
     }
     for (final d in m.disks) {
       if (d.usedPercent >= 95) {
-        add(_AttentionItem(severity: 'critical', title: v.name, message: 'Disk ${d.mount} ${d.usedPercent.toStringAsFixed(0)}%', vpsId: v.id),
+        add(_AttentionItem(severity: 'critical', title: v.name, message: l.f('ovDisk', {'mount': d.mount, 'p': d.usedPercent.toStringAsFixed(0)}), vpsId: v.id),
             'disk:${v.id}:${d.mount}');
       } else if (d.usedPercent >= 85) {
-        add(_AttentionItem(severity: 'warning', title: v.name, message: 'Disk ${d.mount} ${d.usedPercent.toStringAsFixed(0)}%', vpsId: v.id),
+        add(_AttentionItem(severity: 'warning', title: v.name, message: l.f('ovDisk', {'mount': d.mount, 'p': d.usedPercent.toStringAsFixed(0)}), vpsId: v.id),
             'disk:${v.id}:${d.mount}');
       }
     }
     for (final c in snap.docker.containers) {
       if (c.state == 'restarting') {
-        add(_AttentionItem(severity: 'warning', title: v.name, message: 'Docker ${c.name} restarting', vpsId: v.id),
+        add(_AttentionItem(severity: 'warning', title: v.name, message: l.f('ovDockerRestarting', {'name': c.name}), vpsId: v.id),
             'docker:${v.id}:${c.id}');
       }
     }
@@ -540,7 +543,7 @@ class _InfraCard extends StatelessWidget {
               children: [
                 _MiniStat(label: 'CPU', value: m == null ? '—' : '${m.cpuPercent.toStringAsFixed(0)}%'),
                 _MiniStat(label: 'RAM', value: m == null ? '—' : '${m.memPercent.toStringAsFixed(0)}%'),
-                _MiniStat(label: 'PING', value: pingMs == null ? '—' : '${pingMs!.toStringAsFixed(0)} ms'),
+                _MiniStat(label: context.l.t('ovPing'), value: pingMs == null ? '—' : '${pingMs!.toStringAsFixed(0)} ms'),
               ],
             ),
             const SizedBox(height: 10),
@@ -557,7 +560,7 @@ class _InfraCard extends StatelessWidget {
                 Text(
                   svc == null
                       ? 'Systemd —'
-                      : (failed > 0 ? 'Systemd $failed failed' : 'Systemd $activeUnits'),
+                      : (failed > 0 ? context.l.f('ovSystemdFailed', {'n': failed}) : 'Systemd $activeUnits'),
                   style: TextStyle(
                     fontSize: 11,
                     color: failed > 0 ? BeacleColors.warn : BeacleColors.textDim,

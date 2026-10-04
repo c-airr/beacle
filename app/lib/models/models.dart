@@ -1046,15 +1046,6 @@ String fmtUptime(int seconds) {
   return '${m}m';
 }
 
-String fmtAgo(DateTime when) {
-  final sec = DateTime.now().difference(when.toLocal()).inSeconds;
-  if (sec < 5) return 'just now';
-  if (sec < 60) return '${sec}s ago';
-  if (sec < 3600) return '${sec ~/ 60}m ago';
-  if (sec < 86400) return '${sec ~/ 3600}h ago';
-  return '${sec ~/ 86400}d ago';
-}
-
 class ConnectivityProbe {
   final String host, ip, ipClass, recommended, reason;
   final bool pingOk, wireguardOk;

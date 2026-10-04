@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../alert_sound.dart';
+import '../l10n/alert_text.dart';
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -44,17 +46,17 @@ class _AlertsScreenState extends State<AlertsScreen> {
       children: [
         Row(
           children: [
-            const Text(
-              'What needs attention?',
-              style: TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
+            Text(
+              context.l.t('alTagline'),
+              style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, letterSpacing: 0.2),
             ),
             const Spacer(),
             IconButton(
               tooltip: !AlertSound.supported
-                  ? 'Alert sounds are not available on this platform'
+                  ? context.l.t('alSoundUnsupported')
                   : AlertSound.enabled
-                      ? 'Alert sound on — click to silence'
-                      : 'Alert sound off — click to enable',
+                      ? context.l.t('alSoundOn')
+                      : context.l.t('alSoundOff'),
               icon: Icon(
                 AlertSound.enabled && AlertSound.supported ? Icons.volume_up : Icons.volume_off,
                 size: 18,
@@ -100,7 +102,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             const SizedBox(width: 4),
             if (active.isNotEmpty)
               SmallButton(
-                'Mark all seen',
+                context.l.t('alMarkSeen'),
                 icon: Icons.done_all,
                 onPressed: state.markAlertsSeen,
               ),
@@ -111,7 +113,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
         Row(
           children: [
             _SeverityChip(
-              label: 'CRITICAL',
+              label: context.l.t('alCritical'),
               count: counts['critical']!,
               tone: BeacleColors.err,
               selected: severityFilter == 'critical',
@@ -119,7 +121,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ),
             const SizedBox(width: 10),
             _SeverityChip(
-              label: 'WARNING',
+              label: context.l.t('alWarning'),
               count: counts['warning']!,
               tone: BeacleColors.warn,
               selected: severityFilter == 'warning',
@@ -127,7 +129,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ),
             const SizedBox(width: 10),
             _SeverityChip(
-              label: 'INFO',
+              label: context.l.t('alInfo'),
               count: counts['info']!,
               tone: BeacleColors.textDim,
               selected: severityFilter == 'info',
@@ -150,7 +152,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    active.isEmpty ? 'All clear' : 'Nothing matches this filter',
+                    active.isEmpty ? context.l.t('ovAllClear') : context.l.t('alNoMatch'),
                     style: const TextStyle(color: BeacleColors.textDim, fontSize: 14),
                   ),
                 ],
@@ -163,7 +165,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
         if (muted.isNotEmpty) ...[
           const SizedBox(height: 22),
-          _GroupHeader('MUTED', muted.length),
+          _GroupHeader(context.l.t('alMuted'), muted.length),
           const SizedBox(height: 10),
           for (final a in muted)
             _AlertRow(alert: a, state: state, muted: true, onChanged: () => setState(() {})),
@@ -184,7 +186,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'RESOLVED (${resolved.length})',
+                    context.l.f('alResolvedN', {'n': resolved.length}),
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -334,19 +336,19 @@ class _AlertRow extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          alert.vpsName.isEmpty ? 'unknown host' : alert.vpsName,
+                          alert.vpsName.isEmpty ? context.l.t('alUnknownHost') : alert.vpsName,
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          alert.type.replaceAll('_', ' '),
+                          alertTypeLabel(context.l, alert.type),
                           style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                         ),
                       ],
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      alert.message,
+                      alertMessage(context.l, alert),
                       style: TextStyle(
                         fontSize: 13,
                         height: 1.35,
@@ -355,7 +357,7 @@ class _AlertRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      alert.resolved ? 'resolved · started ${fmtAgo(alert.createdAt)}' : 'since ${fmtAgo(alert.createdAt)}',
+                      context.l.f(alert.resolved ? 'alResolvedStarted' : 'alSince', {'ago': context.l.ago(alert.createdAt)}),
                       style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                     ),
                   ],
@@ -369,14 +371,14 @@ class _AlertRow extends StatelessWidget {
                     children: [
                       if (alert.vpsId.isNotEmpty)
                         SmallButton(
-                          'Open VPS',
+                          context.l.t('alOpenVps'),
                           icon: Icons.open_in_new,
                           onPressed: () => AppShell.of(context).goToServer(alert.vpsId),
                         ),
                       if (!alert.resolved) ...[
                         const SizedBox(width: 8),
                         SmallButton(
-                          muted ? 'Unmute' : 'Mute',
+                          context.l.t(muted ? 'alUnmute' : 'alMute'),
                           icon: muted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
                           onPressed: () {
                             state.toggleMute(alert);
@@ -385,7 +387,7 @@ class _AlertRow extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         SmallButton(
-                          'Resolve',
+                          context.l.t('alResolve'),
                           icon: Icons.check,
                           onPressed: () => state.resolveAlert(alert.id),
                         ),

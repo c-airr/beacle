@@ -171,7 +171,7 @@ class _AddServerDialogState extends State<_AddServerDialog> {
                         subtitle: Text(
                           [
                             if (d.ips.isNotEmpty) d.ips.first,
-                            if (!d.online) 'offline',
+                            if (!d.online) context.l.t('svcOfflineLower'),
                             d.os,
                           ].where((s) => s.isNotEmpty).join(' · '),
                           style: const TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim),
@@ -357,7 +357,7 @@ class _AddVpsCommandState extends State<AddVpsCommand> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     if (!state.connected) {
-      return const Text('Backend offline', style: TextStyle(fontSize: 12, color: BeacleColors.textDim));
+      return Text(context.l.t('avBackendOffline'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim));
     }
     return FutureBuilder<String>(
       future: _cmd,
@@ -377,14 +377,14 @@ Future<bool> confirmDeleteVps(BuildContext context, Vps vps) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Delete VPS?'),
+      title: Text(context.l.t('avDeleteTitle')),
       content: Text(
-        'Remove ${vps.name} from Beacle? The agent on the server is not uninstalled.',
+        context.l.f('avDeleteBody', {'name': vps.name}),
         style: const TextStyle(fontSize: 13, color: BeacleColors.textDim, height: 1.45),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l.t('cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l.t('delete'))),
       ],
     ),
   );

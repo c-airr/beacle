@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -161,17 +162,17 @@ class _HistoryPanelState extends State<HistoryPanel> {
     final samples = h?.samples ?? const <MetricSample>[];
 
     return PanelCard(
-      title: 'HISTORY',
+      title: context.l.t('hpHistory'),
       trailing: Row(
         children: [
           // Same control as the log viewer's Follow/Paused, for the same
           // reason and with the same wording, so it reads as one idea.
           Tooltip(
             message: _sync
-                ? 'Following live data'
-                : 'Scrolled back — click to return to now',
+                ? context.l.t('hpFollowing')
+                : context.l.t('hpScrolledBack'),
             child: SmallButton(
-              _sync ? 'Sync' : 'Paused',
+              context.l.t(_sync ? 'hpSync' : 'hpPaused'),
               icon: _sync ? Icons.sync : Icons.pause,
               color: _sync ? BeacleColors.ok : BeacleColors.textDim,
               onPressed: () {
@@ -202,10 +203,8 @@ class _HistoryPanelState extends State<HistoryPanel> {
         children: [
           Text(
             _sync
-                ? 'Following live data — drag to scroll back in time, Ctrl+scroll to zoom, '
-                    'hover for exact values.'
-                : 'Showing ${_fmtRange(_from, _to)} — drag to scroll, Ctrl+scroll to zoom, '
-                    'press Paused to return to live.',
+                ? context.l.t('hpLiveHelp')
+                : context.l.f('hpShowingHelp', {'range': _fmtRange(_from, _to)}),
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           // Only worth explaining when there is a grey band on screen to
@@ -217,11 +216,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
             Row(children: [
               const Icon(Icons.bolt, size: 13, color: BeacleColors.warn),
               const SizedBox(width: 5),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Marks show where this server did something unusual for itself. '
-                  'Click one to see what was running at that minute.',
-                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                  context.l.t('hpMarks'),
+                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 ),
               ),
             ]),
@@ -238,11 +236,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
                 ),
               ),
               const SizedBox(width: 7),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Grey means Beacle was closed — nothing was recorded, which says nothing '
-                  'about the server. Red is the server itself having gone away.',
-                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim),
+                  context.l.t('hpGrey'),
+                  style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 ),
               ),
             ]),
@@ -257,16 +254,15 @@ class _HistoryPanelState extends State<HistoryPanel> {
           else if (_error != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Text('History unavailable: $_error',
+              child: Text(context.l.f('hpUnavailable', {'e': _error}),
                   style: const TextStyle(fontSize: 12, color: BeacleColors.err)),
             )
           else if (samples.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 30),
               child: Text(
-                'Nothing recorded for this window yet. The backend keeps one sample a '
-                'minute, so a chart worth reading appears within the hour.',
-                style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+                context.l.t('hpEmpty'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
               ),
             )
           else ...[
@@ -293,7 +289,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
             ),
             const SizedBox(height: 18),
             MetricChart(
-              title: 'MEMORY',
+              title: context.l.t('srvMemory'),
               samples: samples,
               from: _from,
               to: _to,
@@ -315,7 +311,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
             ),
             const SizedBox(height: 18),
             MetricChart(
-              title: 'NETWORK',
+              title: context.l.t('srvNetwork'),
               samples: samples,
               from: _from,
               to: _to,
@@ -325,13 +321,13 @@ class _HistoryPanelState extends State<HistoryPanel> {
               onWindowChanged: _onWindowChanged,
               series: [
                 ChartSeries(
-                  label: 'in',
+                  label: context.l.t('hpIn'),
                   color: ChartColors.netIn,
                   value: (s) => s.rxPerS.toDouble(),
                   format: (v) => '${fmtBytes(v)}/s',
                 ),
                 ChartSeries(
-                  label: 'out',
+                  label: context.l.t('hpOut'),
                   color: ChartColors.netOut,
                   value: (s) => s.txPerS.toDouble(),
                   format: (v) => '${fmtBytes(v)}/s',
@@ -339,15 +335,14 @@ class _HistoryPanelState extends State<HistoryPanel> {
               ],
             ),
             const SizedBox(height: 10),
-            const Row(
+            Row(
               children: [
-                _OutageKey(),
-                SizedBox(width: 10),
+                const _OutageKey(),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'A shaded band is a stretch with no samples — the agent was not '
-                    'reporting, so the server was unreachable or down.',
-                    style: TextStyle(fontSize: 10, color: BeacleColors.textDim, height: 1.4),
+                    context.l.t('hpShaded'),
+                    style: const TextStyle(fontSize: 10, color: BeacleColors.textDim, height: 1.4),
                   ),
                 ),
               ],

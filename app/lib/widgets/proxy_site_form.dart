@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -190,7 +191,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
           children: [
             Row(children: [
               Expanded(
-                child: Text(widget.existing == null ? 'Add site' : 'Edit ${widget.existing!.domain}',
+                child: Text(widget.existing == null ? context.l.t('pxAddSite') : context.l.f('psfEditTitle', {'domain': widget.existing!.domain}),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context, false)),
@@ -216,20 +217,20 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                     TextField(
                       controller: _domain,
                       autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Domain',
+                      decoration: InputDecoration(
+                        labelText: context.l.t('psfDomain'),
                         hintText: 'app.example.com',
-                        helperText: 'Point this domain\'s DNS at the VPS first.',
+                        helperText: context.l.t('psfDomainHelp'),
                       ),
                       onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 14),
                     TextField(
                       controller: _upstream,
-                      decoration: const InputDecoration(
-                        labelText: 'Forward to',
+                      decoration: InputDecoration(
+                        labelText: context.l.t('psfForward'),
                         hintText: '3000',
-                        helperText: 'A port (3000) means 127.0.0.1:3000. Full addresses also work.',
+                        helperText: context.l.t('psfForwardHelp'),
                       ),
                       style: const TextStyle(fontFamily: 'Consolas'),
                       onChanged: (_) => setState(() {}),
@@ -238,25 +239,25 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
 
                     _switch(
                       'HTTPS',
-                      'Caddy requests and renews a certificate automatically.',
+                      context.l.t('psfHttpsHelp'),
                       _ssl,
                       (v) => setState(() => _ssl = v),
                     ),
                     _switch(
-                      'Redirect www',
-                      'Send www.${_domain.text.trim().isEmpty ? 'domain' : _domain.text.trim()} to the bare domain.',
+                      context.l.t('psfRedirectWww'),
+                      context.l.f('psfRedirectWwwHelp', {'host': 'www.${_domain.text.trim().isEmpty ? 'domain' : _domain.text.trim()}'}),
                       _redirectWww,
                       (v) => setState(() => _redirectWww = v),
                     ),
                     _switch(
                       'WebSockets',
-                      'Forward upgrade requests and the original host header.',
+                      context.l.t('psfWsHelp'),
                       _webSocket,
                       (v) => setState(() => _webSocket = v),
                     ),
                     _switch(
-                      'Compression',
-                      'gzip and zstd for text responses.',
+                      context.l.t('psfCompression'),
+                      context.l.t('psfCompressionHelp'),
                       _gzip,
                       (v) => setState(() => _gzip = v),
                     ),
@@ -270,15 +271,15 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                           Icon(_advanced ? Icons.expand_less : Icons.expand_more,
                               size: 16, color: BeacleColors.textDim),
                           const SizedBox(width: 6),
-                          const Text('Advanced',
-                              style: TextStyle(fontSize: 12, color: BeacleColors.textDim, letterSpacing: 0.3)),
+                          Text(context.l.t('psfAdvanced'),
+                              style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, letterSpacing: 0.3)),
                         ]),
                       ),
                     ),
                     if (_advanced) ...[
                       _switch(
-                        'Access log',
-                        'Write this site\'s requests to /var/log/caddy/<domain>.log.',
+                        context.l.t('psfAccessLog'),
+                        context.l.t('psfAccessLogHelp'),
                         _accessLog,
                         (v) => setState(() => _accessLog = v),
                       ),
@@ -287,7 +288,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                         Expanded(
                           child: TextField(
                             controller: _authUser,
-                            decoration: const InputDecoration(labelText: 'Basic auth user'),
+                            decoration: InputDecoration(labelText: context.l.t('psfAuthUser')),
                             onChanged: (_) => setState(() {}),
                           ),
                         ),
@@ -296,10 +297,10 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                           flex: 2,
                           child: TextField(
                             controller: _authHash,
-                            decoration: const InputDecoration(
-                              labelText: 'Password hash',
+                            decoration: InputDecoration(
+                              labelText: context.l.t('psfAuthHash'),
                               hintText: r'$2a$14$...',
-                              helperText: 'From: caddy hash-password',
+                              helperText: context.l.t('psfAuthHashHelp'),
                             ),
                             style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
                             onChanged: (_) => setState(() {}),
@@ -319,7 +320,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
 
                     const SizedBox(height: 16),
                     Row(children: [
-                      Text(_raw ? 'SITE CONFIG' : 'GENERATED CONFIG',
+                      Text(context.l.t(_raw ? 'psfSiteConfig' : 'psfGenerated'),
                           style: const TextStyle(
                               fontSize: 11,
                               color: BeacleColors.textDim,
@@ -331,7 +332,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
                       // that would rewrite them into something plainer.
                       if (_canEditRaw && (widget.existing!.editable || widget.existing!.managed))
                         SmallButton(
-                          _raw ? 'Back to form' : 'Edit as config',
+                          context.l.t(_raw ? 'psfBackToForm' : 'psfEditAsConfig'),
                           icon: _raw ? Icons.tune : Icons.code,
                           onPressed: () => setState(() {
                             _raw = !_raw;
@@ -379,13 +380,13 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                SmallButton('Cancel', onPressed: _busy ? null : () => Navigator.pop(context, false)),
+                SmallButton(context.l.t('cancel'), onPressed: _busy ? null : () => Navigator.pop(context, false)),
                 const SizedBox(width: 10),
                 if (_busy)
                   const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 else
                   SmallButton(
-                    widget.existing == null ? 'Create site' : 'Save',
+                    widget.existing == null ? context.l.t('psfCreate') : context.l.t('save'),
                     icon: Icons.check,
                     color: _valid ? BeacleColors.ok : null,
                     onPressed: _valid ? _save : null,
@@ -407,18 +408,14 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
       return _notice(
         Icons.code,
         BeacleColors.accent,
-        'Saved exactly as written, into ${s.sourceFile.isEmpty ? 'this site\'s config file' : s.sourceFile}. '
-        'Only this block changes — the rest of the file is left alone. Caddy checks the result '
-        'first, and if it will not load, the previous config is put back.',
+        context.l.f('psfRawNotice', {'file': s.sourceFile.isEmpty ? context.l.t('psfThisFile') : s.sourceFile}),
       );
     }
     if (s != null && !s.managed) {
       return _notice(
         Icons.warning_amber_rounded,
         BeacleColors.warn,
-        'This site lives in ${s.sourceFile}. Saving moves it into Beacle\'s own config and '
-        'rewrites the block from the fields above — anything not shown here is lost. '
-        'Use "Edit as config" below to change it where it is instead.',
+        context.l.f('psfMoveNotice', {'file': s.sourceFile}),
       );
     }
     // Going back to the form on a block someone wrote by hand throws that work
@@ -427,8 +424,7 @@ class _ProxySiteFormState extends State<_ProxySiteForm> {
       return _notice(
         Icons.warning_amber_rounded,
         BeacleColors.warn,
-        'This block was written by hand. Saving from the form rebuilds it from these fields '
-        'and discards everything you typed — switch back to "Edit as config" to keep it.',
+        context.l.t('psfHandNotice'),
       );
     }
     return null;
@@ -517,8 +513,8 @@ class _HeaderEditorState extends State<_HeaderEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Response headers',
-            style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+        Text(context.l.t('psfHeaders'),
+            style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
         const SizedBox(height: 8),
         for (final e in widget.headers.entries)
           Padding(
@@ -556,7 +552,7 @@ class _HeaderEditorState extends State<_HeaderEditor> {
             ),
           ),
           const SizedBox(width: 8),
-          SmallButton('Add', icon: Icons.add, onPressed: _add),
+          SmallButton(context.l.t('psfAdd'), icon: Icons.add, onPressed: _add),
         ]),
       ],
     );

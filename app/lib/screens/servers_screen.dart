@@ -53,7 +53,7 @@ class ServersScreenState extends State<ServersScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     if (state.vpsList.isEmpty) {
-      return const Center(child: Text('No VPS registered', style: TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('srvNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= state.vpsList.first.id;
     // All distinct tags across the fleet, first-seen casing kept for display.
@@ -206,7 +206,7 @@ class _PendingView extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      stale ? '${vps.name} — data outdated' : '${vps.name} — waiting for agent',
+                      context.l.f(stale ? 'srvDataOutdated' : 'srvWaitingAgent', {'name': vps.name}),
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -220,20 +220,20 @@ class _PendingView extends StatelessWidget {
               if (stale) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Last update ${fmtAgo(vps.lastSeen)}. Agent is not sending live metrics.',
+                  context.l.f('srvLastUpdate', {'ago': context.l.ago(vps.lastSeen)}),
                   style: const TextStyle(fontSize: 12, color: BeacleColors.warn, height: 1.45),
                 ),
               ] else ...[
                 const SizedBox(height: 12),
-                const Text(
-                  'Run the install command on the VPS as root. Stats appear within seconds after the agent connects.',
-                  style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
+                Text(
+                  context.l.t('srvRunInstall'),
+                  style: const TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.45),
                 ),
                 const SizedBox(height: 10),
                 const AddVpsCommand(),
               ],
               const SizedBox(height: 16),
-              SmallButton('Delete VPS', icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
+              SmallButton(context.l.t('srvDeleteVps'), icon: Icons.delete_outline, color: BeacleColors.err, onPressed: () async {
                 if (!await confirmDeleteVps(context, vps)) return;
                 await state.api.deleteVps(vps.id);
                 await state.refreshAll();
@@ -345,12 +345,12 @@ class _ServerStats extends StatelessWidget {
               Expanded(
                 child: PanelCard(
                   expand: true,
-                  title: 'DISKS',
+                  title: context.l.t('srvDisks'),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (m.disks.isEmpty)
-                        const Text('No disk data', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                        Text(context.l.t('srvNoDisk'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
                       else
                         for (final d in m.disks)
                           Padding(
@@ -369,12 +369,12 @@ class _ServerStats extends StatelessWidget {
               Expanded(
                 child: PanelCard(
                   expand: true,
-                  title: 'NETWORK',
+                  title: context.l.t('srvNetwork'),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (m.network.isEmpty)
-                        const Text('No network data', style: TextStyle(fontSize: 12, color: BeacleColors.textDim))
+                        Text(context.l.t('srvNoNet'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim))
                       else
                         for (final n in m.network)
                           Padding(
@@ -396,14 +396,14 @@ class _ServerStats extends StatelessWidget {
               Expanded(
                 child: PanelCard(
                   expand: true,
-                  title: 'SYSTEM INFO',
+                  title: context.l.t('srvSysInfo'),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _info('Hostname', m.hostname),
+                    _info(context.l.t('srvHostname'), m.hostname),
                     _info('OS', m.os),
-                    _info('Kernel', m.kernel),
-                    _info('Arch', m.arch),
+                    _info(context.l.t('srvKernel'), m.kernel),
+                    _info(context.l.t('srvArch'), m.arch),
                     _info('CPU', m.cpuModel),
-                    _info('Cores', '${m.cpuCores}'),
+                    _info(context.l.t('srvCores'), '${m.cpuCores}'),
                   ]),
                 ),
               ),
@@ -444,11 +444,11 @@ class _CpuSummary extends StatelessWidget {
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(
-            '${m.cpuCores} cores · load ${m.load1.toStringAsFixed(2)}',
+            context.l.f('srvCoresLoad', {'n': m.cpuCores, 'load': m.load1.toStringAsFixed(2)}),
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(height: 12),
-          MetricBar(label: 'Overall', percent: m.cpuPercent),
+          MetricBar(label: context.l.t('srvOverall'), percent: m.cpuPercent),
         ],
       ),
     );
@@ -464,16 +464,16 @@ class _UptimePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return PanelCard(
       expand: true,
-      title: 'UPTIME',
+      title: context.l.t('srvUptime'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(fmtUptime(m.uptimeSeconds), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+          Text(context.l.uptime(m.uptimeSeconds), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          Text('agent v${vps.agentVersion}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+          Text(context.l.f('srvAgentV', {'v': vps.agentVersion}), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
           const SizedBox(height: 4),
           Text(
-            'load ${m.load1.toStringAsFixed(2)} / ${m.load5.toStringAsFixed(2)} / ${m.load15.toStringAsFixed(2)}',
+            context.l.f('srvLoad', {'v': '${m.load1.toStringAsFixed(2)} / ${m.load5.toStringAsFixed(2)} / ${m.load15.toStringAsFixed(2)}'}),
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
         ],
@@ -499,7 +499,7 @@ class _CoresPanel extends StatelessWidget {
         );
 
     return PanelCard(
-      title: 'CPU CORES',
+      title: context.l.t('srvCpuCores'),
       trailing: Text('${cores.length}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
       child: dual
           ? Row(
@@ -543,7 +543,7 @@ class _RamPanel extends StatelessWidget {
 
     return PanelCard(
       expand: true,
-      title: 'MEMORY',
+      title: context.l.t('srvMemory'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -551,18 +551,18 @@ class _RamPanel extends StatelessWidget {
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(
-            '${fmtBytes(m.memUsedBytes)} / ${fmtBytes(m.memTotalBytes)} used',
+            context.l.f('srvMemUsed', {'v': '${fmtBytes(m.memUsedBytes)} / ${fmtBytes(m.memTotalBytes)}'}),
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
           const SizedBox(height: 12),
           MetricBar(
-            label: 'Used (apps)',
+            label: context.l.t('srvUsedApps'),
             percent: m.memPercent,
             detail: '${fmtBytes(m.memUsedBytes)} · ${m.memPercent.toStringAsFixed(0)}%',
           ),
           const SizedBox(height: 8),
           MetricBar(
-            label: 'Used + cache',
+            label: context.l.t('srvUsedCache'),
             percent: pctCached,
             detail: '${fmtBytes(usedCached)} · ${pctCached.toStringAsFixed(0)}%',
           ),
@@ -570,7 +570,7 @@ class _RamPanel extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Cache / buffers', style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                Text(context.l.t('srvCacheBuffers'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 const Spacer(),
                 Text(fmtBytes(m.memCachedBytes), style: const TextStyle(fontSize: 12)),
               ],
@@ -578,7 +578,7 @@ class _RamPanel extends StatelessWidget {
           ],
           const SizedBox(height: 10),
           Text(
-            'swap ${fmtBytes(m.swapUsed)} / ${fmtBytes(m.swapTotal)}',
+            context.l.f('srvSwap', {'v': '${fmtBytes(m.swapUsed)} / ${fmtBytes(m.swapTotal)}'}),
             style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
           ),
         ],

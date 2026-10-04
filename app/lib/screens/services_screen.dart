@@ -529,7 +529,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final state = context.watch<AppState>();
     final withAgent = state.vpsList.where((v) => state.snapshots.containsKey(v.id)).toList();
     if (withAgent.isEmpty) {
-      return const Center(child: Text('No VPS with agent data', style: TextStyle(color: BeacleColors.textDim)));
+      return Center(child: Text(context.l.t('dockerNoVps'), style: const TextStyle(color: BeacleColors.textDim)));
     }
     selectedId ??= withAgent.first.id;
     final vps = withAgent.where((v) => v.id == selectedId).firstOrNull ?? withAgent.first;
@@ -552,7 +552,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     ? Row(children: [
                         const Icon(Icons.dns_outlined, size: 15, color: BeacleColors.textDim),
                         const SizedBox(width: 8),
-                        Text('All servers (${withAgent.length})',
+                        Text(context.l.f('svcAllServers', {'n': withAgent.length}),
                             style: const TextStyle(fontSize: 13, color: BeacleColors.text)),
                       ])
                     : DropdownButtonHideUnderline(
@@ -643,7 +643,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 (7, 'firewall', fw?.rules.length ?? 0),
               ]) ...[
                 if (i > 0) const SizedBox(width: 6),
-                TabChip(label: label, count: count, selected: tab == i, onTap: () => _selectTab(i)),
+                TabChip(label: context.l.t('svcTab_$label'), count: count, selected: tab == i, onTap: () => _selectTab(i)),
               ],
             ]),
           ),
@@ -683,7 +683,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       try {
         state.onUserAction();
         await state.api.systemdAction(vps.id, u.name, action);
-        if (mounted) showToast(context, '${u.name}: $action ok');
+        if (mounted) showToast(context, context.l.f('actionDone', {'name': u.name, 'action': action}));
       } catch (e) {
         if (mounted) showToast(context, '$e', error: true);
       }
@@ -704,20 +704,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
           child: Row(children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Services that start on boot and come back if they die. Unlike a screen '
-                'session or a nohup job, these survive a reboot.',
-                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                context.l.t('svcSystemdIntro'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
             ),
-            SmallButton('New service', icon: Icons.add, onPressed: live ? newService : null),
+            SmallButton(context.l.t('svcNewService'), icon: Icons.add, onPressed: live ? newService : null),
           ]),
         ),
         if (units.isEmpty)
-          const Expanded(
+          Expanded(
             child: Center(
-              child: Text('No services', style: TextStyle(color: BeacleColors.textDim)),
+              child: Text(context.l.t('svcNoServices'), style: const TextStyle(color: BeacleColors.textDim)),
             ),
           )
         else
@@ -767,24 +766,24 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.play_arrow, size: 16),
-                  tooltip: 'Start',
+                  tooltip: context.l.t('actStart'),
                   color: u.activeState == 'active' ? BeacleColors.textDim : BeacleColors.ok,
                   onPressed: u.activeState == 'active' ? null : () => act(u, 'start'),
                 ),
                 IconButton(
                   icon: const Icon(Icons.stop, size: 16),
-                  tooltip: 'Stop',
+                  tooltip: context.l.t('actStop'),
                   color: u.activeState == 'active' ? BeacleColors.err : BeacleColors.textDim,
                   onPressed: u.activeState == 'active' ? () => act(u, 'stop') : null,
                 ),
                 IconButton(
                   icon: const Icon(Icons.refresh, size: 16),
-                  tooltip: 'Restart',
+                  tooltip: context.l.t('actRestart'),
                   onPressed: () => act(u, 'restart'),
                 ),
                 IconButton(
                   icon: const Icon(Icons.article_outlined, size: 16),
-                  tooltip: 'Logs (journalctl)',
+                  tooltip: context.l.t('svcLogsJournal'),
                   onPressed: () => showLogsDialog(
                       context, 'journalctl -u ${u.name}', () => state.api.systemdLogs(vps.id, u.name, lines: 300)),
                 ),
@@ -825,7 +824,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (!vps.online || state.isReportStale(vps)) {
       return Center(
         child: Text(
-          state.isReportStale(vps) ? 'Data outdated — agent offline' : 'Waiting for agent…',
+          state.isReportStale(vps) ? context.l.t('svcStale') : context.l.t('svcWaiting'),
           style: const TextStyle(color: BeacleColors.textDim),
         ),
       );
@@ -834,7 +833,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (rows.isEmpty) {
       return Center(
         child: Text(
-          loadingProcs ? 'Loading…' : (filter.isEmpty ? 'Nothing running' : 'Nothing matches the filter'),
+          loadingProcs ? context.l.t('svcLoading') : (filter.isEmpty ? context.l.t('svcNothingRunning') : context.l.t('svcNothingMatches')),
           style: const TextStyle(color: BeacleColors.textDim),
         ),
       );
@@ -847,13 +846,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
           padding: const EdgeInsets.fromLTRB(22, 10, 22, 6),
           child: Row(
             children: [
-              const SizedBox(width: 74, child: Text('KIND', style: hdr)),
-              Expanded(flex: 2, child: _sortHeader('NAME', SortKey.name)),
-              const Expanded(flex: 3, child: Text('DETAIL', style: hdr)),
-              const SizedBox(width: 76, child: Text('STATE', style: hdr)),
+              SizedBox(width: 74, child: Text(context.l.t('svcKind'), style: hdr)),
+              Expanded(flex: 2, child: _sortHeader(context.l.t('procName'), SortKey.name)),
+              Expanded(flex: 3, child: Text(context.l.t('svcDetail'), style: hdr)),
+              SizedBox(width: 76, child: Text(context.l.t('procState'), style: hdr)),
               SizedBox(width: 62, child: _sortHeader('PID', SortKey.pid, align: TextAlign.right)),
               SizedBox(width: 66, child: _sortHeader('CPU %', SortKey.cpu, align: TextAlign.right)),
-              SizedBox(width: 86, child: _sortHeader('MEMORY', SortKey.mem, align: TextAlign.right)),
+              SizedBox(width: 86, child: _sortHeader(context.l.t('procMemory'), SortKey.mem, align: TextAlign.right)),
             ],
           ),
         ),
@@ -868,7 +867,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               final (kindLabel, kindColor) = switch (r.kind) {
                 RunKind.systemd => ('systemd', BeacleColors.accent),
                 RunKind.screen => ('screen', BeacleColors.ok),
-                RunKind.process => ('process', BeacleColors.textDim),
+                RunKind.process => (context.l.t('svcKindProcess'), BeacleColors.textDim),
               };
               return Tooltip(
                 message: r.detail.isEmpty ? r.name : r.detail,
@@ -1584,7 +1583,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       state.onUserAction();
       await state.api.screenStart(vps.id, name: spec.name, dir: spec.dir, command: spec.command);
-      if (mounted) showToast(context, 'Started ${spec.command} in ${spec.name}');
+      if (mounted) showToast(context, context.l.f('svcStartedIn', {'cmd': spec.command, 'name': spec.name}));
     } catch (e) {
       if (mounted) showToast(context, '$e', error: true);
     }
@@ -1595,16 +1594,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Stop this process?'),
+        title: Text(context.l.t('svcStopProcTitle')),
         content: Text(
-          'Sends Ctrl+C to "${s.command}" in session ${s.name}.\n\n'
-          'The session itself stays open, so you can start something else in it.',
+          context.l.f('svcStopProcBody', {'cmd': s.command, 'name': s.name}),
           style: const TextStyle(fontSize: 13, height: 1.45),
         ),
         actions: [
-          SmallButton('Cancel', onPressed: () => Navigator.pop(ctx, false)),
+          SmallButton(context.l.t('cancel'), onPressed: () => Navigator.pop(ctx, false)),
           const SizedBox(width: 8),
-          SmallButton('Send Ctrl+C', icon: Icons.stop, color: BeacleColors.err,
+          SmallButton(context.l.t('svcSendCtrlC'), icon: Icons.stop, color: BeacleColors.err,
               onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
@@ -1613,7 +1611,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       state.onUserAction();
       await state.api.screenStop(vps.id, s.name);
-      if (mounted) showToast(context, 'Ctrl+C sent to ${s.name}');
+      if (mounted) showToast(context, context.l.f('svcCtrlCSent', {'name': s.name}));
     } catch (e) {
       if (mounted) showToast(context, '$e', error: true);
     }
@@ -1627,18 +1625,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete session ${s.name}?'),
+        title: Text(context.l.f('svcDeleteSessionTitle', {'name': s.name})),
         content: Text(
           s.running
-              ? 'The session and "${s.command}" running inside it are both killed. '
-                  'Nothing is asked to shut down cleanly first — use the stop button for that.'
-              : 'The session is empty, so only the session itself goes away.',
+              ? context.l.f('svcDeleteSessionBusy', {'cmd': s.command})
+              : context.l.t('svcDeleteSessionEmpty'),
           style: const TextStyle(fontSize: 13, height: 1.45),
         ),
         actions: [
-          SmallButton('Cancel', onPressed: () => Navigator.pop(ctx, false)),
+          SmallButton(context.l.t('cancel'), onPressed: () => Navigator.pop(ctx, false)),
           const SizedBox(width: 8),
-          SmallButton('Delete', icon: Icons.delete_outline, color: BeacleColors.err,
+          SmallButton(context.l.t('delete'), icon: Icons.delete_outline, color: BeacleColors.err,
               onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
@@ -1647,7 +1644,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       state.onUserAction();
       await state.api.screenKill(vps.id, s.name);
-      if (mounted) showToast(context, 'Session ${s.name} deleted');
+      if (mounted) showToast(context, context.l.f('svcSessionDeleted', {'name': s.name}));
     } catch (e) {
       if (mounted) showToast(context, '$e', error: true);
     }
@@ -1660,7 +1657,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       state.onUserAction();
       await state.api.nohupStart(vps.id, name: spec.name, dir: spec.dir, command: spec.command);
-      if (mounted) showToast(context, 'Started ${spec.command}');
+      if (mounted) showToast(context, context.l.f('svcStarted', {'cmd': spec.command}));
     } catch (e) {
       if (mounted) showToast(context, '$e', error: true);
     }
@@ -1671,18 +1668,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Stop ${j.name}?'),
+        title: Text(context.l.f('svcStopJobTitle', {'name': j.name})),
         content: Text(
           j.running
-              ? 'Sends SIGTERM to "${j.command}" (PID ${j.pid}) and its children, then SIGKILL '
-                  'to anything still up after two seconds.\n\nThe log file stays.'
-              : 'This job is no longer running — only its record is removed.',
+              ? context.l.f('svcStopJobBody', {'cmd': j.command, 'pid': j.pid})
+              : context.l.t('svcStopJobGone'),
           style: const TextStyle(fontSize: 13, height: 1.45),
         ),
         actions: [
-          SmallButton('Cancel', onPressed: () => Navigator.pop(ctx, false)),
+          SmallButton(context.l.t('cancel'), onPressed: () => Navigator.pop(ctx, false)),
           const SizedBox(width: 8),
-          SmallButton(j.running ? 'Stop' : 'Remove', icon: Icons.stop, color: BeacleColors.err,
+          SmallButton(context.l.t(j.running ? 'actStop' : 'remove'), icon: Icons.stop, color: BeacleColors.err,
               onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
@@ -1691,7 +1687,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     try {
       state.onUserAction();
       await state.api.nohupStop(vps.id, j.name);
-      if (mounted) showToast(context, '${j.name} stopped');
+      if (mounted) showToast(context, context.l.f('svcJobStopped', {'name': j.name}));
     } catch (e) {
       if (mounted) showToast(context, '$e', error: true);
     }
@@ -1735,7 +1731,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 Icon(vps.status == 'agent_down' ? Icons.sensors_off : Icons.cloud_off,
                     size: 11, color: BeacleColors.err),
                 const SizedBox(width: 5),
-                Text(vps.status == 'agent_down' ? 'agent down' : 'offline',
+                Text(context.l.t(vps.status == 'agent_down' ? 'svcAgentDown' : 'svcOfflineLower'),
                     style: const TextStyle(fontSize: 10, color: BeacleColors.err)),
               ]),
             ),
@@ -1776,18 +1772,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
     return SmoothListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
           child: Text(
-            'Long-running scripts kept alive in GNU screen, across every server.',
-            style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+            context.l.t('svcScreenIntro'),
+            style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
           ),
         ),
         if (shown.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 40),
+          Padding(
+            padding: const EdgeInsets.only(top: 40),
             child: Center(
-              child: Text('Nothing matches the filter', style: TextStyle(color: BeacleColors.textDim)),
+              child: Text(context.l.t('svcNothingMatches'), style: const TextStyle(color: BeacleColors.textDim)),
             ),
           ),
         for (var i = 0; i < shown.length; i++) ...[
@@ -1802,11 +1798,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 _hostHeader(
                   vps,
                   live
-                      ? '${sessions.length} session(s)'
-                      : '${sessions.length} session(s) — last seen',
+                      ? context.l.f('svcNSessions', {'n': sessions.length})
+                      : context.l.f('svcNSessionsLast', {'n': sessions.length}),
                   offline: !live,
                   actions: [
-                    SmallButton('New session', icon: Icons.add,
+                    SmallButton(context.l.t('sshNewSession'), icon: Icons.add,
                         onPressed: live ? () => _startScreen(state, vps) : null),
                   ],
                 ),
@@ -1814,7 +1810,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 if (sessions.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Text(live ? 'No screen sessions' : 'Nothing was running here when last seen',
+                    child: Text(live ? context.l.t('svcNoScreens') : context.l.t('svcNothingLastSeen'),
                         style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                   )
                 else
@@ -1823,10 +1819,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
             );
           }),
         ],
-        const Padding(
-          padding: EdgeInsets.only(top: 14),
-          child: Text('Reattach on the server with screen -r <name>.',
-              style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+        Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Text(context.l.t('svcReattach'),
+              style: const TextStyle(fontSize: 11, color: BeacleColors.textDim)),
         ),
       ],
     );
@@ -1846,11 +1842,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 Text(s.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(width: 10),
                 if (s.attached)
-                  const Text('attached', style: TextStyle(fontSize: 10, color: BeacleColors.textDim)),
+                  Text(context.l.t('svcAttached'), style: const TextStyle(fontSize: 10, color: BeacleColors.textDim)),
               ]),
               const SizedBox(height: 2),
               Text(
-                s.running ? s.command : 'idle — nothing running',
+                s.running ? s.command : context.l.t('svcIdleNothing'),
                 style: TextStyle(
                   fontSize: 11,
                   fontFamily: s.running ? 'Consolas' : null,
@@ -1860,7 +1856,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                'PID ${s.pid}${s.running ? ' · child ${s.childPid}' : ''} · created ${s.created}',
+                'PID ${s.pid}${s.running ? ' · ${context.l.f('svcChild', {'pid': s.childPid})}' : ''} · ${context.l.f('svcCreated', {'t': s.created})}',
                 style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
               ),
             ]),
@@ -1871,7 +1867,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               color: (s.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Text(s.running ? 'running' : 'idle',
+            child: Text(context.l.t(s.running ? 'svcRunning' : 'svcIdle'),
                 style: TextStyle(
                     fontSize: 11, color: s.running ? BeacleColors.ok : BeacleColors.textDim)),
           ),
@@ -1880,19 +1876,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
           // enforces the same rule.
           IconButton(
             icon: const Icon(Icons.add, size: 16),
-            tooltip: s.running ? 'Already running — stop it first' : 'Run a script here',
+            tooltip: context.l.t(s.running ? 'svcAlreadyRunning' : 'svcRunHere'),
             color: BeacleColors.ok,
             onPressed: (!live || s.running) ? null : () => _startScreen(state, vps, existingName: s.name),
           ),
           IconButton(
             icon: const Icon(Icons.stop, size: 16),
-            tooltip: s.running ? 'Send Ctrl+C' : 'Nothing to stop',
+            tooltip: context.l.t(s.running ? 'svcSendCtrlC' : 'svcNothingToStop'),
             color: BeacleColors.err,
             onPressed: (!live || !s.running) ? null : () => _stopScreen(state, vps, s),
           ),
           IconButton(
             icon: const Icon(Icons.article_outlined, size: 16),
-            tooltip: 'Session output',
+            tooltip: context.l.t('svcSessionOutput'),
             onPressed: !live
                 ? null
                 : () => showLogsDialog(
@@ -1903,7 +1899,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 16),
-            tooltip: 'Delete this session',
+            tooltip: context.l.t('svcDeleteSession'),
             color: BeacleColors.err,
             onPressed: !live ? null : () => _killScreen(state, vps, s),
           ),
@@ -1930,20 +1926,20 @@ class _ServicesScreenState extends State<ServicesScreen> {
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Row(children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Detached commands across every server. Output goes to /var/log/beacle/<name>.log.',
-                style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
+                context.l.t('svcNohupIntro'),
+                style: const TextStyle(fontSize: 12, color: BeacleColors.textDim),
               ),
             ),
-            SmallButton('Refresh', icon: Icons.refresh, onPressed: _loadNohup),
+            SmallButton(context.l.t('refresh'), icon: Icons.refresh, onPressed: _loadNohup),
           ]),
         ),
         if (shown.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 40),
+          Padding(
+            padding: const EdgeInsets.only(top: 40),
             child: Center(
-              child: Text('Nothing matches the filter', style: TextStyle(color: BeacleColors.textDim)),
+              child: Text(context.l.t('svcNothingMatches'), style: const TextStyle(color: BeacleColors.textDim)),
             ),
           ),
         for (var i = 0; i < shown.length; i++) ...[
@@ -1958,11 +1954,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 _hostHeader(
                   vps,
                   live
-                      ? '${jobs.where((j) => j.running).length}/${jobs.length} running'
-                      : '${jobs.length} job(s) — last seen',
+                      ? context.l.f('svcNRunning', {'r': jobs.where((j) => j.running).length, 't': jobs.length})
+                      : context.l.f('svcNJobsLast', {'n': jobs.length}),
                   offline: !live,
                   actions: [
-                    SmallButton('Run detached', icon: Icons.add,
+                    SmallButton(context.l.t('svcRunDetached'), icon: Icons.add,
                         onPressed: live ? () => _startNohup(state, vps) : null),
                   ],
                 ),
@@ -1970,7 +1966,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 if (jobs.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Text(live ? 'No nohup jobs' : 'Nothing was running here when last seen',
+                    child: Text(live ? context.l.t('svcNoNohup') : context.l.t('svcNothingLastSeen'),
                         style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                   )
                 else
@@ -2001,7 +1997,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 2),
               Text(
-                'PID ${j.pid}${j.dir.isEmpty ? '' : ' · ${j.dir}'} · started ${j.started}',
+                'PID ${j.pid}${j.dir.isEmpty ? '' : ' · ${j.dir}'} · ${context.l.f('svcStartedAt', {'t': j.started})}',
                 style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -2013,21 +2009,21 @@ class _ServicesScreenState extends State<ServicesScreen> {
               color: (j.running ? BeacleColors.ok : BeacleColors.textDim).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Text(j.running ? 'running' : 'exited',
+            child: Text(context.l.t(j.running ? 'svcRunning' : 'svcExited'),
                 style: TextStyle(
                     fontSize: 11, color: j.running ? BeacleColors.ok : BeacleColors.textDim)),
           ),
           const SizedBox(width: 10),
           IconButton(
             icon: const Icon(Icons.article_outlined, size: 16),
-            tooltip: 'Job output',
+            tooltip: context.l.t('svcJobOutput'),
             onPressed: !live
                 ? null
                 : () => showLogsDialog(context, j.logFile, () => state.api.nohupLogs(vps.id, j.name)),
           ),
           IconButton(
             icon: Icon(j.running ? Icons.stop : Icons.delete_outline, size: 16),
-            tooltip: j.running ? 'Stop this job' : 'Remove this record',
+            tooltip: context.l.t(j.running ? 'svcStopJob' : 'svcRemoveRecord'),
             color: BeacleColors.err,
             onPressed: !live ? null : () => _stopNohup(state, vps, j),
           ),

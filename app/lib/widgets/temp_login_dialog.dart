@@ -132,7 +132,7 @@ class _TempLoginDialogState extends State<_TempLoginDialog> {
     return l.year == now.year && l.month == now.month && l.day == now.day ? time : '${two(l.day)}.${two(l.month)} $time';
   }
 
-  String _dur(int m) => m < 60 ? '$m min' : '${m ~/ 60} h';
+  String _dur(int m) => m < 60 ? context.l.f('tlMin', {'n': m}) : context.l.f('tlHours', {'n': m ~/ 60});
 
   @override
   Widget build(BuildContext context) {

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/strings.dart';
 import '../../models/models.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
@@ -440,11 +441,11 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(12, 2, 12, 10),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
                               child: Text(
-                                'CONTINENTS',
-                                style: TextStyle(
+                                context.l.t('mapContinents'),
+                                style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 1.2,
@@ -536,7 +537,7 @@ class _ContinentRowState extends State<_ContinentRow> {
             children: [
               Expanded(
                 child: Text(
-                  widget.name,
+                  context.l.t('mapC_${widget.name}'),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w400,
@@ -610,7 +611,7 @@ class _VpsMapCard extends StatelessWidget {
                   Text(vps.host, style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                   if (vps.publicIp.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text('public ${vps.publicIp}', style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
+                    Text(context.l.f('mapPublic', {'ip': vps.publicIp}), style: const TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
                   ],
                   if (vps.location.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -623,15 +624,15 @@ class _VpsMapCard extends StatelessWidget {
                     MetricBar(label: 'RAM', percent: m.memPercent, detail: '${fmtBytes(m.memUsedBytes)} / ${fmtBytes(m.memTotalBytes)}'),
                     if (m.disks.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      MetricBar(label: 'Disk', percent: m.disks.first.usedPercent),
+                      MetricBar(label: context.l.t('mapDisk'), percent: m.disks.first.usedPercent),
                     ],
                     const SizedBox(height: 12),
                     Text(
-                      '${m.cpuCores} cores · load ${m.load1.toStringAsFixed(2)} · up ${fmtUptime(m.uptimeSeconds)}',
+                      '${context.l.f('srvCoresLoad', {'n': m.cpuCores, 'load': m.load1.toStringAsFixed(2)})} · ${context.l.f('mapUp', {'t': context.l.uptime(m.uptimeSeconds)})}',
                       style: const TextStyle(fontSize: 11, color: BeacleColors.textDim),
                     ),
                   ] else
-                    const Text('Waiting for agent…', style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+                    Text(context.l.t('svcWaiting'), style: const TextStyle(fontSize: 12, color: BeacleColors.textDim)),
                 ],
               ),
             ),
@@ -639,7 +640,7 @@ class _VpsMapCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: SizedBox(
                 width: double.infinity,
-                child: SmallButton('Stats', icon: Icons.dns_outlined, onPressed: onStats),
+                child: SmallButton(context.l.t('actStats'), icon: Icons.dns_outlined, onPressed: onStats),
               ),
             ),
           ],
