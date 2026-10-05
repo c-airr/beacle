@@ -5,6 +5,12 @@
 Eight languages across the whole panel, a light theme that is easy on the
 eyes, and search for everything behind Ctrl+K.
 
+### License
+
+- **GPLv3** — from 2.1.0 on Beacle is licensed under the GNU General Public
+  License v3.0. Releases up to and including 2.0.5 stay under the MIT
+  License they were published with.
+
 ### Added
 
 - **Search (Ctrl+K)** — Ctrl+K (⌘K on macOS), or the search field in the
