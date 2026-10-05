@@ -31,3 +31,7 @@ claude.md
 HANDOFF.md
 WORKLOG.md
 output.txt
+
+# Windows firewall rule dumps (local only)
+firewall.txt
+rules.txt
