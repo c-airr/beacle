@@ -207,9 +207,10 @@ Dart (Flutter) · Go · WebSocket · Tailscale
 
 ## License
 
-Beacle is licensed under the [GNU General Public License v3.0](LICENSE)
-from version 2.1.0 on. Releases up to and including 2.0.5 were published
-under the MIT License and stay under it.
+Beacle 2.0 and later is licensed under the
+[GNU General Public License v3.0](LICENSE). Releases before 2.0 stay under
+the MIT License. Copies of 2.0.0–2.0.5 already obtained under the MIT
+License, which those releases shipped with, keep the rights it granted.
 
 The alert sounds in `app/assets/sounds/` are synthetic tones generated for
 Beacle. The world maps come from Natural Earth (public domain).

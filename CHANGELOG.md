@@ -7,9 +7,10 @@ eyes, and search for everything behind Ctrl+K.
 
 ### License
 
-- **GPLv3** — from 2.1.0 on Beacle is licensed under the GNU General Public
-  License v3.0. Releases up to and including 2.0.5 stay under the MIT
-  License they were published with.
+- **GPLv3** — Beacle 2.0 and later is licensed under the GNU General
+  Public License v3.0. Releases before 2.0 stay under the MIT License.
+  2.0.0–2.0.5 shipped with the MIT License; copies obtained under it keep
+  the rights it granted.
 
 ### Added
 
