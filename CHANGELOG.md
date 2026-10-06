@@ -34,6 +34,14 @@ eyes, and search for everything behind Ctrl+K.
   (Brazil) and Simplified Chinese, next to English and Polish. Each
   language is listed under its own name, so it can be found by someone who
   does not read the current one.
+- **"No internet" instead of a wall of offline alerts** — when the computer
+  running Beacle loses its own internet (Wi-Fi drops, cable out, the line
+  still coming up after sleep), every server goes out of reach at once.
+  Before raising an offline alert the panel now checks its own line
+  (1.1.1.1 and 8.8.8.8, then a ping); if that is down too, a banner at the
+  top says so and no offline alerts, sounds or webhooks go out. Servers
+  still read offline and keep their last data. Once the line is back, and
+  after waking from sleep, alerts wait 45 s for the agents to reconnect.
 
 ### Changed
 

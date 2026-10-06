@@ -18,7 +18,7 @@ func TestOfflineSweepWaitsForAgentsToReconnectAfterStartup(t *testing.T) {
 	}
 	e := NewAlertEngine(store, NewHub())
 
-	if time.Since(e.startedAt) >= agentReconnectGrace {
+	if !time.Now().Before(e.quietUntil) {
 		t.Fatalf("a freshly built engine should still be inside its grace window")
 	}
 }

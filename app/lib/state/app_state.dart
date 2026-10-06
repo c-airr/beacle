@@ -199,6 +199,18 @@ class AppState extends ChangeNotifier {
 
   final StreamController<Alert> alertStream = StreamController.broadcast();
 
+  /// False while this computer itself has no internet. The backend asks
+  /// whenever an agent goes missing; until the line is back, servers are out
+  /// of reach rather than down, and no offline alerts are raised.
+  bool internetUp = true;
+  DateTime? internetDownSince;
+
+  void _applyLocalNet(Object? j) {
+    if (j is! Map<String, dynamic>) return;
+    internetUp = j['online'] != false;
+    internetDownSince = internetUp ? null : DateTime.tryParse('${j['since'] ?? ''}')?.toLocal();
+  }
+
   /// Set in a tool window (lib/tool_window.dart): it only looks. Power modes
   /// and alert sounds belong to the main window — two windows switching the
   /// fleet between eco and active would fight, and every alert would chime
@@ -370,6 +382,7 @@ class AppState extends ChangeNotifier {
       alerts = ((o['alerts'] as List?) ?? []).map((e) => Alert.fromJson(e)).toList().reversed.toList();
       actions = ((o['actions'] as List?) ?? []).map((e) => ActionLog.fromJson(e)).toList().reversed.toList();
       links = ((o['links'] as List?) ?? []).map((e) => VpsLink.fromJson(e)).toList();
+      _applyLocalNet(o['local_net']);
       lastError = null;
       _sampleFleet(force: true);
     } catch (e) {
@@ -491,6 +504,9 @@ class AppState extends ChangeNotifier {
         } else {
           links.add(l);
         }
+        break;
+      case 'local_net':
+        _applyLocalNet(payload);
         break;
       case 'action':
         actions.insert(0, ActionLog.fromJson(payload as Map<String, dynamic>));

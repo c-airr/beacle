@@ -361,6 +361,8 @@ const _zh = <String, String>{
   'stRestored': '已恢复 {n} 个文件。重启 Beacle 后生效 —— 当前文件已先另存一份。',
   'stStaged': '更新 {v} 已就绪。点击“应用并重启”进行安装。',
   'stUpdateBanner': 'Beacle {v} 已发布 —— 你当前为 {cur}。打开 设置 → 更新 进行安装。',
+  'noInternetBanner': '这台电脑没有网络 —— 你的服务器很可能一切正常。离线告警已暂停，直到网络恢复。',
+  'noInternetBannerSince': '这台电脑自 {t} 起没有网络 —— 你的服务器很可能一切正常。离线告警已暂停，直到网络恢复。',
   'wgBannerButton': '选择服务器',
   'wgSwitchIntro': 'Beacle 目前通过 Tailscale 连接这些服务器。内置的 WireGuard 隧道无需在服务器上安装任何东西 —— 只要开放 UDP 51931。Tailscale 会保留在服务器上；Beacle 只是不再使用它。',
   'wgSwitchNone': '所有服务器都已在使用 WireGuard。',

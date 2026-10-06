@@ -241,6 +241,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		"alerts":    s.store.ListAlerts(),
 		"actions":   s.store.ListActions(),
 		"links":     s.store.ListLinks(),
+		"local_net": s.alerts.LocalNetStatus(),
 	})
 }
 

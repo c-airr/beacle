@@ -1146,7 +1146,16 @@ const (
 	WSAlert      WSMessageType = "alert"       // payload: Alert
 	WSLinkUpdate WSMessageType = "link_update" // payload: VPSLink
 	WSActionLog  WSMessageType = "action"      // payload: ActionLog
+	WSLocalNet   WSMessageType = "local_net"   // payload: LocalNetStatus
 )
+
+// LocalNetStatus is whether the computer running Beacle can reach the
+// internet at all. While it cannot, every server looks gone at once, and the
+// panel says so instead of raising an outage per server.
+type LocalNetStatus struct {
+	Online bool      `json:"online"`
+	Since  time.Time `json:"since"`
+}
 
 type WSMessage struct {
 	Type    WSMessageType `json:"type"`

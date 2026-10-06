@@ -217,6 +217,14 @@ are refused, here and on the whole panel API.
 
 **Power save:** `POST /api/ui/power-mode` with `{"mode":"active"|"eco"|"sleep"}`.
 
+**No internet here (2.1):** `GET /api/overview` carries `local_net`
+(`{"online": bool, "since": time}`), and a `local_net` frame on `/ws`
+announces every change. Whenever an agent is missing, the backend dials
+1.1.1.1 / 8.8.8.8 (then pings 8.8.8.8); if none answers, servers still read
+offline but no offline alerts are raised. After the line comes back, and
+after the computer wakes from sleep, offline alerts wait 45 s for agents to
+reconnect.
+
 **Webhooks (2.0):** `GET /api/webhooks` — targets plus the elected
 primary/secondary watchers. `PUT /api/webhooks` with `{"targets": [...]}` —
 Discord (`kind`, webhook `url`), ntfy (topic `url`), Telegram (`url` = bot

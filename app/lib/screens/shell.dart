@@ -328,6 +328,7 @@ class AppShellState extends State<AppShell> {
                       child: Column(
                         children: [
                           _buildTopBar(state),
+                          if (state.connected && !state.internetUp) _buildNoInternetBanner(state),
                           if (state.availableUpdate != null) _buildUpdateBanner(state),
                           if (wgBanner != null) wgBanner,
                           Expanded(child: _content()),
@@ -534,6 +535,42 @@ class AppShellState extends State<AppShell> {
                 s.raw[_wgBannerDismissKey] = true;
                 s.save();
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// This computer lost its internet: every server is out of reach at once,
+  /// and saying so once beats an offline alert per server. The backend holds
+  /// those alerts until the line is back and the agents have reconnected.
+  Widget _buildNoInternetBanner(AppState state) {
+    final since = state.internetDownSince;
+    final hhmm = since == null
+        ? ''
+        : '${since.hour.toString().padLeft(2, '0')}:${since.minute.toString().padLeft(2, '0')}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: BeacleColors.warn.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BeacleColors.warn.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 15, color: BeacleColors.warn),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                hhmm.isEmpty ? context.l.t('noInternetBanner') : context.l.f('noInternetBannerSince', {'t': hhmm}),
+                style: TextStyle(fontSize: 12, color: BeacleColors.text, height: 1.2),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
             ),
           ],
         ),

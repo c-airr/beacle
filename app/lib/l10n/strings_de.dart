@@ -361,6 +361,8 @@ const _de = <String, String>{
   'stRestored': '{n} Datei(en) wiederhergestellt. Starte Beacle neu, damit sie wirksam werden — die aktuellen Dateien wurden vorher beiseitegelegt.',
   'stStaged': 'Update {v} ist bereit. Klicke auf „Anwenden und neu starten“, um es zu installieren.',
   'stUpdateBanner': 'Beacle {v} ist verfügbar — du verwendest {cur}. Öffne Einstellungen → Updates zum Installieren.',
+  'noInternetBanner': 'Dieser Computer hat kein Internet — deine Server laufen höchstwahrscheinlich normal. Offline-Alarme pausieren, bis die Verbindung zurück ist.',
+  'noInternetBannerSince': 'Kein Internet auf diesem Computer seit {t} — deine Server laufen höchstwahrscheinlich normal. Offline-Alarme pausieren, bis die Verbindung zurück ist.',
   'wgBannerButton': 'Server auswählen',
   'wgSwitchIntro': 'Beacle erreicht diese Server über Tailscale. Der integrierte WireGuard-Tunnel braucht auf dem Server keine Installation — nur offenes UDP 51931. Tailscale bleibt auf dem Server; Beacle verwendet es nur nicht mehr.',
   'wgSwitchNone': 'Alle Server verwenden bereits WireGuard.',

@@ -28,8 +28,12 @@ type AlertEngine struct {
 	// reach caches the host probe per VPS; see hostReachable.
 	reach map[string]reachProbe
 
-	// startedAt gates the first sweep. See WatchOffline.
-	startedAt time.Time
+	// quietUntil holds back offline alerts while agents are expected to be
+	// reconnecting: after startup, after the machine wakes from sleep and
+	// after its own internet comes back. Owned by the sweep goroutine.
+	quietUntil time.Time
+	// net is this computer's own internet line. See sweepOffline.
+	net *LocalNet
 	// notify hands fired alerts to the webhook delivery queue. Set by main;
 	// nil-safe so tests and old call paths never notice.
 	notify func(shared.WebhookMessage)
@@ -50,7 +54,16 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		prevContainers: map[string]map[string]shared.ContainerInfo{},
 		prevServices:   map[string]map[string]string{},
 		reach:          map[string]reachProbe{},
-		startedAt:      time.Now(),
+		quietUntil:     time.Now().Add(agentReconnectGrace),
+		net:            NewLocalNet(),
+	}
+	e.net.onChange = func(st shared.LocalNetStatus) {
+		if st.Online {
+			log.Printf("local net: internet is back")
+		} else {
+			log.Printf("local net: this computer has no internet, offline alerts held")
+		}
+		hub.Broadcast(shared.WSLocalNet, st)
 	}
 	// Alerts outlive the process that raised them. Without adopting the open
 	// ones, a restarted backend would neither resolve them when the condition
@@ -121,6 +134,9 @@ func (e *AlertEngine) probeHost(id, host string) bool {
 }
 
 func (e *AlertEngine) SetAgentHub(h *AgentHub) { e.agentHub = h }
+
+// LocalNetStatus is what the panel shows in its "no internet" banner.
+func (e *AlertEngine) LocalNetStatus() shared.LocalNetStatus { return e.net.Status() }
 
 // SetNotifier wires alert delivery (webhooks via watcher agents). The queue
 // is buffered and the enqueue never blocks, so firing stays synchronous.
@@ -300,66 +316,114 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 // than the window before a genuine outage would be reported.
 const agentReconnectGrace = 20 * time.Second
 
+// localOutageGrace is the same wait after this computer's own outage: waking
+// from sleep, or its internet coming back. Longer than at startup because the
+// tunnel itself has to come back first (Wi-Fi rejoins, Tailscale and WireGuard
+// find their peers again) before any agent can.
+const localOutageGrace = 45 * time.Second
+
+// sleepGap is how far apart two sweeps must be on the wall clock to mean the
+// machine was asleep in between. They run every three seconds.
+const sleepGap = 20 * time.Second
+
+// netUpRecheck is how long a good answer about the internet line is trusted
+// while some agent is missing. Well under OfflineAfterSec, so the answer an
+// alert rests on was taken after the line could have dropped.
+const netUpRecheck = 15 * time.Second
+
+// holdAlerts keeps offline alerts quiet for at least d from now.
+func (e *AlertEngine) holdAlerts(d time.Duration) {
+	if until := time.Now().Add(d); until.After(e.quietUntil) {
+		e.quietUntil = until
+	}
+}
+
 // WatchOffline keeps the VPS status tied to the agent WebSocket: a live socket
 // means online even if a metrics tick was delayed (eco/sleep mode, slow docker
 // collect), and a missing socket means offline. Only the *alert* waits out the
 // grace window, so a reconnect after a network blip never raises one.
 func (e *AlertEngine) WatchOffline() {
+	// Wall clock on purpose (Round(0) drops the monotonic reading): it keeps
+	// running while the machine sleeps, which is exactly what is measured.
+	last := time.Now().Round(0)
 	for range time.Tick(3 * time.Second) {
-		// Every LastSeen is stale at startup — it was last written whenever the
-		// panel was last open, which for an overnight shutdown is hours ago.
-		// Without this the first sweep reads the entire fleet as long dead and
-		// fires a critical alert per server, seconds before their agents finish
-		// reconnecting: the wall of red you come back to in the morning, for an
-		// outage that never happened. Agents reconnect within a second or two;
-		// this waits long enough to let them.
-		if time.Since(e.startedAt) < agentReconnectGrace {
+		if gap := time.Now().Round(0).Sub(last); gap > sleepGap {
+			// Every socket died while the lid was shut and every LastSeen is
+			// as old as the nap. Without this, waking up reads as the whole
+			// fleet going down at once.
+			log.Printf("offline sweep: resumed after %s, holding alerts for %s",
+				gap.Round(time.Second), localOutageGrace)
+			e.holdAlerts(localOutageGrace)
+		}
+		e.sweepOffline()
+		last = time.Now().Round(0)
+	}
+}
+
+// sweepOffline is one pass of WatchOffline.
+func (e *AlertEngine) sweepOffline() {
+	// Every LastSeen is stale at startup — it was last written whenever the
+	// panel was last open, which for an overnight shutdown is hours ago.
+	// Without this the first sweep reads the entire fleet as long dead and
+	// fires a critical alert per server, seconds before their agents finish
+	// reconnecting: the wall of red you come back to in the morning, for an
+	// outage that never happened. Agents reconnect within a second or two;
+	// this waits long enough to let them. Waking from sleep and the internet
+	// coming back extend the same wait.
+	if time.Now().Before(e.quietUntil) {
+		return
+	}
+	vpsList := e.store.ListVPS()
+
+	// A server whose socket is gone is either down itself or out of reach
+	// because this computer is offline. Only the second explains every
+	// server going at once, so ask the line before believing any of them.
+	missing := false
+	for _, v := range vpsList {
+		if v.Status != shared.VPSPending && (e.agentHub == nil || !e.agentHub.Connected(v.ID)) {
+			missing = true
+			break
+		}
+	}
+	netUp := true
+	if missing || !e.net.Online() {
+		wasUp := e.net.Online()
+		netUp = e.net.Up(netUpRecheck)
+		if netUp && !wasUp {
+			// Back online, but nothing has had a chance to reconnect yet.
+			e.holdAlerts(localOutageGrace)
+			return
+		}
+	}
+
+	for _, v := range vpsList {
+		if v.Status == shared.VPSPending {
 			continue
 		}
-		for _, v := range e.store.ListVPS() {
-			if v.Status == shared.VPSPending {
-				continue
-			}
-			marker := e.store.RestartMarker(v.ID)
-			markerFresh := marker != nil && marker.Fresh()
-			if marker != nil && !markerFresh {
-				// The box should have been back long ago — expire into a
-				// normal offline so a failed boot still raises an alert.
-				e.store.ClearRestart(v.ID)
-				marker = nil
-			}
-			live := e.agentHub != nil && e.agentHub.Connected(v.ID)
-			if live {
-				if markerFresh {
-					// A rebooted agent drops its socket within seconds. Still
-					// live this long after the marker means the reboot never
-					// happened — drop the marker and go back to online.
-					if time.Since(marker.Since) > shared.RestartLiveClearSec*time.Second {
-						e.store.ClearRestart(v.ID)
-						e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
-							en.VPS.Status = shared.VPSOnline
-							en.VPS.LastSeen = time.Now().UTC()
-						})
-						e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
-					} else if v.Status != marker.MarkerStatus() {
-						e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
-							en.VPS.Status = marker.MarkerStatus()
-						})
-						e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
-					}
-					e.mu.Lock()
-					e.clearReachability(v.ID)
-					e.mu.Unlock()
-					continue
-				}
-				// A snapshot/heartbeat often flips Status to online the moment
-				// the socket returns — before this tick runs. Clearing used to
-				// gate on "still Offline/AgentDown", so the alert stayed open
-				// forever while the panel already showed a healthy agent.
-				if v.Status == shared.VPSOffline || v.Status == shared.VPSAgentDown {
+		marker := e.store.RestartMarker(v.ID)
+		markerFresh := marker != nil && marker.Fresh()
+		if marker != nil && !markerFresh {
+			// The box should have been back long ago — expire into a
+			// normal offline so a failed boot still raises an alert.
+			e.store.ClearRestart(v.ID)
+			marker = nil
+		}
+		live := e.agentHub != nil && e.agentHub.Connected(v.ID)
+		if live {
+			if markerFresh {
+				// A rebooted agent drops its socket within seconds. Still
+				// live this long after the marker means the reboot never
+				// happened — drop the marker and go back to online.
+				if time.Since(marker.Since) > shared.RestartLiveClearSec*time.Second {
+					e.store.ClearRestart(v.ID)
 					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
 						en.VPS.Status = shared.VPSOnline
 						en.VPS.LastSeen = time.Now().UTC()
+					})
+					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+				} else if v.Status != marker.MarkerStatus() {
+					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+						en.VPS.Status = marker.MarkerStatus()
 					})
 					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 				}
@@ -368,51 +432,72 @@ func (e *AlertEngine) WatchOffline() {
 				e.mu.Unlock()
 				continue
 			}
-			if markerFresh {
-				// Expected silence: show it, alert nothing.
-				if v.Status != marker.MarkerStatus() {
-					e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
-						en.VPS.Status = marker.MarkerStatus()
-					})
-					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
-				}
-				continue
-			}
-			if v.Status != shared.VPSOffline && v.Status != shared.VPSAgentDown {
+			// A snapshot/heartbeat often flips Status to online the moment
+			// the socket returns — before this tick runs. Clearing used to
+			// gate on "still Offline/AgentDown", so the alert stayed open
+			// forever while the panel already showed a healthy agent.
+			if v.Status == shared.VPSOffline || v.Status == shared.VPSAgentDown {
 				e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
-					en.VPS.Status = shared.VPSOffline
+					en.VPS.Status = shared.VPSOnline
+					en.VPS.LastSeen = time.Now().UTC()
 				})
 				e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 			}
-			// Socket gone for longer than the grace window: this is a real
-			// outage, not a reconnect. Which outage it is decides what the user
-			// should go and do, so ask the tailnet before saying the box died —
-			// a crashed agent on a healthy server is a restart, not a rescue.
-			if time.Since(v.LastSeen) > shared.OfflineAfterSec*time.Second {
-				e.store.ClearSnapshot(v.ID)
-				hostUp := e.hostReachable(v.ID, v.Host)
-
-				want := shared.VPSOffline
-				if hostUp {
-					want = shared.VPSAgentDown
-				}
-				if v.Status != want {
-					e.store.UpdateVPS(v.ID, func(en *VPSEntry) { en.VPS.Status = want })
-					e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
-				}
-
-				e.mu.Lock()
-				if hostUp {
-					e.clear(v.ID, shared.AlertAgentOffline, "")
-					e.fire(v, shared.AlertAgentDown, shared.SeverityCritical, "",
-						"Agent is not responding — the VPS itself still answers")
-				} else {
-					e.clear(v.ID, shared.AlertAgentDown, "")
-					e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
-						"VPS offline — no answer on its address")
-				}
-				e.mu.Unlock()
+			e.mu.Lock()
+			e.clearReachability(v.ID)
+			e.mu.Unlock()
+			continue
+		}
+		if markerFresh {
+			// Expected silence: show it, alert nothing.
+			if v.Status != marker.MarkerStatus() {
+				e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+					en.VPS.Status = marker.MarkerStatus()
+				})
+				e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 			}
+			continue
+		}
+		if v.Status != shared.VPSOffline && v.Status != shared.VPSAgentDown {
+			e.store.UpdateVPS(v.ID, func(en *VPSEntry) {
+				en.VPS.Status = shared.VPSOffline
+			})
+			e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+		}
+		if !netUp {
+			// Out of reach because this computer is offline, not because the
+			// server is. The panel shows one "no internet" banner instead; the
+			// last data stays, and nothing is alerted that is not known.
+			continue
+		}
+		// Socket gone for longer than the grace window: this is a real
+		// outage, not a reconnect. Which outage it is decides what the user
+		// should go and do, so ask the tailnet before saying the box died —
+		// a crashed agent on a healthy server is a restart, not a rescue.
+		if time.Since(v.LastSeen) > shared.OfflineAfterSec*time.Second {
+			e.store.ClearSnapshot(v.ID)
+			hostUp := e.hostReachable(v.ID, v.Host)
+
+			want := shared.VPSOffline
+			if hostUp {
+				want = shared.VPSAgentDown
+			}
+			if v.Status != want {
+				e.store.UpdateVPS(v.ID, func(en *VPSEntry) { en.VPS.Status = want })
+				e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
+			}
+
+			e.mu.Lock()
+			if hostUp {
+				e.clear(v.ID, shared.AlertAgentOffline, "")
+				e.fire(v, shared.AlertAgentDown, shared.SeverityCritical, "",
+					"Agent is not responding — the VPS itself still answers")
+			} else {
+				e.clear(v.ID, shared.AlertAgentDown, "")
+				e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
+					"VPS offline — no answer on its address")
+			}
+			e.mu.Unlock()
 		}
 	}
 }
