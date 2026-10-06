@@ -1,9 +1,10 @@
 # Changelog
 
-## 2.1.0 — 2026-10-04
+## 2.1.0 — 2026-10-06
 
 Eight languages across the whole panel, a light theme that is easy on the
-eyes, and search for everything behind Ctrl+K.
+eyes, search for everything behind Ctrl+K, and one "no internet" banner
+instead of an offline alert per server when this computer loses its line.
 
 ### License
 
