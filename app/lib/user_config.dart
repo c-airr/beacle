@@ -16,8 +16,8 @@ extension SshDisplayModeWire on SshDisplayMode {
       };
   static SshDisplayMode fromWire(String? v) => switch (v) {
         'split_view' => SshDisplayMode.splitView,
-        'fullscreen' => SshDisplayMode.fullscreen,
-        _ => SshDisplayMode.separateWindow,
+        'separate_window' => SshDisplayMode.separateWindow,
+        _ => SshDisplayMode.fullscreen,
       };
 }
 
@@ -28,8 +28,8 @@ class UserConfig {
 
   UserConfig({
     this.onboardingComplete = false,
-    this.sshDisplayMode = SshDisplayMode.separateWindow,
-    this.filesDisplayMode = SshDisplayMode.separateWindow,
+    this.sshDisplayMode = SshDisplayMode.fullscreen,
+    this.filesDisplayMode = SshDisplayMode.fullscreen,
   });
 
   factory UserConfig.fromJson(Map<String, dynamic> j) {

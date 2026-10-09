@@ -781,6 +781,26 @@ class TerminalUsers {
         main = _s(j['main']);
 }
 
+/// A machine the SSH tab reaches with a plain SSH client from this computer
+/// (the "+" in the SSH tab), not through an agent. Its password and key stay
+/// in the backend; the app only knows whether one is saved.
+class SshHost {
+  final String id, label, host, user;
+  final int port;
+  final bool hasPassword, hasKey;
+  SshHost.fromJson(Map<String, dynamic> j)
+      : id = _s(j['id']),
+        label = _s(j['label']),
+        host = _s(j['host']),
+        user = _s(j['user']),
+        port = (j['port'] as num?)?.toInt() ?? 22,
+        hasPassword = j['has_password'] == true,
+        hasKey = j['has_key'] == true;
+
+  /// user@host, with the port when it is not 22.
+  String get address => '$user@$host${port == 22 ? '' : ':$port'}';
+}
+
 /// One chunk of a remote file; [data] is base64 on the wire.
 class FsChunk {
   final String path, version, data;

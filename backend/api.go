@@ -29,6 +29,7 @@ type Server struct {
 	startedAt time.Time
 	uptime    *UptimeLog
 	spikes    *Spikes
+	sshHosts  *SSHHosts
 
 	uiPowerMu   sync.RWMutex
 	uiPowerMode shared.PowerMode
@@ -613,6 +614,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/vps/{id}/history", s.handleVPSHistory)
 	mux.HandleFunc("/api/vps/{id}/agent/{rest...}", s.handleAgentProxy)
 	mux.HandleFunc("GET /api/vps/{id}/terminal", s.handleTerminalWS)
+	mux.HandleFunc("GET /api/ssh/hosts", s.handleListSSHHosts)
+	mux.HandleFunc("POST /api/ssh/hosts", s.handleCreateSSHHost)
+	mux.HandleFunc("PUT /api/ssh/hosts/{id}", s.handleUpdateSSHHost)
+	mux.HandleFunc("DELETE /api/ssh/hosts/{id}", s.handleDeleteSSHHost)
+	mux.HandleFunc("GET /api/ssh/hosts/{id}/terminal", s.handleSSHTerminalWS)
 	mux.HandleFunc("POST /api/ui/power-mode", s.handleUIPowerMode)
 	mux.HandleFunc("GET /api/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/alerts", s.handleAlerts)

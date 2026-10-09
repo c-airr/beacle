@@ -21,6 +21,42 @@ import (
 type linuxPTY struct {
 	*os.File // PTY master
 	cmd      *exec.Cmd
+	greeting []byte // the login message, read out before the shell's output
+}
+
+// Read hands out the greeting first. Only the session's pump reads.
+func (p *linuxPTY) Read(b []byte) (int, error) {
+	if len(p.greeting) > 0 {
+		n := copy(b, p.greeting)
+		p.greeting = p.greeting[n:]
+		return n, nil
+	}
+	return p.File.Read(b)
+}
+
+// loginMessage is what an SSH login prints before the prompt: pam_motd's
+// /run/motd.dynamic (Ubuntu's "Welcome to ..." and system information,
+// written at the last SSH login) and then /etc/motd. A shell from the agent
+// skips PAM, so it has to be shown here. ~/.hushlogin turns it off, as it
+// does for SSH.
+var motdFiles = []string{"/run/motd.dynamic", "/etc/motd"}
+
+func loginMessage(home string) []byte {
+	if _, err := os.Stat(home + "/.hushlogin"); err == nil {
+		return nil
+	}
+	var msg []byte
+	for _, f := range motdFiles {
+		if b, err := os.ReadFile(f); err == nil && len(b) <= 64<<10 {
+			msg = append(msg, b...)
+		}
+	}
+	if len(msg) == 0 {
+		return nil
+	}
+	// Written straight to the panel, so no PTY turns \n into \r\n for it.
+	s := strings.ReplaceAll(string(msg), "\r\n", "\n")
+	return []byte(strings.ReplaceAll(s, "\n", "\r\n"))
 }
 
 // loginShell picks the user's shell from /etc/passwd, then bash. Not $SHELL:
@@ -250,7 +286,7 @@ func startPTY(cols, rows int, as string) (ptyProcess, error) {
 		ptmx.Close()
 		return nil, err
 	}
-	return &linuxPTY{File: ptmx, cmd: cmd}, nil
+	return &linuxPTY{File: ptmx, cmd: cmd, greeting: loginMessage(home)}, nil
 }
 
 func (p *linuxPTY) Resize(cols, rows int) error {

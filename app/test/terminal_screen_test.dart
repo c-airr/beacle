@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
@@ -37,6 +38,26 @@ void main() {
     expect(find.byType(TerminalView), findsNothing);
   });
 
+  testWidgets('the + tile opens the host form beside the grid, not over it', (tester) async {
+    await pump(tester, stateWith([
+      {'id': 'a', 'name': 'web-1', 'host': '10.0.0.1', 'status': 'online'},
+    ]));
+    expect(find.text('Private key'), findsNothing);
+    await tester.tap(find.text('New host'));
+    await tester.pumpAndSettle();
+    expect(find.text('Private key'), findsOneWidget);
+    expect(find.text('web-1'), findsOneWidget, reason: 'the grid stays in view');
+
+    // Saving without a host says what is missing instead of calling out.
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(find.text('Enter the host and the user.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Private key'), findsNothing);
+  });
+
   testWidgets('opening a server shows its shell in a tab', (tester) async {
     final key = await pump(tester, stateWith([
       {'id': 'a', 'name': 'web-1', 'host': '10.0.0.1', 'status': 'online'},
@@ -46,6 +67,16 @@ void main() {
     expect(find.byType(TerminalView), findsOneWidget);
     expect(find.text('web-1'), findsOneWidget); // the tab
     expect(find.text('Open a shell'), findsNothing);
+
+    // Typing reaches the shell. Keys come straight from the keyboard: xterm's
+    // text input connection is refused on Windows (no view id).
+    final typed = <String>[];
+    key.currentState!.sessions.first.terminal.onOutput = typed.add;
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(typed.join(), 'ls\r');
 
     key.currentState!.open('a');
     await tester.pump();

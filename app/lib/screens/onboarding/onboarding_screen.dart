@@ -21,8 +21,8 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int step = 0;
   AppLanguage lang = AppLanguage.en;
-  SshDisplayMode sshMode = SshDisplayMode.separateWindow;
-  SshDisplayMode filesMode = SshDisplayMode.separateWindow;
+  SshDisplayMode sshMode = SshDisplayMode.fullscreen;
+  SshDisplayMode filesMode = SshDisplayMode.fullscreen;
   final List<SavedServer> _servers = [];
   bool _finishing = false;
   String? _error;

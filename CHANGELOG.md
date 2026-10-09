@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.1.5 (unreleased)
+
+### Added
+
+- **Saved SSH hosts** — the "+" tile in the SSH tab opens a panel beside
+  it to add any machine reachable over SSH: host, port, user, and a
+  password, a private key (pasted or loaded from a file, with its
+  passphrase) or both. The backend dials it with its own SSH client, so
+  no agent is needed there. Passwords and keys never reach the app; on
+  Windows they are encrypted for your account (DPAPI). A host's key is
+  remembered the first time, and a changed key is refused.
+- **Login message** — a shell opened through the agent prints the server's
+  MOTD first ("Welcome to Ubuntu ...", system information), as an SSH
+  login does; `~/.hushlogin` turns it off. Needs the 2.1.5 agent.
+
+### Changed
+
+- **SSH tab like Termius** — the title on top, below it every server and
+  saved host as a tile in a grid, and a "+" tile to add one. The terminal
+  is green on near-black.
+- **SSH and Files open full screen by default** — on a fresh setup both
+  tools now start in the main content area instead of their own window.
+  A choice already made in setup or Settings stays as it was.
+
+### Fixed
+
+- **Typing in the SSH terminal** — on Windows no key reached the shell:
+  the terminal's text input was rejected by Flutter ("view ID is null"),
+  so a tab showed the prompt and nothing else happened. Keys now come
+  straight from the keyboard.
+
 ## 2.1.0 — 2026-10-06
 
 Eight languages across the whole panel, a light theme that is easy on the

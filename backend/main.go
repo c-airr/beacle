@@ -58,6 +58,7 @@ func main() {
 		webhooks:  webhooks,
 		wg:        wg,
 		spikes:    spikes,
+		sshHosts:  NewSSHHosts(*dataDir),
 		baseURL:   base,
 		dataDir:   *dataDir,
 		startedAt: time.Now(),

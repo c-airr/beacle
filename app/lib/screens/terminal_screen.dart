@@ -15,13 +15,20 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../user_config.dart';
 import '../widgets/common.dart';
+import '../widgets/ssh_host_panel.dart';
 import '../widgets/temp_login_dialog.dart';
 
 /// One shell on one server. The bytes travel app ⇄ backend ⇄ agent over
-/// WebSockets (see backend/terminal.go); there is no SSH client and no key.
+/// WebSockets (see backend/terminal.go), or, for a saved SSH host, app ⇄
+/// backend ⇄ SSH server (backend/ssh_terminal.go). Either way the app speaks
+/// the same frames and holds no key.
 class TermSession {
+  /// The Beacle server the shell is on; empty for a saved SSH host.
   final String vpsId;
-  final String vpsName;
+
+  /// The saved SSH host the shell is on, if it is one.
+  final String? sshHostId;
+  final String name;
 
   /// Who the shell runs as; empty is the agent's own user, root.
   final String user;
@@ -37,7 +44,7 @@ class TermSession {
   bool connected = false;
   bool ended = false;
 
-  TermSession({required this.vpsId, required this.vpsName, this.user = '', required this.onChange}) {
+  TermSession({this.vpsId = '', this.sshHostId, required this.name, this.user = '', required this.onChange}) {
     terminal.onOutput = (data) => _send({'op': 'data', 'data': base64Encode(utf8.encode(data))});
     terminal.onResize = (w, h, _, __) => _send({'op': 'resize', 'cols': w, 'rows': h});
   }
@@ -56,8 +63,14 @@ class TermSession {
 
     final cols = terminal.viewWidth > 0 ? terminal.viewWidth : 80;
     final rows = terminal.viewHeight > 0 ? terminal.viewHeight : 24;
-    final as = user.isEmpty ? '' : '&user=${Uri.encodeQueryComponent(user)}';
-    final url = '${backendUrl.replaceFirst('http', 'ws')}/api/vps/$vpsId/terminal?cols=$cols&rows=$rows$as';
+    final base = backendUrl.replaceFirst('http', 'ws');
+    final String url;
+    if (sshHostId != null) {
+      url = '$base/api/ssh/hosts/$sshHostId/terminal?cols=$cols&rows=$rows';
+    } else {
+      final as = user.isEmpty ? '' : '&user=${Uri.encodeQueryComponent(user)}';
+      url = '$base/api/vps/$vpsId/terminal?cols=$cols&rows=$rows$as';
+    }
     final ws = IOWebSocketChannel.connect(url);
     _ws = ws;
     connected = true;
@@ -103,7 +116,7 @@ class TermSession {
     _close();
   }
 
-  String get label => user.isEmpty ? vpsName : '$user@$vpsName';
+  String get label => user.isEmpty ? name : '$user@$name';
 }
 
 /// Copy/paste like Windows Terminal. xterm's defaults put "select all" on
@@ -120,60 +133,32 @@ final _shortcuts = Platform.isMacOS
             const PasteTextIntent(SelectionChangedCause.keyboard),
       };
 
-TerminalTheme get _theme => BeacleColors.isDark ? _darkTheme : _lightTheme;
-
-final _darkTheme = TerminalTheme(
-  cursor: const Color(0xCCF4F4F5),
-  selection: const Color(0x55A1A1AA),
-  foreground: BeaclePalette.dark.text,
-  background: BeaclePalette.dark.bg,
-  black: const Color(0xFF18181B),
-  red: const Color(0xFFF87171),
-  green: const Color(0xFF4ADE80),
-  yellow: const Color(0xFFFBBF24),
-  blue: const Color(0xFF60A5FA),
-  magenta: const Color(0xFFC084FC),
-  cyan: const Color(0xFF22D3EE),
-  white: const Color(0xFFE4E4E7),
-  brightBlack: const Color(0xFF71717A),
-  brightRed: const Color(0xFFFCA5A5),
-  brightGreen: const Color(0xFF86EFAC),
-  brightYellow: const Color(0xFFFDE68A),
-  brightBlue: const Color(0xFF93C5FD),
-  brightMagenta: const Color(0xFFD8B4FE),
-  brightCyan: const Color(0xFF67E8F9),
-  brightWhite: const Color(0xFFFFFFFF),
-  searchHitBackground: const Color(0xFFFBBF24),
-  searchHitBackgroundCurrent: const Color(0xFF4ADE80),
-  searchHitForeground: const Color(0xFF000000),
-);
-
-/// ANSI colours dark enough to read on a pale background — the bright
-/// variants of a dark-theme palette would vanish on it.
-const _lightTheme = TerminalTheme(
-  cursor: Color(0xCC24292F),
-  selection: Color(0x4D6E7781),
-  foreground: Color(0xFF24292F),
-  background: Color(0xFFF3F4F6),
-  black: Color(0xFF24292F),
-  red: Color(0xFFCF222E),
-  green: Color(0xFF116329),
-  yellow: Color(0xFF7D4E00),
-  blue: Color(0xFF0969DA),
-  magenta: Color(0xFF8250DF),
-  cyan: Color(0xFF1B7C83),
-  white: Color(0xFF6E7781),
-  brightBlack: Color(0xFF57606A),
-  brightRed: Color(0xFFA40E26),
-  brightGreen: Color(0xFF1A7F37),
-  brightYellow: Color(0xFF633C01),
-  brightBlue: Color(0xFF218BFF),
-  brightMagenta: Color(0xFFA475F9),
-  brightCyan: Color(0xFF3192AA),
-  brightWhite: Color(0xFF8C959F),
-  searchHitBackground: Color(0xFFFFDF5D),
-  searchHitBackgroundCurrent: Color(0xFF4AC26B),
-  searchHitForeground: Color(0xFF24292F),
+/// Green on near-black, like Termius: the same in the light and dark app
+/// themes, as a terminal window is in most SSH clients.
+const _theme = TerminalTheme(
+  cursor: Color(0xFF33E27A),
+  selection: Color(0x5533E27A),
+  foreground: Color(0xFF33E27A),
+  background: Color(0xFF0A0C0B),
+  black: Color(0xFF1B211D),
+  red: Color(0xFFFF5C7A),
+  green: Color(0xFF33E27A),
+  yellow: Color(0xFFE6DB74),
+  blue: Color(0xFF5FB3FF),
+  magenta: Color(0xFFFF5FAF),
+  cyan: Color(0xFF4FE0D0),
+  white: Color(0xFFC8F5D8),
+  brightBlack: Color(0xFF5C6B62),
+  brightRed: Color(0xFFFF8FA3),
+  brightGreen: Color(0xFF7DFFA8),
+  brightYellow: Color(0xFFF4EBA0),
+  brightBlue: Color(0xFF9CCFFF),
+  brightMagenta: Color(0xFFFF9BCD),
+  brightCyan: Color(0xFF8DF0E5),
+  brightWhite: Color(0xFFF0FFF5),
+  searchHitBackground: Color(0xFFE6DB74),
+  searchHitBackgroundCurrent: Color(0xFF33E27A),
+  searchHitForeground: Color(0xFF000000),
 );
 
 /// The SSH tab: shells on your servers, one per tab.
@@ -184,6 +169,10 @@ class TerminalScreen extends StatefulWidget {
   State<TerminalScreen> createState() => TerminalScreenState();
 }
 
+/// What the new-session menu opens: a Beacle server as an account, a saved
+/// SSH host, or the form for a new host.
+typedef _Pick = ({String? vpsId, String? user, SshHost? saved});
+
 class TerminalScreenState extends State<TerminalScreen> {
   final List<TermSession> sessions = [];
   int active = 0;
@@ -192,6 +181,14 @@ class TerminalScreenState extends State<TerminalScreen> {
   /// without the picker, which opens root shells only.
   final Map<String, TerminalUsers> _users = {};
   final Map<String, Future<TerminalUsers>> _usersLoading = {};
+
+  /// Saved SSH hosts, from the backend.
+  List<SshHost> _saved = [];
+
+  /// The host panel beside the screen: open, and the host it edits (null for
+  /// a new one).
+  bool _panelOpen = false;
+  SshHost? _editing;
 
   static const _userKey = 'terminal_user';
 
@@ -203,7 +200,17 @@ class TerminalScreenState extends State<TerminalScreen> {
       for (final v in _hosts(context.read<AppState>())) {
         if (v.online) _loadUsers(v.id);
       }
+      _loadSaved();
     });
+  }
+
+  Future<void> _loadSaved() async {
+    try {
+      final list = await context.read<AppState>().api.sshHosts();
+      if (mounted) setState(() => _saved = list);
+    } catch (_) {
+      // A backend from before saved hosts: the grid shows Beacle servers only.
+    }
   }
 
   Future<TerminalUsers> _loadUsers(String vpsId) {
@@ -256,9 +263,20 @@ class TerminalScreenState extends State<TerminalScreen> {
       if (!mounted) return;
       user = _userFor(vpsId);
     }
-    final s = TermSession(vpsId: vps.id, vpsName: vps.name, user: user, onChange: () {
-      if (mounted) setState(() {});
-    });
+    _start(TermSession(vpsId: vps.id, name: vps.name, user: user, onChange: _changed));
+  }
+
+  /// Opens a new shell on a saved SSH host.
+  void openSaved(SshHost h) {
+    context.read<AppState>().bumpActivity();
+    _start(TermSession(sshHostId: h.id, name: h.label, user: h.user, onChange: _changed));
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  void _start(TermSession s) {
     setState(() {
       sessions.add(s);
       active = sessions.length - 1;
@@ -272,6 +290,56 @@ class TerminalScreenState extends State<TerminalScreen> {
     setState(() {
       sessions.removeAt(i);
       if (active >= sessions.length) active = sessions.isEmpty ? 0 : sessions.length - 1;
+    });
+  }
+
+  void _editHost(SshHost? h) => setState(() {
+        _panelOpen = true;
+        _editing = h;
+      });
+
+  void _closePanel() => setState(() {
+        _panelOpen = false;
+        _editing = null;
+      });
+
+  void _hostSaved(SshHost h) {
+    setState(() {
+      final i = _saved.indexWhere((x) => x.id == h.id);
+      if (i < 0) {
+        _saved = [..._saved, h];
+      } else {
+        _saved = [..._saved]..[i] = h;
+      }
+      _panelOpen = false;
+      _editing = null;
+    });
+  }
+
+  Future<void> _deleteHost(SshHost h) async {
+    final l = L.read(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BeacleColors.surface,
+        content: Text(l.f('sshHostDeleteAsk', {'name': h.label})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l.t('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l.t('delete'), style: TextStyle(color: BeacleColors.err)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await context.read<AppState>().api.deleteSshHost(h.id);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _saved = _saved.where((x) => x.id != h.id).toList();
+      if (_editing?.id == h.id) _closePanel();
     });
   }
 
@@ -289,8 +357,30 @@ class TerminalScreenState extends State<TerminalScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final hosts = _hosts(state);
-    if (sessions.isEmpty) return _picker(state, hosts);
+    final body = sessions.isEmpty ? _picker(state, hosts) : _shells(hosts);
+    // The host form slides in beside whatever is showing, not over it.
+    return Row(
+      children: [
+        Expanded(child: body),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          transitionBuilder: (child, anim) =>
+              SizeTransition(sizeFactor: anim, axis: Axis.horizontal, alignment: Alignment.centerLeft, child: child),
+          child: _panelOpen
+              ? SshHostPanel(
+                  key: ValueKey(_editing?.id ?? 'new'),
+                  host: _editing,
+                  onSaved: _hostSaved,
+                  onDelete: _editing == null ? null : () => _deleteHost(_editing!),
+                  onClose: _closePanel,
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
 
+  Widget _shells(List<Vps> hosts) {
     return Column(
       children: [
         Container(
@@ -305,17 +395,25 @@ class TerminalScreenState extends State<TerminalScreen> {
                   child: Row(children: [for (var i = 0; i < sessions.length; i++) _tab(i)]),
                 ),
               ),
-              PopupMenuButton<(String, String?)>(
+              PopupMenuButton<_Pick>(
                 tooltip: context.l.t('sshNewSession'),
                 icon: const Icon(Icons.add, size: 18),
                 color: BeacleColors.surfaceHi,
-                onSelected: (p) => open(p.$1, user: p.$2),
+                onSelected: (p) {
+                  if (p.vpsId != null) {
+                    open(p.vpsId!, user: p.user);
+                  } else if (p.saved != null) {
+                    openSaved(p.saved!);
+                  } else {
+                    _editHost(null);
+                  }
+                },
                 itemBuilder: (_) => [
                   for (final v in hosts)
                     // One entry per account where the server offers a choice.
                     for (final u in _accounts(v.id))
                       PopupMenuItem(
-                        value: (v.id, u),
+                        value: (vpsId: v.id, user: u, saved: null),
                         enabled: v.online,
                         child: Row(children: [
                           StatusDot(v.status, size: 7),
@@ -323,6 +421,24 @@ class TerminalScreenState extends State<TerminalScreen> {
                           Text(u == null ? v.name : '$u@${v.name}'),
                         ]),
                       ),
+                  for (final h in _saved)
+                    PopupMenuItem(
+                      value: (vpsId: null, user: null, saved: h),
+                      child: Row(children: [
+                        Icon(Icons.vpn_key_outlined, size: 13, color: BeacleColors.textDim),
+                        const SizedBox(width: 8),
+                        Text('${h.user}@${h.label}'),
+                      ]),
+                    ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: (vpsId: null, user: null, saved: null),
+                    child: Row(children: [
+                      Icon(Icons.add, size: 15, color: BeacleColors.textDim),
+                      const SizedBox(width: 8),
+                      Text(context.l.t('sshNewHost')),
+                    ]),
+                  ),
                 ],
               ),
             ],
@@ -343,6 +459,11 @@ class TerminalScreenState extends State<TerminalScreen> {
                         textStyle: const TerminalStyle(fontSize: 13),
                         padding: const EdgeInsets.all(8),
                         autofocus: true,
+                        // xterm 4.0 attaches its text input without a view
+                        // id, which Flutter on Windows rejects ("view ID is
+                        // null") and no key ever arrives. Key events carry the
+                        // typed character, AltGr letters included.
+                        hardwareKeyboardOnly: true,
                         shortcuts: _shortcuts,
                       ),
                     ),
@@ -415,19 +536,18 @@ class TerminalScreenState extends State<TerminalScreen> {
     return u.length > 1 ? u : const [null];
   }
 
-  /// Which account the row opens as, switchable where there is a choice.
-  Widget _userChip(Vps v) {
+  /// Switches the account a server's tile opens as, where there is a choice.
+  Widget? _userMenu(Vps v) {
     final users = _users[v.id]?.users ?? const <String>[];
+    if (users.length < 2 || !v.online) return null;
     final current = _userFor(v.id);
-    final label = Text(current.isEmpty ? 'root' : current,
-        style: TextStyle(fontSize: 12, fontFamily: 'Consolas', color: BeacleColors.text));
-    if (users.length < 2 || !v.online) {
-      return Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: label);
-    }
     return PopupMenuButton<String>(
       tooltip: context.l.t('sshAs'),
       color: BeacleColors.surfaceHi,
       onSelected: (u) => _pickUser(v.id, u),
+      icon: Icon(Icons.person_outline, size: 16, color: BeacleColors.textDim),
+      padding: EdgeInsets.zero,
+      iconSize: 16,
       itemBuilder: (_) => [
         for (final u in users)
           PopupMenuItem(
@@ -443,23 +563,11 @@ class TerminalScreenState extends State<TerminalScreen> {
             ]),
           ),
       ],
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: BeacleColors.border),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.person_outline, size: 13, color: BeacleColors.textDim),
-          const SizedBox(width: 4),
-          label,
-          Icon(Icons.arrow_drop_down, size: 16, color: BeacleColors.textDim),
-        ]),
-      ),
     );
   }
 
-  /// No shell open yet: pick a server.
+  /// No shell open yet: the title above, and below it every server and saved
+  /// host as a tile, with a "+" tile to add one.
   Widget _picker(AppState state, List<Vps> hosts) {
     // A server that came online after the screen opened.
     final missing = hosts.where((v) => v.online && !_users.containsKey(v.id)).map((v) => v.id).toList();
@@ -468,47 +576,236 @@ class TerminalScreenState extends State<TerminalScreen> {
         if (mounted) missing.forEach(_loadUsers);
       });
     }
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.terminal, size: 28, color: BeacleColors.textDim),
-            const SizedBox(height: 12),
-            Text(context.l.t('sshPickTitle'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text(context.l.t('sshPickBody'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
-            const SizedBox(height: 16),
-            if (hosts.isEmpty)
-              Text(context.l.t('fsNoServers'), style: TextStyle(color: BeacleColors.textDim))
-            else
-              for (final v in hosts)
-                HoverRow(
-                  onTap: v.online ? () => open(v.id) : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                    child: Row(children: [
-                      StatusDot(v.status),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(v.name, style: const TextStyle(fontSize: 13))),
-                      Text(v.host, style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-                      const SizedBox(width: 8),
-                      _userChip(v),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        tooltip: context.l.t('tlButton'),
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.key_outlined, size: 15),
-                        onPressed: v.online ? () => showTempLoginDialog(context, v) : null,
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(Icons.arrow_forward, size: 14, color: v.online ? BeacleColors.text : BeacleColors.border),
-                    ]),
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _theme.background,
+                    borderRadius: BorderRadius.circular(BeacleRadius.control),
+                  ),
+                  child: Icon(Icons.terminal, size: 20, color: _theme.foreground),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(context.l.t('sshPickTitle'),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text(context.l.t('sshPickBody'),
+                        style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
+                  ]),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  alignment: Alignment.topLeft,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: BeacleColors.card,
+                    borderRadius: BorderRadius.circular(BeacleRadius.card),
+                    border: Border.all(color: BeacleColors.cardBorder),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final v in hosts)
+                          _HostTile(
+                            icon: Icons.dns_outlined,
+                            title: v.name,
+                            subtitle: '${_userFor(v.id).isEmpty ? 'root' : _userFor(v.id)}@${v.host}',
+                            status: v.status,
+                            onTap: v.online ? () => open(v.id) : null,
+                            actions: [
+                              if (_userMenu(v) case final menu?) menu,
+                              IconButton(
+                                tooltip: context.l.t('tlButton'),
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.key_outlined, size: 15),
+                                onPressed: v.online ? () => showTempLoginDialog(context, v) : null,
+                              ),
+                            ],
+                          ),
+                        for (final h in _saved)
+                          _HostTile(
+                            icon: Icons.vpn_key_outlined,
+                            title: h.label,
+                            subtitle: h.address,
+                            onTap: () => openSaved(h),
+                            actions: [
+                              PopupMenuButton<bool>(
+                                tooltip: '',
+                                color: BeacleColors.surfaceHi,
+                                icon: Icon(Icons.more_vert, size: 16, color: BeacleColors.textDim),
+                                padding: EdgeInsets.zero,
+                                onSelected: (edit) => edit ? _editHost(h) : _deleteHost(h),
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(value: true, child: Text(context.l.t('edit'))),
+                                  PopupMenuItem(
+                                    value: false,
+                                    child: Text(context.l.t('delete'), style: TextStyle(color: BeacleColors.err)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        _AddTile(onTap: () => _editHost(null)),
+                      ],
+                    ),
                   ),
                 ),
-          ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const _tileWidth = 280.0;
+const _tileHeight = 68.0;
+
+/// One server or saved host in the picker grid.
+class _HostTile extends StatefulWidget {
+  final IconData icon;
+  final String title, subtitle;
+
+  /// A Beacle server's status, for the dot on its icon; null for a saved host.
+  final String? status;
+  final VoidCallback? onTap;
+  final List<Widget> actions;
+  const _HostTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.status,
+    this.onTap,
+    this.actions = const [],
+  });
+
+  @override
+  State<_HostTile> createState() => _HostTileState();
+}
+
+class _HostTileState extends State<_HostTile> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: _tileWidth,
+          height: _tileHeight,
+          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+          decoration: BoxDecoration(
+            color: _hover && enabled ? BeacleColors.hover : BeacleColors.surfaceHi,
+            borderRadius: BorderRadius.circular(BeacleRadius.control),
+            border: Border.all(color: _hover && enabled ? _theme.foreground.withValues(alpha: 0.6) : BeacleColors.border),
+          ),
+          child: Opacity(
+            opacity: enabled ? 1 : 0.5,
+            child: Row(children: [
+              Stack(clipBehavior: Clip.none, children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _theme.background,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(widget.icon, size: 18, color: _theme.foreground),
+                ),
+                if (widget.status != null)
+                  Positioned(right: -2, bottom: -2, child: StatusDot(widget.status!, size: 9)),
+              ]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text(widget.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, fontFamily: 'Consolas', color: BeacleColors.textDim)),
+                  ],
+                ),
+              ),
+              ...widget.actions,
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "+" tile: add a host the SSH client reaches directly.
+class _AddTile extends StatefulWidget {
+  final VoidCallback onTap;
+  const _AddTile({required this.onTap});
+
+  @override
+  State<_AddTile> createState() => _AddTileState();
+}
+
+class _AddTileState extends State<_AddTile> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _hover ? _theme.foreground : BeacleColors.textDim;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: _tileWidth,
+          height: _tileHeight,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(BeacleRadius.control),
+            border: Border.all(color: _hover ? _theme.foreground.withValues(alpha: 0.6) : BeacleColors.borderGlow),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.add, size: 18, color: color),
+            const SizedBox(width: 8),
+            Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.l.t('sshNewHost'),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _hover ? BeacleColors.text : color)),
+              Text(context.l.t('sshNewHostSub'), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+            ]),
+          ]),
         ),
       ),
     );

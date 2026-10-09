@@ -383,6 +383,18 @@ class ApiClient {
   Future<TerminalUsers> terminalUsers(String vpsId) async =>
       TerminalUsers.fromJson(await get(_a(vpsId, 'terminal/users')) as Map<String, dynamic>);
 
+  Future<List<SshHost>> sshHosts() async => ((await get('/api/ssh/hosts')) as List? ?? [])
+      .map((e) => SshHost.fromJson(e as Map<String, dynamic>))
+      .toList();
+
+  /// Saves a new host ([id] null) or edits one. On an edit an empty secret
+  /// keeps the saved one.
+  Future<SshHost> saveSshHost(String? id, Map<String, Object?> body) async => SshHost.fromJson(
+      (id == null ? await post('/api/ssh/hosts', body: body) : await put('/api/ssh/hosts/$id', body: body))
+          as Map<String, dynamic>);
+
+  Future<void> deleteSshHost(String id) async => delete('/api/ssh/hosts/$id');
+
   Future<List<TempLogin>> tempLogins(String vpsId) async =>
       ((await get(_a(vpsId, 'ssh/temp-logins'))) as List? ?? [])
           .map((e) => TempLogin.fromJson(e as Map<String, dynamic>))

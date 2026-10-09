@@ -161,3 +161,25 @@ func TestShellRefusesUnknownAccount(t *testing.T) {
 		}
 	}
 }
+
+
+// The login message comes before the prompt, with line ends a terminal
+// understands, and ~/.hushlogin silences it.
+func TestLoginMessageIsTheMotdUnlessHushed(t *testing.T) {
+	dir := t.TempDir()
+	dyn, static := dir+"/motd.dynamic", dir+"/motd"
+	_ = os.WriteFile(dyn, []byte("Welcome to Ubuntu\n\n * Docs\n"), 0o644)
+	_ = os.WriteFile(static, []byte("be nice\r\n"), 0o644)
+	old := motdFiles
+	motdFiles = []string{dyn, dir + "/missing", static}
+	defer func() { motdFiles = old }()
+
+	home := t.TempDir()
+	if got, want := string(loginMessage(home)), "Welcome to Ubuntu\r\n\r\n * Docs\r\nbe nice\r\n"; got != want {
+		t.Fatalf("loginMessage = %q, want %q", got, want)
+	}
+	_ = os.WriteFile(home+"/.hushlogin", nil, 0o644)
+	if got := loginMessage(home); got != nil {
+		t.Fatalf("hushed loginMessage = %q, want nothing", got)
+	}
+}

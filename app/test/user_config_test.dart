@@ -18,4 +18,12 @@ void main() {
     expect(cfg.sshDisplayMode, SshDisplayMode.fullscreen);
     expect(cfg.filesDisplayMode, SshDisplayMode.separateWindow);
   });
+
+  test('SSH and Files open full screen until the user picks otherwise', () {
+    expect(UserConfig().sshDisplayMode, SshDisplayMode.fullscreen);
+    expect(UserConfig().filesDisplayMode, SshDisplayMode.fullscreen);
+    final cfg = UserConfig.fromJson({'onboarding_complete': true});
+    expect(cfg.sshDisplayMode, SshDisplayMode.fullscreen);
+    expect(cfg.filesDisplayMode, SshDisplayMode.fullscreen);
+  });
 }

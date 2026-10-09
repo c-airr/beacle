@@ -88,8 +88,8 @@ class AppState extends ChangeNotifier {
 
   /// How the SSH and Files tools open; picked during setup, changeable in
   /// Settings. Stored in config.json next to the setup flag.
-  SshDisplayMode sshMode = SshDisplayMode.separateWindow;
-  SshDisplayMode filesMode = SshDisplayMode.separateWindow;
+  SshDisplayMode sshMode = SshDisplayMode.fullscreen;
+  SshDisplayMode filesMode = SshDisplayMode.fullscreen;
 
   void setDisplayModes({SshDisplayMode? ssh, SshDisplayMode? files}) {
     final cfg = UserConfigStore.load();
