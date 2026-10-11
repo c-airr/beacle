@@ -1,6 +1,9 @@
 # Changelog
 
-## 2.1.5 (unreleased)
+## 2.1.5 — 2026-10-11
+
+An SSH tab you can actually type in, laid out like Termius, with saved
+hosts that need no agent and the server's login message on connect.
 
 ### Added
 
