@@ -16,6 +16,7 @@ import '../theme.dart';
 import '../user_config.dart';
 import '../widgets/common.dart';
 import '../widgets/ssh_host_panel.dart';
+import '../widgets/ssh_snippets.dart';
 import '../widgets/temp_login_dialog.dart';
 
 /// One shell on one server. The bytes travel app ⇄ backend ⇄ agent over
@@ -34,6 +35,7 @@ class TermSession {
   final String user;
   final terminal = Terminal(maxLines: 10000);
   final controller = TerminalController();
+  final focus = FocusNode();
   final VoidCallback onChange;
 
   IOWebSocketChannel? _ws;
@@ -43,6 +45,11 @@ class TermSession {
   StreamController<List<int>>? _bytes;
   bool connected = false;
   bool ended = false;
+
+  // A command waiting for the shell to come up; see runWhenReady.
+  String? _queued;
+  Timer? _queuedTimer;
+  bool _seenOutput = false;
 
   TermSession({this.vpsId = '', this.sshHostId, required this.name, this.user = '', required this.onChange}) {
     terminal.onOutput = (data) => _send({'op': 'data', 'data': base64Encode(utf8.encode(data))});
@@ -54,9 +61,48 @@ class TermSession {
     _ws?.sink.add(jsonEncode(frame));
   }
 
+  /// Puts [text] at the prompt as if pasted, without pressing Enter.
+  void paste(String text) => terminal.paste(text);
+
+  /// Pastes [command] and presses Enter. Pasted rather than typed so a
+  /// multi-line snippet arrives whole: with bracketed paste the shell runs it
+  /// as one block instead of line by line as it goes.
+  void run(String command) {
+    terminal.paste(command);
+    terminal.textInput('\r');
+  }
+
+  /// Runs [command] once the shell is ready for it: after its first output
+  /// (the login message and the prompt) has gone quiet for half a second.
+  /// Sent any earlier, it would land in the middle of the login, or before
+  /// the backend has reached the server at all.
+  void runWhenReady(String command) {
+    _queued = command;
+    if (_seenOutput) _armQueued();
+  }
+
+  void _shellOutput() {
+    _seenOutput = true;
+    _armQueued();
+  }
+
+  @visibleForTesting
+  void debugShellOutput() => _shellOutput();
+
+  void _armQueued() {
+    if (_queued == null) return;
+    _queuedTimer?.cancel();
+    _queuedTimer = Timer(const Duration(milliseconds: 500), () {
+      final c = _queued;
+      _queued = null;
+      if (c != null && !ended) run(c);
+    });
+  }
+
   void connect() {
     _close();
     ended = false;
+    _seenOutput = false;
     final bytes = StreamController<List<int>>();
     _bytes = bytes;
     bytes.stream.transform(const Utf8Decoder(allowMalformed: true)).listen(terminal.write);
@@ -81,6 +127,7 @@ class TermSession {
         switch (f['op']) {
           case 'data':
             bytes.add(base64Decode(f['data'] as String? ?? ''));
+            _shellOutput();
           case 'exit':
             _end('\r\n\x1b[2m[exit ${f['code'] ?? 0}]\x1b[0m\r\n');
           case 'error':
@@ -96,6 +143,7 @@ class TermSession {
     if (ended) return;
     ended = true;
     connected = false;
+    _queuedTimer?.cancel();
     if (note.isNotEmpty) _bytes?.add(utf8.encode(note));
     onChange();
   }
@@ -113,7 +161,9 @@ class TermSession {
   void dispose() {
     _send({'op': 'close'});
     ended = true;
+    _queuedTimer?.cancel();
     _close();
+    focus.dispose();
   }
 
   String get label => user.isEmpty ? name : '$user@$name';
@@ -163,7 +213,9 @@ const _theme = TerminalTheme(
 
 /// The SSH tab: shells on your servers, one per tab.
 class TerminalScreen extends StatefulWidget {
-  const TerminalScreen({super.key});
+  /// Where snippets are kept; settings.json unless a test hands in another.
+  final SnippetStore? snippets;
+  const TerminalScreen({super.key, this.snippets});
 
   @override
   State<TerminalScreen> createState() => TerminalScreenState();
@@ -189,6 +241,9 @@ class TerminalScreenState extends State<TerminalScreen> {
   /// a new one).
   bool _panelOpen = false;
   SshHost? _editing;
+
+  late final SnippetStore _snippetStore = widget.snippets ?? SnippetStore();
+  late bool _snippetsOpen = _snippetStore.panelOpen();
 
   static const _userKey = 'terminal_user';
 
@@ -253,35 +308,77 @@ class TerminalScreenState extends State<TerminalScreen> {
 
   /// Opens a new shell on [vpsId] and shows it, as [user] or as the account
   /// [_userFor] picks.
-  Future<void> open(String vpsId, {String? user}) async {
+  Future<TermSession?> open(String vpsId, {String? user}) async {
     final state = context.read<AppState>();
     state.bumpActivity();
     final vps = state.vpsList.where((v) => v.id == vpsId).firstOrNull;
-    if (vps == null) return;
+    if (vps == null) return null;
     if (user == null) {
       await _loadUsers(vpsId);
-      if (!mounted) return;
+      if (!mounted) return null;
       user = _userFor(vpsId);
     }
-    _start(TermSession(vpsId: vps.id, name: vps.name, user: user, onChange: _changed));
+    return _start(TermSession(vpsId: vps.id, name: vps.name, user: user, onChange: _changed));
   }
 
   /// Opens a new shell on a saved SSH host.
-  void openSaved(SshHost h) {
+  TermSession openSaved(SshHost h) {
     context.read<AppState>().bumpActivity();
-    _start(TermSession(sshHostId: h.id, name: h.label, user: h.user, onChange: _changed));
+    return _start(TermSession(sshHostId: h.id, name: h.label, user: h.user, onChange: _changed));
+  }
+
+  /// Every place "Run on…" can send a command: the online servers, as the
+  /// account their tile opens as, and the saved hosts.
+  List<RunTarget> _runTargets(List<Vps> hosts) => [
+        for (final v in hosts)
+          if (v.online)
+            RunTarget(
+              label: '${_userFor(v.id).isEmpty ? 'root' : _userFor(v.id)}@${v.name}',
+              vpsId: v.id,
+              user: _userFor(v.id),
+            ),
+        for (final h in _saved) RunTarget(label: '${h.user}@${h.label}', sshHostId: h.id),
+      ];
+
+  /// Opens a tab on each target and runs [command] there once it is up.
+  Future<void> runOn(String command, List<RunTarget> on) async {
+    for (final t in on) {
+      TermSession? s;
+      if (t.vpsId != null) {
+        s = await open(t.vpsId!, user: t.user);
+      } else if (_saved.where((h) => h.id == t.sshHostId).firstOrNull case final h?) {
+        s = openSaved(h);
+      }
+      if (!mounted) return;
+      s?.runWhenReady(command);
+    }
+  }
+
+  void _toActive(void Function(TermSession s) f) {
+    if (sessions.isEmpty) return;
+    final s = sessions[active];
+    f(s);
+    // The click went to the panel; give the keyboard back to the shell so
+    // Enter, or the rest of the command, goes where it is expected.
+    s.focus.requestFocus();
+  }
+
+  void _toggleSnippets() {
+    setState(() => _snippetsOpen = !_snippetsOpen);
+    _snippetStore.setPanelOpen(_snippetsOpen);
   }
 
   void _changed() {
     if (mounted) setState(() {});
   }
 
-  void _start(TermSession s) {
+  TermSession _start(TermSession s) {
     setState(() {
       sessions.add(s);
       active = sessions.length - 1;
     });
     s.connect();
+    return s;
   }
 
   void _closeTab(int i) {
@@ -362,6 +459,15 @@ class TerminalScreenState extends State<TerminalScreen> {
     return Row(
       children: [
         Expanded(child: body),
+        if (_snippetsOpen)
+          SnippetsPanel(
+            store: _snippetStore,
+            onPaste: sessions.isEmpty ? null : (c) => _toActive((s) => s.paste(c)),
+            onRun: sessions.isEmpty ? null : (c) => _toActive((s) => s.run(c)),
+            targets: _runTargets(hosts),
+            onRunOn: runOn,
+            onClose: _toggleSnippets,
+          ),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
           transitionBuilder: (child, anim) =>
@@ -395,6 +501,7 @@ class TerminalScreenState extends State<TerminalScreen> {
                   child: Row(children: [for (var i = 0; i < sessions.length; i++) _tab(i)]),
                 ),
               ),
+              if (!_snippetsOpen) _snippetsButton(),
               PopupMenuButton<_Pick>(
                 tooltip: context.l.t('sshNewSession'),
                 icon: const Icon(Icons.add, size: 18),
@@ -455,6 +562,7 @@ class TerminalScreenState extends State<TerminalScreen> {
                       child: TerminalView(
                         s.terminal,
                         controller: s.controller,
+                        focusNode: s.focus,
                         theme: _theme,
                         textStyle: const TerminalStyle(fontSize: 13),
                         padding: const EdgeInsets.all(8),
@@ -486,6 +594,12 @@ class TerminalScreenState extends State<TerminalScreen> {
       ],
     );
   }
+
+  Widget _snippetsButton() => IconButton(
+        tooltip: context.l.t('snipTitle'),
+        icon: Icon(Icons.bolt_outlined, size: 18, color: BeacleColors.textDim),
+        onPressed: _toggleSnippets,
+      );
 
   Widget _tab(int i) {
     final s = sessions[i];
@@ -605,6 +719,7 @@ class TerminalScreenState extends State<TerminalScreen> {
                         style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.4)),
                   ]),
                 ),
+                if (!_snippetsOpen) _snippetsButton(),
               ]),
               const SizedBox(height: 16),
               Expanded(

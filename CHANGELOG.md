@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Snippets in the SSH tab** — a panel beside the shells keeps commands
+  you type often. Clicking one pastes it into the current tab without
+  pressing Enter; ▶ runs it. **Run on…** sends one command, a snippet or
+  typed in, to several servers and saved hosts at once: each opens in a
+  tab of its own and the command runs there once the shell has finished
+  its login message. Multi-line snippets arrive as one pasted block.
+  Snippets are kept on this computer (settings.json); the panel can be
+  closed and brought back with the bolt button.
 - **Expiring certificates** — the agent reads the certificate the proxy
   (Caddy or Nginx Proxy Manager) serves for each domain, over a local TLS
   handshake, and checks it again every six hours. An alert goes out when
