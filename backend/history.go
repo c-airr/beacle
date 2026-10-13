@@ -31,6 +31,8 @@ type History struct {
 	// than one Docker snapshot.
 	samples map[string][]shared.MetricSample
 	lastAt  map[string]time.Time
+	// forecasts caches DiskForecast per server; see disk_forecast.go.
+	forecasts map[string]diskForecast
 }
 
 const (
@@ -48,6 +50,8 @@ func NewHistory(dataDir string) *History {
 		dir:     filepath.Join(dataDir, "history"),
 		samples: map[string][]shared.MetricSample{},
 		lastAt:  map[string]time.Time{},
+
+		forecasts: map[string]diskForecast{},
 	}
 	_ = os.MkdirAll(h.dir, 0o755)
 	h.load()
@@ -256,6 +260,7 @@ func (h *History) Forget(vpsID string) {
 	defer h.mu.Unlock()
 	delete(h.samples, vpsID)
 	delete(h.lastAt, vpsID)
+	delete(h.forecasts, vpsID)
 	_ = os.Remove(h.pathFor(vpsID))
 }
 

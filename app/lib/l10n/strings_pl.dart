@@ -593,6 +593,8 @@ const _pl = <String, String>{
   'srvDeleteVps': 'Usuń VPS',
   'srvDisks': 'DYSKI',
   'srvNoDisk': 'Brak danych o dyskach',
+  'srvDiskFullDays': 'pełny za ~{n} dni przy obecnym tempie',
+  'srvDiskFullHours': 'pełny za ~{n} h przy obecnym tempie',
   'srvNetwork': 'SIEĆ',
   'srvNoNet': 'Brak danych o sieci',
   'srvSysInfo': 'INFORMACJE O SYSTEMIE',

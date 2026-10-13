@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.0 (unreleased)
+
+### Added
+
+- **When a disk will be full** — a disk that keeps filling shows "full in
+  ~4 days at the current rate" under its bar on the server's page (hours
+  when it is under two days). The rate is a straight line through the
+  last three days of history, started over after a cleanup; it appears
+  after half a day of data and only when the disk would run out within a
+  month.
+
 ## 2.1.5 — 2026-10-11
 
 An SSH tab you can actually type in, laid out like Termius, with saved

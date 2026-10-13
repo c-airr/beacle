@@ -359,6 +359,7 @@ class _ServerStats extends StatelessWidget {
                               label: '${d.mount} (${d.filesystem})',
                               percent: d.usedPercent,
                               detail: '${fmtBytes(d.usedBytes)} / ${fmtBytes(d.totalBytes)}',
+                              note: _fullIn(context, d.fullAt),
                             ),
                           ),
                     ],
@@ -585,4 +586,14 @@ class _RamPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "full in ~4 days" for a disk with a forecast. Hours under two days, where
+/// "~1 day" would hide whether it is tonight or tomorrow evening.
+String? _fullIn(BuildContext context, DateTime? fullAt) {
+  if (fullAt == null) return null;
+  final left = fullAt.difference(DateTime.now());
+  if (left.isNegative) return null;
+  if (left.inHours < 48) return context.l.f('srvDiskFullHours', {'n': left.inHours < 1 ? 1 : left.inHours});
+  return context.l.f('srvDiskFullDays', {'n': (left.inHours / 24).round()});
 }

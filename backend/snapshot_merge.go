@@ -45,6 +45,7 @@ func mergeSnapshot(store *Store, hub *Hub, alerts *AlertEngine, history *History
 
 	copy.VPS = updated.VPS
 	copy.Updated = time.Now().UTC()
+	annotateDiskForecast(history, updated.VPS.ID, &copy.Metrics)
 	store.SetSnapshot(&copy)
 
 	alerts.EvaluateSnapshot(updated.VPS, &copy)

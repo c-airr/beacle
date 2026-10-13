@@ -21,6 +21,10 @@ type DiskUsage struct {
 	TotalBytes  uint64  `json:"total_bytes"`
 	UsedBytes   uint64  `json:"used_bytes"`
 	UsedPercent float64 `json:"used_percent"`
+	// FullAt is when the disk runs out at its recent rate of growth. Set by the
+	// backend from recorded history, never by the agent; absent when the disk
+	// is not filling or would take more than a month.
+	FullAt *time.Time `json:"full_at,omitempty"`
 }
 
 type NetworkStats struct {
@@ -42,6 +46,10 @@ type MetricSample struct {
 	RxPerS uint64    `json:"rx"`
 	TxPerS uint64    `json:"tx"`
 	Load1  float64   `json:"load1"`
+	// Mounts is the used percent of every disk, keyed by mount point. Disk
+	// above is only the fullest one, which can switch between mounts and so
+	// cannot tell how fast any one of them is filling.
+	Mounts map[string]float64 `json:"mounts,omitempty"`
 }
 
 // SpikeRecord is what a machine was running when a metric jumped.

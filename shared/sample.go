@@ -1,6 +1,9 @@
 package shared
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // SampleFrom turns a live snapshot into the handful of numbers worth keeping.
 //
@@ -13,10 +16,17 @@ func SampleFrom(m SystemMetrics) MetricSample {
 	// The busiest disk is the one worth charting: a full root partition is a
 	// problem whatever the others are doing.
 	worstDisk := 0.0
+	var mounts map[string]float64
 	for _, d := range m.Disks {
 		if d.UsedPercent > worstDisk {
 			worstDisk = d.UsedPercent
 		}
+		if mounts == nil {
+			mounts = make(map[string]float64, len(m.Disks))
+		}
+		// A tenth of a percent is finer than any trend worth reporting and
+		// keeps the line in the history file short.
+		mounts[d.Mount] = math.Round(d.UsedPercent*10) / 10
 	}
 
 	// Interfaces are summed rather than picked from, because which one carries
@@ -40,5 +50,6 @@ func SampleFrom(m SystemMetrics) MetricSample {
 		RxPerS: rx,
 		TxPerS: tx,
 		Load1:  m.Load1,
+		Mounts: mounts,
 	}
 }

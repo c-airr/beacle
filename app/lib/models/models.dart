@@ -15,12 +15,16 @@ class DiskUsage {
   final String mount, filesystem;
   final int totalBytes, usedBytes;
   final double usedPercent;
+  /// When the disk runs out at its recent rate of growth; null when it is not
+  /// filling. Computed by the backend from history.
+  final DateTime? fullAt;
   DiskUsage.fromJson(Map<String, dynamic> j)
       : mount = _s(j['mount']),
         filesystem = _s(j['filesystem']),
         totalBytes = _i(j['total_bytes']),
         usedBytes = _i(j['used_bytes']),
-        usedPercent = _d(j['used_percent']);
+        usedPercent = _d(j['used_percent']),
+        fullAt = j['full_at'] == null ? null : DateTime.tryParse(j['full_at'] as String);
 }
 
 class NetworkStats {

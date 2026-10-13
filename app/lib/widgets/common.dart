@@ -121,7 +121,9 @@ class MetricBar extends StatelessWidget {
   final String label;
   final double percent; // 0..100
   final String? detail;
-  const MetricBar({super.key, required this.label, required this.percent, this.detail});
+  /// A line under the bar, in the warning colour.
+  final String? note;
+  const MetricBar({super.key, required this.label, required this.percent, this.detail, this.note});
 
   Color get _color {
     if (percent >= 90) return BeacleColors.err;
@@ -151,6 +153,10 @@ class MetricBar extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation(_color),
           ),
         ),
+        if (note != null) ...[
+          const SizedBox(height: 3),
+          Text(note!, style: TextStyle(fontSize: 11, color: BeacleColors.warn)),
+        ],
       ],
     );
   }

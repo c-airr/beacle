@@ -593,6 +593,8 @@ const _zh = <String, String>{
   'srvDeleteVps': '删除 VPS',
   'srvDisks': '磁盘',
   'srvNoDisk': '没有磁盘数据',
+  'srvDiskFullDays': '按当前速度约 {n} 天后写满',
+  'srvDiskFullHours': '按当前速度约 {n} 小时后写满',
   'srvNetwork': '网络',
   'srvNoNet': '没有网络数据',
   'srvSysInfo': '系统信息',
