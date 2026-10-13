@@ -25,6 +25,9 @@ type AlertEngine struct {
 	// previous per-VPS state used for transition detection
 	prevContainers map[string]map[string]shared.ContainerInfo // vps -> containerID -> info
 	prevServices   map[string]map[string]string               // vps -> unit -> active_state
+	// certHosts remembers which domains had a certificate on the last
+	// snapshot, so an alert for a site that was since removed gets resolved.
+	certHosts map[string]map[string]bool // vps -> domain
 	// reach caches the host probe per VPS; see hostReachable.
 	reach map[string]reachProbe
 
@@ -52,6 +55,7 @@ func NewAlertEngine(store *Store, hub *Hub) *AlertEngine {
 		active:         map[string]bool{},
 		since:          map[string]time.Time{},
 		prevContainers: map[string]map[string]shared.ContainerInfo{},
+		certHosts:      map[string]map[string]bool{},
 		prevServices:   map[string]map[string]string{},
 		reach:          map[string]reachProbe{},
 		quietUntil:     time.Now().Add(agentReconnectGrace),
@@ -177,6 +181,8 @@ func alertTitle(t shared.AlertType) string {
 		return "container crashed"
 	case shared.AlertProxyError:
 		return "proxy error"
+	case shared.AlertCertExpiring:
+		return "certificate expiring"
 	case shared.AlertAgentOffline:
 		return "VPS offline"
 	case shared.AlertAgentDown:
@@ -307,6 +313,62 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 			e.clear(vps.ID, shared.AlertProxyError, "err")
 		}
 	}
+
+	e.evaluateCerts(vps, snap.Proxy.Sites, time.Now())
+}
+
+const (
+	// Caddy and certbot renew a Let's Encrypt certificate with 30 days left,
+	// so one at 14 has failed to renew for two weeks.
+	certWarnDays = 14
+	certCritDays = 3
+)
+
+// Each level is its own key, so going from "expires in 10 days" to "expires
+// in 2 days" to "expired" raises a new alert, at the higher severity, instead
+// of being swallowed as a repeat of the first one.
+var certLevels = []string{"warn", "crit", "expired"}
+
+func (e *AlertEngine) evaluateCerts(vps shared.VPS, sites []shared.ProxySite, now time.Time) {
+	seen := map[string]bool{}
+	for _, s := range sites {
+		if s.CertNotAfter == nil || s.Domain == "" {
+			continue
+		}
+		seen[s.Domain] = true
+		end := *s.CertNotAfter
+		left := end.Sub(now)
+		date := end.UTC().Format("2006-01-02")
+
+		level, sev, msg := "", shared.SeverityWarning, ""
+		switch {
+		case left <= 0:
+			level, sev = "expired", shared.SeverityCritical
+			msg = fmt.Sprintf("Certificate for %s expired on %s", s.Domain, date)
+		case left <= certCritDays*24*time.Hour:
+			level, sev = "crit", shared.SeverityCritical
+			msg = fmt.Sprintf("Certificate for %s expires on %s", s.Domain, date)
+		case left <= certWarnDays*24*time.Hour:
+			level = "warn"
+			msg = fmt.Sprintf("Certificate for %s expires on %s", s.Domain, date)
+		}
+		for _, l := range certLevels {
+			if l != level {
+				e.clear(vps.ID, shared.AlertCertExpiring, s.Domain+"|"+l)
+			}
+		}
+		if level != "" {
+			e.fire(vps, shared.AlertCertExpiring, sev, s.Domain+"|"+level, msg)
+		}
+	}
+	for d := range e.certHosts[vps.ID] {
+		if !seen[d] {
+			for _, l := range certLevels {
+				e.clear(vps.ID, shared.AlertCertExpiring, d+"|"+l)
+			}
+		}
+	}
+	e.certHosts[vps.ID] = seen
 }
 
 // agentReconnectGrace is how long after startup the offline sweep stays quiet,

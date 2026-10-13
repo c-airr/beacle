@@ -720,6 +720,15 @@ type ProxySite struct {
 	// UpstreamHealthy is a live probe of the upstream, not just the listener.
 	UpstreamHealthy bool `json:"upstream_healthy"`
 
+	// CertNotAfter is when the certificate the proxy serves for this domain
+	// expires, read by the agent over a local TLS handshake. Absent until the
+	// first check, for plain-HTTP sites and from agents before 2.2.0.
+	CertNotAfter *time.Time `json:"cert_not_after,omitempty"`
+	// CertIssuer names who issued it ("Let's Encrypt", "ZeroSSL").
+	CertIssuer string `json:"cert_issuer,omitempty"`
+	// CertError says why the certificate could not be read.
+	CertError string `json:"cert_error,omitempty"`
+
 	// RedirectWWW adds a redirect from www.<domain> to <domain>.
 	RedirectWWW bool `json:"redirect_www,omitempty"`
 	// ForceHTTPS redirects plain HTTP to HTTPS (Caddy's default, explicit here).
@@ -1107,6 +1116,9 @@ const (
 	AlertServiceDown  AlertType = "service_down"
 	AlertDockerCrash  AlertType = "docker_crash"
 	AlertProxyError   AlertType = "proxy_error"
+	// AlertCertExpiring: a proxied domain's certificate expires within
+	// CertWarnDays (warning) or CertCritDays (critical), or already has.
+	AlertCertExpiring AlertType = "cert_expiring"
 	AlertAgentOffline AlertType = "agent_offline"
 	// AlertAgentDown is raised when the host still answers on its Tailscale
 	// address but the agent stopped reporting.

@@ -196,7 +196,7 @@ class ProxyScreenState extends State<ProxyScreen> {
                   ),
                   _upstreamBadge(s),
                   const SizedBox(width: 8),
-                  _sslBadge(s.ssl),
+                  _sslBadge(s),
                   const SizedBox(width: 16),
                   if (s.rawConfig.isNotEmpty)
                     IconButton(
@@ -362,26 +362,45 @@ class ProxyScreenState extends State<ProxyScreen> {
     );
   }
 
-  Widget _sslBadge(String ssl) {
-    final (color, label) = switch (ssl) {
+  Widget _sslBadge(ProxySite s) {
+    var (color, label) = switch (s.ssl) {
       'active' => (BeacleColors.ok, context.l.t('pxSslActive')),
       'pending' => (BeacleColors.warn, context.l.t('pxSslPending')),
       'error' => (BeacleColors.err, context.l.t('pxSslError')),
       _ => (BeacleColors.textDim, context.l.t('pxHttpOnly')),
     };
-    return Container(
+    // The same 14 and 3 days the backend alerts at (certWarnDays/certCritDays).
+    String? tip;
+    final end = s.certNotAfter;
+    if (end != null) {
+      final date = _isoDate(end.toLocal());
+      tip = context.l.f('pxCertUntil', {'date': date}) + (s.certIssuer.isEmpty ? '' : ' · ${s.certIssuer}');
+      final left = end.difference(DateTime.now());
+      if (left.isNegative) {
+        (color, label) = (BeacleColors.err, context.l.t('pxCertExpired'));
+      } else if (left <= const Duration(days: 3)) {
+        (color, label) = (BeacleColors.err, context.l.f('pxCertSoon', {'date': date}));
+      } else if (left <= const Duration(days: 14)) {
+        (color, label) = (BeacleColors.warn, context.l.f('pxCertSoon', {'date': date}));
+      }
+    } else if (s.certError.isNotEmpty) {
+      tip = context.l.f('pxCertUnreadable', {'err': s.certError});
+    }
+    final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(ssl == 'active' ? Icons.lock : Icons.lock_open, size: 11, color: color),
+        Icon(s.ssl == 'active' ? Icons.lock : Icons.lock_open, size: 11, color: color),
         const SizedBox(width: 4),
         Text(label, style: TextStyle(fontSize: 11, color: color)),
       ]),
     );
+    return tip == null ? badge : Tooltip(message: tip, child: badge);
   }
+
 
 }
 
@@ -496,3 +515,6 @@ class _PortCheckerState extends State<_PortChecker> {
         ]),
       );
 }
+
+String _isoDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

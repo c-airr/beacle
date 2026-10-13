@@ -25,6 +25,8 @@ class AlertsPanel extends StatelessWidget {
         return Icons.view_in_ar;
       case 'proxy_error':
         return Icons.alt_route;
+      case 'cert_expiring':
+        return Icons.lock_clock;
       case 'agent_offline':
         return Icons.cloud_off;
       default:

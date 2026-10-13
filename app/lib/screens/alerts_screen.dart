@@ -309,6 +309,7 @@ class _AlertRow extends StatelessWidget {
         'service_down' => Icons.miscellaneous_services,
         'docker_crash' => Icons.view_in_ar,
         'proxy_error' => Icons.alt_route,
+        'cert_expiring' => Icons.lock_clock,
         'agent_offline' => Icons.cloud_off,
         // The host answers, the agent does not — a restart, not a dead server.
         'agent_down' => Icons.sensors_off,

@@ -31,6 +31,7 @@ type ProxyManager struct {
 	adapters   []ProxyAdapter
 	active     ProxyAdapter
 	detectedAt time.Time
+	certs      *certChecker
 }
 
 func NewProxyManager(cfg *Config) *ProxyManager {
@@ -39,6 +40,7 @@ func NewProxyManager(cfg *Config) *ProxyManager {
 			newCaddyAdapter(cfg),
 			newNPMAdapter(cfg),
 		},
+		certs: newCertChecker(),
 	}
 }
 
@@ -64,7 +66,11 @@ func (m *ProxyManager) State() shared.ProxyState {
 	if a == nil {
 		return shared.ProxyState{Provider: shared.ProxyProviderNone}
 	}
-	return a.State()
+	st := a.State()
+	if m.certs != nil {
+		m.certs.annotate(st.Sites)
+	}
+	return st
 }
 
 var errNoProvider = fmt.Errorf("no reverse proxy provider detected (install Caddy or Nginx Proxy Manager)")

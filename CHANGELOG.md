@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Expiring certificates** — the agent reads the certificate the proxy
+  (Caddy or Nginx Proxy Manager) serves for each domain, over a local TLS
+  handshake, and checks it again every six hours. An alert goes out when
+  one expires within 14 days (warning) or 3 days (critical), and again if
+  it does expire; a renewal resolves it. Proxy shows the date on the SSL
+  badge once it is that close, and in its tooltip always, with the issuer.
+  Caddy renews with 30 days left, so this means a renewal has been failing
+  for two weeks. Needs the 2.2.0 agent.
 - **When a disk will be full** — a disk that keeps filling shows "full in
   ~4 days at the current rate" under its bar on the server's page (hours
   when it is under two days). The rate is a straight line through the

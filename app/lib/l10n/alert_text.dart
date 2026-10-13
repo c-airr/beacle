@@ -17,6 +17,10 @@ final _templates = <RegExp, String Function(L, RegExpMatch)>{
       l.f('alMsgRestarted', {'name': m[1], 'n': m[2]}),
   RegExp(r'^Agent is not responding — the VPS itself still answers$'): (l, m) => l.t('alMsgAgentDown'),
   RegExp(r'^VPS offline — no answer on its address$'): (l, m) => l.t('alMsgOffline'),
+  RegExp(r'^Certificate for (.+) expires on (\d{4}-\d{2}-\d{2})$'): (l, m) =>
+      l.f('alMsgCertExpires', {'domain': m[1], 'date': m[2]}),
+  RegExp(r'^Certificate for (.+) expired on (\d{4}-\d{2}-\d{2})$'): (l, m) =>
+      l.f('alMsgCertExpired', {'domain': m[1], 'date': m[2]}),
 };
 
 String alertMessage(L l, Alert a) => localizeAlertText(l, a.message);

@@ -860,6 +860,11 @@ class ProxySite {
   final String readOnlyReason, kind, tlsMode, sourceFile, rawConfig;
   final List<String> domains;
 
+  /// The certificate the proxy serves, as the agent read it; null until the
+  /// first check, for HTTP-only sites and from agents before 2.2.0.
+  final DateTime? certNotAfter;
+  final String certIssuer, certError;
+
   ProxySite.fromJson(Map<String, dynamic> j)
       : id = _s(j['id']),
         domain = _s(j['domain']),
@@ -887,6 +892,9 @@ class ProxySite {
         sourceFile = _s(j['source_file']),
         rawConfig = _s(j['raw_config']),
         domains = ((j['domains'] as List?) ?? const []).map((e) => '$e').toList(),
+        certNotAfter = j['cert_not_after'] == null ? null : DateTime.tryParse(j['cert_not_after'] as String),
+        certIssuer = _s(j['cert_issuer']),
+        certError = _s(j['cert_error']),
         extra = (j['extra'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)) ?? {};
 }
 
