@@ -37,6 +37,8 @@ func main() {
 		log.Fatalf("wireguard: %v", err)
 	}
 	alerts.SetWireGuard(wg)
+	plugins := NewPlugins(*dataDir, store, hub, agentHub)
+	alerts.SetPluginMetrics(plugins.MetricDefs)
 
 	base := *baseURL
 	if base == "" {
@@ -59,6 +61,7 @@ func main() {
 		wg:        wg,
 		spikes:    spikes,
 		sshHosts:  NewSSHHosts(*dataDir),
+		plugins:   plugins,
 		baseURL:   base,
 		dataDir:   *dataDir,
 		startedAt: time.Now(),
@@ -77,6 +80,7 @@ func main() {
 	go srv.LinkMonitor()
 	go webhooks.Run()
 	go webhooks.RunSyncLoop()
+	go plugins.WatchLinked()
 
 	if isLoopbackAddr(*addr) {
 		agents := srv.AgentRoutes()

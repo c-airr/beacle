@@ -1095,6 +1095,9 @@ type VPSThresholds struct {
 	CPUHigh  float64 `json:"cpu_high,omitempty"`
 	MemHigh  float64 `json:"mem_high,omitempty"`
 	DiskHigh float64 `json:"disk_high,omitempty"`
+	// Plugins replaces a plugin metric's warn level, keyed "<plugin>.<metric>",
+	// in the metric's own unit.
+	Plugins map[string]float64 `json:"plugins,omitempty"`
 }
 
 // UpdateVPSRequest edits metadata of an auto-registered VPS (display name,
@@ -1153,6 +1156,9 @@ const (
 	// AlertAgentDown is raised when the host still answers on its Tailscale
 	// address but the agent stopped reporting.
 	AlertAgentDown AlertType = "agent_down"
+	// AlertPluginMetric: a plugin metric reached the warn or crit level its
+	// manifest declares. Key is "<plugin>.<metric>|warn" or "|crit".
+	AlertPluginMetric AlertType = "plugin_metric"
 )
 
 type Alert struct {
@@ -1197,6 +1203,7 @@ const (
 	WSLinkUpdate WSMessageType = "link_update" // payload: VPSLink
 	WSActionLog  WSMessageType = "action"      // payload: ActionLog
 	WSLocalNet   WSMessageType = "local_net"   // payload: LocalNetStatus
+	WSPlugins    WSMessageType = "plugins"     // no payload: GET /api/plugins again
 )
 
 // LocalNetStatus is whether the computer running Beacle can reach the

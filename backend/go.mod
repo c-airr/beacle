@@ -5,6 +5,7 @@ go 1.26
 require (
 	beacle/shared v0.0.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/crypto v0.37.0
 	golang.org/x/sys v0.32.0
 )

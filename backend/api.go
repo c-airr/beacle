@@ -30,6 +30,7 @@ type Server struct {
 	uptime    *UptimeLog
 	spikes    *Spikes
 	sshHosts  *SSHHosts
+	plugins   *Plugins
 
 	uiPowerMu   sync.RWMutex
 	uiPowerMode shared.PowerMode
@@ -182,7 +183,16 @@ func normalizeThresholds(t *shared.VPSThresholds) *shared.VPSThresholds {
 		return v
 	}
 	t.CPUHigh, t.MemHigh, t.DiskHigh = clamp(t.CPUHigh), clamp(t.MemHigh), clamp(t.DiskHigh)
-	if t.CPUHigh == 0 && t.MemHigh == 0 && t.DiskHigh == 0 {
+	// Plugin levels are in the metric's own unit, so only "unset" is dropped.
+	for k, v := range t.Plugins {
+		if v <= 0 {
+			delete(t.Plugins, k)
+		}
+	}
+	if len(t.Plugins) == 0 {
+		t.Plugins = nil
+	}
+	if t.CPUHigh == 0 && t.MemHigh == 0 && t.DiskHigh == 0 && t.Plugins == nil {
 		return nil
 	}
 	return t
@@ -629,6 +639,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/actions", s.handleActions)
 	mux.HandleFunc("/api/links", s.handleLinks)
 	mux.HandleFunc("DELETE /api/links/{id}", s.handleDeleteLink)
+	mux.HandleFunc("GET /api/plugins", s.handleListPlugins)
+	mux.HandleFunc("POST /api/plugins", s.handleInstallPlugin)
+	mux.HandleFunc("POST /api/plugins/inspect", s.handleInspectPlugin)
+	mux.HandleFunc("GET /api/plugins/ui", s.handlePluginUI)
+	mux.HandleFunc("PATCH /api/plugins/{id}", s.handlePatchPlugin)
+	mux.HandleFunc("DELETE /api/plugins/{id}", s.handleDeletePlugin)
+	mux.HandleFunc("GET /api/plugins/{id}/log", s.handlePluginLog)
+	mux.HandleFunc("POST /api/plugins/{id}/action", s.handlePluginAction)
 	mux.HandleFunc("GET /ws", s.hub.ServeWS)
 
 	// distribution

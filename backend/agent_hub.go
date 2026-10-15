@@ -266,6 +266,9 @@ func (h *AgentHub) handleMessage(sess *agentSession, srv *Server, msg *shared.Ag
 		// A (re)connected agent changes the watcher election — sync now
 		// instead of waiting for the next timer tick.
 		go srv.webhooks.SyncWatchers()
+		if srv.plugins != nil {
+			go srv.plugins.SyncAgent(entry.VPS.ID)
+		}
 
 	case shared.AgentWSMetrics:
 		if !sess.registered.Load() || sess.entry == nil || msg.Metrics == nil {

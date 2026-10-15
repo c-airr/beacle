@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"beacle/shared"
+	"beacle/shared/plugin"
 )
 
 // AlertEngine evaluates incoming reports against thresholds and tracks state
@@ -41,7 +43,11 @@ type AlertEngine struct {
 	// nil-safe so tests and old call paths never notice.
 	notify func(shared.WebhookMessage)
 	wg     *WireGuardService
+	// pluginMetrics declares the plugin metrics and their levels; nil-safe.
+	pluginMetrics func() map[string]plugin.MetricDef
 }
+
+func (e *AlertEngine) SetPluginMetrics(f func() map[string]plugin.MetricDef) { e.pluginMetrics = f }
 
 type reachProbe struct {
 	up bool
@@ -187,6 +193,8 @@ func alertTitle(t shared.AlertType) string {
 		return "VPS offline"
 	case shared.AlertAgentDown:
 		return "agent down"
+	case shared.AlertPluginMetric:
+		return "plugin metric"
 	default:
 		return string(t)
 	}
@@ -315,6 +323,64 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 	}
 
 	e.evaluateCerts(vps, snap.Proxy.Sites, time.Now())
+	if e.pluginMetrics != nil {
+		e.evaluatePlugins(vps, m.Plugins, e.pluginMetrics())
+	}
+}
+
+// evaluatePlugins raises an alert per plugin metric at its warn or crit level,
+// held for SustainedSeconds like CPU, since sensors spike too. Each level has
+// its own key, as with certificates, so warn going to crit alerts again.
+func (e *AlertEngine) evaluatePlugins(vps shared.VPS, values map[string]float64, defs map[string]plugin.MetricDef) {
+	for key, v := range values {
+		d, ok := defs[key]
+		if !ok {
+			continue
+		}
+		warn := d.Warn
+		if vps.Thresholds != nil && vps.Thresholds.Plugins[key] > 0 {
+			warn = vps.Thresholds.Plugins[key]
+		}
+		level, sev, limit := "", shared.SeverityWarning, 0.0
+		switch {
+		case d.Crit > 0 && v >= d.Crit:
+			level, sev, limit = "crit", shared.SeverityCritical, d.Crit
+		case warn > 0 && v >= warn:
+			level, limit = "warn", warn
+		}
+		lowest := warn
+		if lowest <= 0 {
+			lowest = d.Crit
+		}
+		if e.sustained(vps.ID, "plugin|"+key, level != "") {
+			for _, l := range []string{"warn", "crit"} {
+				if l != level {
+					e.clear(vps.ID, shared.AlertPluginMetric, key+"|"+l)
+				}
+			}
+			label := d.Label
+			if label == "" {
+				label = key
+			}
+			e.fire(vps, shared.AlertPluginMetric, sev, key+"|"+level,
+				fmt.Sprintf("%s at %.1f%s (limit %g%s)", label, v, d.Unit, limit, d.Unit))
+		} else if level == "" && v < lowest*0.95 {
+			// shortcut: 5% hysteresis assumes positive levels, revisit for metrics that alert below zero
+			e.clear(vps.ID, shared.AlertPluginMetric, key+"|warn")
+			e.clear(vps.ID, shared.AlertPluginMetric, key+"|crit")
+		}
+	}
+	// A metric that is gone (plugin removed or failing) resolves its alerts:
+	// nothing would ever clear them otherwise.
+	prefix := vps.ID + "|" + string(shared.AlertPluginMetric) + "|"
+	for id := range e.active {
+		if rest, ok := strings.CutPrefix(id, prefix); ok {
+			key := rest[:strings.LastIndex(rest, "|")]
+			if _, still := values[key]; !still {
+				e.clear(vps.ID, shared.AlertPluginMetric, rest)
+			}
+		}
+	}
 }
 
 const (

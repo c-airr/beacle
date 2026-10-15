@@ -134,32 +134,37 @@ func (r *Runtime) Load(src, chunk string) error {
 	return nil
 }
 
-// Call runs fn with a deadline and returns its first result. A Lua error,
+// Call runs fn with a deadline. Arguments and the (first) result are plain Go
+// values in the JSON shapes, converted while the state is held — building a
+// Lua table outside the lock would race a running task. A Lua error,
 // including an interrupted endless loop, comes back as err with the plugin
 // still usable.
-func (r *Runtime) Call(fn *lua.LFunction, timeout time.Duration, args ...lua.LValue) (lua.LValue, error) {
+func (r *Runtime) Call(fn *lua.LFunction, timeout time.Duration, args ...any) (any, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
-		return lua.LNil, errors.New("plugin stopped")
+		return nil, errors.New("plugin stopped")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	r.L.SetContext(ctx)
 	defer r.L.RemoveContext()
-	if err := r.L.CallByParam(lua.P{Fn: fn, NRet: 1, Protect: true}, args...); err != nil {
-		if ctx.Err() != nil {
-			return lua.LNil, fmt.Errorf("timed out after %s", timeout)
-		}
-		return lua.LNil, luaErr(err)
+	largs := make([]lua.LValue, len(args))
+	for i, a := range args {
+		largs[i] = FromGo(r.L, a)
 	}
-	ret := r.L.Get(-1)
+	if err := r.L.CallByParam(lua.P{Fn: fn, NRet: 1, Protect: true}, largs...); err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("timed out after %s", timeout)
+		}
+		return nil, luaErr(err)
+	}
+	ret := ToGo(r.L.Get(-1))
 	r.L.Pop(1)
 	return ret, nil
 }
 
-// Handle calls a handler registered with beacle.on, converting to and from
-// plain Go values (the JSON shapes).
+// Handle calls a handler registered with beacle.on.
 func (r *Runtime) Handle(name string, args any, timeout time.Duration) (any, error) {
 	r.mu.Lock()
 	fn := r.handlers[name]
@@ -167,11 +172,7 @@ func (r *Runtime) Handle(name string, args any, timeout time.Duration) (any, err
 	if fn == nil {
 		return nil, fmt.Errorf("no handler %q", name)
 	}
-	ret, err := r.Call(fn, timeout, FromGo(r.L, args))
-	if err != nil {
-		return nil, err
-	}
-	return ToGo(ret), nil
+	return r.Call(fn, timeout, args)
 }
 
 func (r *Runtime) runTask(t task) {
