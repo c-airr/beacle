@@ -50,6 +50,8 @@ func main() {
 	proxy := NewProxyManager(cfg)
 	updater := NewUpdater(cfg)
 	reporter := NewReporter(cfg, col, proxy)
+	plugins := NewPluginHost(cfg)
+	reporter.plugins = plugins
 	// Boot restore from a reboot-with-restore manifest. Backgrounded: it
 	// sleeps to let the system settle, and must not delay connecting.
 	go maybeRestoreSessions(col)
@@ -57,7 +59,7 @@ func main() {
 	// Deletes temporary SSH logins as they expire, including any left over
 	// from before a restart.
 	go tempLoginReaper()
-	api := &APIServer{cfg: cfg, col: col, proxy: proxy, upd: updater, files: &FileManager{root: defaultFilesRoot()}}
+	api := &APIServer{cfg: cfg, col: col, proxy: proxy, upd: updater, files: &FileManager{root: defaultFilesRoot()}, plugins: plugins}
 	// Automatic updates are parked — see AutoUpdateLoop in updater.go. The agent
 	// only replaces its own binary when someone presses Update.
 	// go updater.AutoUpdateLoop()

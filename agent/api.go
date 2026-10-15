@@ -20,6 +20,7 @@ type APIServer struct {
 	proxy *ProxyManager
 	upd   *Updater
 	files *FileManager
+	plugins *PluginHost
 	// kickSession drops the panel WebSocket so transport changes take effect.
 	kickSession func()
 }
@@ -315,6 +316,40 @@ func (s *APIServer) Routes() http.Handler {
 			return
 		}
 		jsonOut(w, 200, res)
+	}))
+	mux.HandleFunc("POST /api/plugins/sync", a(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.DisablePlugins || s.plugins == nil {
+			jsonErr(w, http.StatusForbidden, "plugins are disabled on this server")
+			return
+		}
+		var bundles []shared.PluginBundle
+		if err := json.NewDecoder(r.Body).Decode(&bundles); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		if err := s.plugins.Sync(bundles); err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		_, status := s.plugins.Snapshot()
+		jsonOut(w, 200, status)
+	}))
+	mux.HandleFunc("POST /api/plugins/call", a(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.DisablePlugins || s.plugins == nil {
+			jsonErr(w, http.StatusForbidden, "plugins are disabled on this server")
+			return
+		}
+		var c shared.PluginCall
+		if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+			jsonErr(w, 400, "bad json")
+			return
+		}
+		res, err := s.plugins.Call(c)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOut(w, 200, map[string]any{"result": res})
 	}))
 	mux.HandleFunc("POST /api/watchdog/config", a(func(w http.ResponseWriter, r *http.Request) {
 		var cfg shared.WatchdogConfig

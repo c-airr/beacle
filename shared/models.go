@@ -50,6 +50,8 @@ type MetricSample struct {
 	// above is only the fullest one, which can switch between mounts and so
 	// cannot tell how fast any one of them is filling.
 	Mounts map[string]float64 `json:"mounts,omitempty"`
+	// Plugins is SystemMetrics.Plugins at that moment.
+	Plugins map[string]float64 `json:"plugins,omitempty"`
 }
 
 // SpikeRecord is what a machine was running when a metric jumped.
@@ -127,6 +129,34 @@ type SystemMetrics struct {
 	Load15             float64        `json:"load15"`
 	Network            []NetworkStats `json:"network"`
 	CollectedAt        time.Time      `json:"collected_at"`
+	// Plugins is every plugin metric, keyed "<plugin>.<metric>".
+	Plugins      map[string]float64 `json:"plugins,omitempty"`
+	PluginStatus []PluginStatus     `json:"plugin_status,omitempty"`
+}
+
+// PluginStatus is how one plugin is doing on one agent.
+type PluginStatus struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+	Error   string `json:"error,omitempty"` // empty while it runs
+}
+
+// PluginBundle is the agent part of a plugin, pushed by the backend to
+// POST /api/plugins/sync as the complete list the agent should run.
+type PluginBundle struct {
+	ID       string          `json:"id"`
+	Version  string          `json:"version"`
+	SHA256   string          `json:"sha256"` // of manifest + agent_lua, to skip unchanged ones
+	Manifest json.RawMessage `json:"manifest"`
+	AgentLua string          `json:"agent_lua"`
+}
+
+// PluginCall runs a handler registered with beacle.on in a plugin's agent
+// part (POST /api/plugins/call).
+type PluginCall struct {
+	ID     string `json:"id"`
+	Action string `json:"action"`
+	Args   any    `json:"args,omitempty"`
 }
 
 type ProcessInfo struct {

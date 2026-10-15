@@ -21,6 +21,8 @@ type Reporter struct {
 	cfg   *Config
 	col   Collector
 	proxy *ProxyManager
+	// plugins adds plugin metrics to every metrics frame; nil in tests.
+	plugins *PluginHost
 
 	metricsGate *collectGate[metricsResult]
 	portsGate   *collectGate[portsResult]
@@ -83,6 +85,9 @@ func (r *Reporter) Metrics() (shared.SystemMetrics, error) {
 	res := r.metricsGate.do(func() metricsResult {
 		defer track("metrics")()
 		m, err := r.col.Metrics()
+		if r.plugins != nil {
+			m.Plugins, m.PluginStatus = r.plugins.Snapshot()
+		}
 		return metricsResult{metrics: m, err: err}
 	})
 	return res.metrics, res.err

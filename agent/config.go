@@ -41,6 +41,7 @@ type Config struct {
 	// root shell. Only settable by editing config.json on the server.
 	DisableFiles    bool `json:"disable_files,omitempty"`
 	DisableTerminal bool `json:"disable_terminal,omitempty"`
+	DisablePlugins  bool `json:"disable_plugins,omitempty"`
 
 	path string // where this config was loaded from
 }

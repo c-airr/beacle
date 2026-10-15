@@ -51,5 +51,7 @@ func SampleFrom(m SystemMetrics) MetricSample {
 		TxPerS: tx,
 		Load1:  m.Load1,
 		Mounts: mounts,
+
+		Plugins: m.Plugins,
 	}
 }
