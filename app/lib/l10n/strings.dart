@@ -32,7 +32,11 @@ class L {
   @visibleForTesting
   static Map<AppLanguage, Map<String, String>> get tables => _table;
 
-  String t(String key) => _table[lang]?[key] ?? _table[AppLanguage.en]![key] ?? key;
+  /// Texts replaced by plugins (beacle.text), and the titles of their tabs.
+  /// Set by AppState from GET /api/plugins; wins over every language.
+  static Map<String, String> overrides = const {};
+
+  String t(String key) => overrides[key] ?? _table[lang]?[key] ?? _table[AppLanguage.en]![key] ?? key;
 
   String f(String key, [Map<String, Object?> params = const {}]) {
     var s = t(key);

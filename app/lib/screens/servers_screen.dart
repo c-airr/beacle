@@ -10,6 +10,7 @@ import '../widgets/common.dart';
 import '../widgets/edit_vps_dialog.dart';
 import '../widgets/history_panel.dart';
 import '../widgets/os_updates.dart';
+import '../widgets/plugin_blocks.dart';
 import '../widgets/reboot_dialog.dart';
 import '../widgets/temp_login_dialog.dart';
 import 'shell.dart';
@@ -112,7 +113,9 @@ class ServersScreenState extends State<ServersScreen> {
                   ),
                 ),
               Expanded(
-                child: SmoothListView(
+                child: PluginSlot(
+                  slot: 'servers.column',
+                  builder: (context, columns, reload) => SmoothListView(
                   padding: const EdgeInsets.all(8),
                   children: [
                     for (final v in shown)
@@ -141,6 +144,21 @@ class ServersScreenState extends State<ServersScreen> {
                                   ],
                                 ),
                               ),
+                              for (final c in columns)
+                                if (c.cells[v.id] != null || c.error.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: Tooltip(
+                                      message: c.error.isNotEmpty ? c.error : c.title,
+                                      child: c.error.isNotEmpty
+                                          ? Icon(Icons.extension_off_outlined, size: 13, color: BeacleColors.err)
+                                          : ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 72),
+                                              child: PluginBlocks(
+                                                  render: c, vpsId: v.id, onAction: reload, only: c.cells[v.id]),
+                                            ),
+                                    ),
+                                  ),
                               if (state.snapshots[v.id]?.metrics != null && v.online)
                                 Text(
                                   '${state.snapshots[v.id]!.metrics.cpuPercent.toStringAsFixed(0)}%',
@@ -151,6 +169,7 @@ class ServersScreenState extends State<ServersScreen> {
                         ),
                       ),
                   ],
+                ),
                 ),
               ),
             ],
@@ -255,6 +274,9 @@ class _ServerStats extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
     final m = snap.metrics;
+    // Sections a plugin hid with beacle.hide (ids in docs/plugins/api.md).
+    final hidden = context.select<AppState, Set<String>>((s) => s.pluginHidden);
+    bool shown(String id) => !hidden.contains(id);
     return SmoothListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -317,9 +339,10 @@ class _ServerStats extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: BeacleColors.textDim),
         ),
         const SizedBox(height: 12),
-        OsUpdatesBanner(vps: vps),
+        if (shown('server.updates')) OsUpdatesBanner(vps: vps),
         const SizedBox(height: 16),
         // Equal-height summary tiles
+        if (shown('server.summary'))
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -332,12 +355,13 @@ class _ServerStats extends StatelessWidget {
             ],
           ),
         ),
-        if (m.cpuPerCore.isNotEmpty) ...[
+        if (m.cpuPerCore.isNotEmpty && shown('server.cores')) ...[
           const SizedBox(height: 12),
           _CoresPanel(cores: m.cpuPerCore),
         ],
 
         const SizedBox(height: 12),
+        if (shown('server.details'))
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -411,11 +435,16 @@ class _ServerStats extends StatelessWidget {
             ],
           ),
         ),
+        PluginSlot(
+          slot: 'server.section',
+          vpsId: vps.id,
+          builder: (context, renders, reload) => pluginCards(context, renders, reload, vpsId: vps.id),
+        ),
         const SizedBox(height: 12),
         // Last on the page on purpose. Everything above is "right now", which
         // is what you came for; this answers what happened while nobody was
         // watching, and that is a question you scroll down to ask.
-        HistoryPanel(vps: vps),
+        if (shown('server.history')) HistoryPanel(vps: vps),
       ],
     );
   }

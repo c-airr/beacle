@@ -20,6 +20,7 @@ import '../update/agent_updater.dart';
 import '../update/app_updater.dart';
 import '../user_config.dart';
 import '../widgets/common.dart';
+import '../widgets/plugins_settings.dart';
 import '../widgets/wg_switch.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -45,7 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   bool agentPickerBusy = false;
   bool agentUpdatingAll = false;
 
-  late final TabController _tabs = TabController(length: 5, vsync: this);
+  late final TabController _tabs = TabController(length: 6, vsync: this);
   bool? autostartOn;
 
   // Notifications tab
@@ -128,6 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               Tab(text: context.l.t('setStatus')),
               Tab(text: context.l.t('setNotify')),
               Tab(text: context.l.t('setWireGuard')),
+              Tab(text: context.l.t('setPlugins')),
             ],
           ),
         ),
@@ -140,6 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               _statusTab(state),
               _notifyTab(state),
               _wireGuardTab(state),
+              const PluginsSettings(),
             ],
           ),
         ),

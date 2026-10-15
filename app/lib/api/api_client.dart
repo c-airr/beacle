@@ -72,6 +72,7 @@ class ApiClient {
   Future<dynamic> post(String path, {Object? body}) => _req('POST', path, body: body);
   Future<dynamic> put(String path, {Object? body}) => _req('PUT', path, body: body);
   Future<dynamic> delete(String path) => _req('DELETE', path);
+  Future<dynamic> patch(String path, {Object? body}) => _req('PATCH', path, body: body);
 
   Future<bool> health() async {
     try {

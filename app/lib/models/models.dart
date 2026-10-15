@@ -4,6 +4,8 @@ double _d(dynamic v) => (v as num?)?.toDouble() ?? 0;
 int _i(dynamic v) => (v as num?)?.toInt() ?? 0;
 String _s(dynamic v) => v as String? ?? '';
 bool _b(dynamic v) => v as bool? ?? false;
+Map<String, double> _dmap(dynamic v) =>
+    v is Map ? v.map((k, e) => MapEntry('$k', _d(e))) : const <String, double>{};
 
 DateTime _dt(dynamic v) =>
     v == null ? DateTime.fromMillisecondsSinceEpoch(0) : DateTime.tryParse(v as String) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -46,6 +48,9 @@ class SystemMetrics {
   final List<double> cpuPerCore;
   final List<DiskUsage> disks;
   final List<NetworkStats> network;
+
+  /// Plugin metrics, keyed `plugin.metric`.
+  final Map<String, double> plugins;
   SystemMetrics.fromJson(Map<String, dynamic> j)
       : hostname = _s(j['hostname']),
         os = _s(j['os']),
@@ -68,7 +73,8 @@ class SystemMetrics {
         uptimeSeconds = _i(j['uptime_seconds']),
         cpuPerCore = (j['cpu_per_core'] as List?)?.map((e) => _d(e)).toList() ?? const [],
         disks = _list(j['disks'], DiskUsage.fromJson),
-        network = _list(j['network'], NetworkStats.fromJson);
+        network = _list(j['network'], NetworkStats.fromJson),
+        plugins = _dmap(j['plugins']);
   SystemMetrics.empty() : this.fromJson(const {});
 }
 
@@ -250,6 +256,7 @@ class MetricSample {
   final DateTime at;
   final double cpu, mem, disk, load1;
   final int rxPerS, txPerS;
+  final Map<String, double> plugins;
   MetricSample.fromJson(Map<String, dynamic> j)
       : at = _dt(j['at']),
         cpu = _d(j['cpu']),
@@ -257,7 +264,8 @@ class MetricSample {
         disk = _d(j['disk']),
         load1 = _d(j['load1']),
         rxPerS = _i(j['rx']),
-        txPerS = _i(j['tx']);
+        txPerS = _i(j['tx']),
+        plugins = _dmap(j['plugins']);
 }
 
 /// A server's history plus the span actually on disk, so the chart can bound
@@ -985,17 +993,22 @@ class Vps {
 /// Per-server alert threshold overrides. Zero means "use the global value".
 class VpsThresholds {
   final double cpuHigh, memHigh, diskHigh;
-  VpsThresholds({this.cpuHigh = 0, this.memHigh = 0, this.diskHigh = 0});
+
+  /// Warn level of plugin metrics, keyed `plugin.metric`, in their unit.
+  final Map<String, double> plugins;
+  VpsThresholds({this.cpuHigh = 0, this.memHigh = 0, this.diskHigh = 0, this.plugins = const {}});
   VpsThresholds.fromJson(Map<String, dynamic> j)
       : cpuHigh = _d(j['cpu_high']),
         memHigh = _d(j['mem_high']),
-        diskHigh = _d(j['disk_high']);
+        diskHigh = _d(j['disk_high']),
+        plugins = _dmap(j['plugins']);
   Map<String, dynamic> toJson() => {
         'cpu_high': cpuHigh,
         'mem_high': memHigh,
         'disk_high': diskHigh,
+        if (plugins.isNotEmpty) 'plugins': plugins,
       };
-  bool get isCustom => cpuHigh > 0 || memHigh > 0 || diskHigh > 0;
+  bool get isCustom => cpuHigh > 0 || memHigh > 0 || diskHigh > 0 || plugins.isNotEmpty;
 }
 
 class VpsLink {

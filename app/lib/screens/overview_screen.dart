@@ -10,6 +10,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/plugin_blocks.dart';
 import 'shell.dart';
 
 /// First screen — answers: "Is everything working?"
@@ -43,6 +44,8 @@ class OverviewScreen extends StatelessWidget {
     final avgDisk = diskN == 0 ? 0.0 : diskSum / diskN;
     final l = context.l;
     final attention = _attentionItems(state, l);
+    // Sections a plugin hid with beacle.hide (ids in docs/plugins/api.md).
+    bool shown(String id) => !state.pluginHidden.contains(id);
 
     return SmoothListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -54,6 +57,7 @@ class OverviewScreen extends StatelessWidget {
         const SizedBox(height: 14),
 
         // KPI strip
+        if (shown('overview.kpis'))
         LayoutBuilder(builder: (context, c) {
           final cols = c.maxWidth > 1100 ? 6 : (c.maxWidth > 780 ? 3 : 2);
           return Wrap(
@@ -106,6 +110,7 @@ class OverviewScreen extends StatelessWidget {
           );
         }),
 
+        if (shown('overview.attention')) ...[
         const SizedBox(height: 22),
         _SectionHeader(
           title: l.t('ovAttention'),
@@ -121,7 +126,11 @@ class OverviewScreen extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: _AttentionRow(item: item),
               )),
+        ],
 
+        PluginSlot(slot: 'overview.card', builder: pluginCards),
+
+        if (shown('overview.infra')) ...[
         const SizedBox(height: 22),
         _SectionHeader(
           title: l.t('ovInfra'),
@@ -152,7 +161,9 @@ class OverviewScreen extends StatelessWidget {
               ],
             );
           }),
+        ],
 
+        if (shown('overview.activity')) ...[
         const SizedBox(height: 22),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,6 +264,7 @@ class OverviewScreen extends StatelessWidget {
             ),
           ],
         ),
+        ],
       ],
     );
   }

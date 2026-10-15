@@ -20,6 +20,7 @@ import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/wg_switch.dart';
 import '../widgets/alerts_panel.dart';
+import '../widgets/plugin_blocks.dart';
 import '../window_control.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
@@ -96,7 +97,19 @@ class AppShellState extends State<AppShell> {
   @visibleForTesting
   static String labelKey(int i) => i < items.length ? items[i].$2 : toolItems[i - items.length].$2;
 
-  String _label(BuildContext context, int i) => context.l.t(labelKey(i));
+  /// Plugin tabs come after the tools, in the sidebar's main group.
+  int get _firstPlugin => items.length + toolItems.length;
+
+  String _keyAt(int i) {
+    if (i < _firstPlugin) return labelKey(i);
+    final tabs = context.read<AppState>().pluginTabs;
+    return i - _firstPlugin < tabs.length ? tabs[i - _firstPlugin].key : '';
+  }
+
+  String _label(BuildContext context, int i) => context.l.t(_keyAt(i));
+
+  /// Plugins may hide any sidebar entry but Settings, where they are removed.
+  bool _hidden(AppState state, String key) => key != 'navSettings' && state.pluginHidden.contains(key);
 
   int get _firstTool => items.length;
 
@@ -154,9 +167,13 @@ class AppShellState extends State<AppShell> {
     return true;
   }
 
-  /// Every sidebar entry's label key, main tabs then tools — the search
-  /// palette's "pages".
-  static List<String> get _pageKeys => [for (final i in items) i.$2, for (final t in toolItems) t.$2];
+  /// Every sidebar entry's label key, main tabs then tools then plugin tabs —
+  /// the search palette's "pages".
+  List<String> get _pageKeys => [
+        for (final i in items) i.$2,
+        for (final t in toolItems) t.$2,
+        for (final p in context.read<AppState>().pluginTabs) p.key,
+      ];
 
   Future<void> openSearch() async {
     if (_searchOpen) return;
@@ -181,7 +198,7 @@ class AppShellState extends State<AppShell> {
     final state = context.read<AppState>();
     switch (t.kind) {
       case SearchKind.page:
-        if (t.tab < items.length) {
+        if (t.tab < items.length || t.tab >= _firstPlugin) {
           _goToMain(t.tab);
         } else {
           openTool(t.tab - items.length);
@@ -306,6 +323,8 @@ class AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final wgBanner = _buildWgMigrateBanner(state);
+    // A plugin tab that was open when its plugin went away.
+    if (index >= _firstPlugin + state.pluginTabs.length) index = 0;
 
     return ActivityScope(
       child: Scaffold(
@@ -374,6 +393,7 @@ class AppShellState extends State<AppShell> {
         // a tool lives in the split panel or its own window instead.
         for (var t = 0; t < toolItems.length; t++)
           _splitTool == t || _modeOf(t) == SshDisplayMode.separateWindow ? const SizedBox.shrink() : _toolWidget(t),
+        for (final tab in context.read<AppState>().pluginTabs) PluginTabScreen(key: ValueKey(tab.key), tab: tab),
       ],
     );
     final split = _splitTool;
@@ -433,6 +453,7 @@ class AppShellState extends State<AppShell> {
             ),
           ),
           for (var i = 0; i < items.length; i++)
+            if (!_hidden(state, items[i].$2))
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
               child: _NavItem(
@@ -450,12 +471,23 @@ class AppShellState extends State<AppShell> {
                 },
               ),
             ),
+          for (var k = 0; k < state.pluginTabs.length; k++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+              child: _NavItem(
+                icon: pluginIcon(state.pluginTabs[k].icon),
+                label: state.pluginTabs[k].title,
+                selected: index == _firstPlugin + k,
+                onTap: () => _goToMain(_firstPlugin + k),
+              ),
+            ),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Divider(height: 1, color: BeacleColors.border.withValues(alpha: 0.8)),
           ),
           for (var t = 0; t < toolItems.length; t++)
+            if (!_hidden(state, toolItems[t].$2))
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
               child: _NavItem(

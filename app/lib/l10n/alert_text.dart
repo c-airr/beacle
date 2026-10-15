@@ -21,6 +21,9 @@ final _templates = <RegExp, String Function(L, RegExpMatch)>{
       l.f('alMsgCertExpires', {'domain': m[1], 'date': m[2]}),
   RegExp(r'^Certificate for (.+) expired on (\d{4}-\d{2}-\d{2})$'): (l, m) =>
       l.f('alMsgCertExpired', {'domain': m[1], 'date': m[2]}),
+  // Plugin metrics (backend/alerts.go evaluatePlugins): "CPU at 85.0°C (limit 80°C)".
+  RegExp(r'^(.+) at (-?[\d.]+\S*) \(limit (-?[\d.e+]+\S*)\)$'): (l, m) =>
+      l.f('alMsgPlugin', {'name': m[1], 'now': m[2], 'limit': m[3]}),
 };
 
 String alertMessage(L l, Alert a) => localizeAlertText(l, a.message);

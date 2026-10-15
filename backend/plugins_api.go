@@ -3,19 +3,40 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 )
 
-type pluginPathReq struct {
+// A package arrives as the .zip itself (the app reads the file it picked,
+// which a sandboxed app may not be able to hand on as a path) or as a folder
+// path, which installs it linked.
+type pluginSrcReq struct {
 	Path string `json:"path"`
+	Zip  []byte `json:"zip"` // base64 in JSON
 }
 
-func decodePath(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var req pluginPathReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		writeErr(w, http.StatusBadRequest, "path required")
-		return "", false
+const pluginZipMax = 8 << 20
+
+// decodePath returns a path to read the package from; done removes a zip
+// written to a temporary file for that.
+func decodePath(w http.ResponseWriter, r *http.Request) (path string, done func(), ok bool) {
+	var req pluginSrcReq
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginZipMax*2)).Decode(&req); err != nil || (req.Path == "") == (len(req.Zip) == 0) {
+		writeErr(w, http.StatusBadRequest, "path or zip required")
+		return "", nil, false
 	}
-	return req.Path, true
+	if req.Path != "" {
+		return req.Path, func() {}, true
+	}
+	f, err := os.CreateTemp("", "beacle-plugin-*.zip")
+	if err == nil {
+		_, err = f.Write(req.Zip)
+		f.Close()
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return "", nil, false
+	}
+	return f.Name(), func() { os.Remove(f.Name()) }, true
 }
 
 func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
@@ -23,10 +44,11 @@ func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleInspectPlugin(w http.ResponseWriter, r *http.Request) {
-	path, ok := decodePath(w, r)
+	path, done, ok := decodePath(w, r)
 	if !ok {
 		return
 	}
+	defer done()
 	info, err := s.plugins.Inspect(path)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -36,10 +58,11 @@ func (s *Server) handleInspectPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	path, ok := decodePath(w, r)
+	path, done, ok := decodePath(w, r)
 	if !ok {
 		return
 	}
+	defer done()
 	bp, err := s.plugins.Install(path)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())

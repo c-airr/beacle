@@ -36,6 +36,13 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
   bool _saving = false;
   bool _switchingBack = false;
 
+  /// Plugin metrics that alert, keyed `plugin.metric`: their warn override.
+  late final Map<String, TextEditingController> _pluginLevels = {
+    for (final e in context.read<AppState>().pluginMetrics.entries)
+      if (((e.value['warn'] as num?) ?? 0) > 0 || ((e.value['crit'] as num?) ?? 0) > 0)
+        e.key: TextEditingController(text: _numOrEmpty(widget.vps.thresholds?.plugins[e.key])),
+  };
+
   static String _numOrEmpty(double? v) =>
       v == null || v <= 0 ? '' : v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 1);
 
@@ -47,6 +54,9 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
     _cpu.dispose();
     _mem.dispose();
     _disk.dispose();
+    for (final c in _pluginLevels.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -90,7 +100,8 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
   Future<void> _save() async {
     if (_saving) return;
     final cpu = _parse(_cpu), mem = _parse(_mem), disk = _parse(_disk);
-    if (cpu == null || mem == null || disk == null) {
+    final plugins = {for (final e in _pluginLevels.entries) e.key: _parse(e.value)};
+    if (cpu == null || mem == null || disk == null || plugins.containsValue(null)) {
       showToast(context, context.l.t('thresholdsHint'), error: true);
       return;
     }
@@ -103,7 +114,16 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
         'name': _name.text.trim(),
         'location': _location.text.trim(),
         'tags': tags,
-        'thresholds': {'cpu_high': cpu, 'mem_high': mem, 'disk_high': disk},
+        'thresholds': {
+          'cpu_high': cpu,
+          'mem_high': mem,
+          'disk_high': disk,
+          'plugins': {
+            // Overrides of plugins not installed right now are kept, not lost.
+            ...?widget.vps.thresholds?.plugins,
+            for (final e in plugins.entries) e.key: e.value,
+          },
+        },
       });
       await state.refreshAll();
       if (mounted) {
@@ -121,6 +141,7 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true, // plugin levels can make it taller than the window
       title: Text('${context.l.t('editServer')} · ${widget.vps.name}'),
       content: SizedBox(
         width: 420,
@@ -149,6 +170,16 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
                 Expanded(child: _numField(context.l.t('thresholdDisk'), _disk)),
               ],
             ),
+            if (_pluginLevels.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(context.l.t('plgThresholdsHint'),
+                  style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final e in _pluginLevels.entries)
+                  SizedBox(width: 130, child: _numField(_pluginLabel(e.key), e.value)),
+              ]),
+            ],
             if (widget.vps.isWireGuard || widget.vps.wgPublicKey.isNotEmpty) ...[
               const SizedBox(height: 16),
               OutlinedButton.icon(
@@ -188,6 +219,13 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
         ),
       ],
     );
+  }
+
+  /// A plugin metric's field label: "CPU (°C)".
+  String _pluginLabel(String key) {
+    final d = context.read<AppState>().pluginMetrics[key] ?? const {};
+    final unit = '${d['unit'] ?? ''}';
+    return '${d['label'] ?? key}${unit.isEmpty ? '' : ' ($unit)'}';
   }
 
   Widget _numField(String label, TextEditingController c) {

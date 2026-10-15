@@ -8,6 +8,7 @@ import '../alert_sound.dart';
 import '../api/api_client.dart';
 import '../config.dart';
 import '../l10n/language.dart';
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../theme.dart';
 import '../tray.dart';
@@ -370,7 +371,46 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Installed plugins as GET /api/plugins lists them (see backend/plugins.go).
+  List<Map<String, dynamic>> plugins = [];
+
+  /// Sidebar tabs added by plugins.
+  List<PluginTab> pluginTabs = [];
+
+  /// Ids of panel parts plugins hid (beacle.hide).
+  Set<String> pluginHidden = {};
+
+  /// Bumped on every plugin change, so slots fetch their blocks again.
+  int pluginsRevision = 0;
+
+  /// Every plugin metric, keyed `plugin.metric`: label, unit, warn, crit.
+  Map<String, Map<String, dynamic>> get pluginMetrics => {
+        for (final p in plugins)
+          if (p['enabled'] == true)
+            for (final e in ((p['metrics'] as Map?) ?? const {}).entries)
+              '${p['id']}.${e.key}': {'plugin': p['name'], ...(e.value as Map<String, dynamic>)},
+      };
+
+  Future<void> refreshPlugins() async {
+    try {
+      final r = await api.get('/api/plugins') as Map<String, dynamic>;
+      plugins = [for (final p in (r['plugins'] as List? ?? [])) p as Map<String, dynamic>];
+      pluginTabs = [for (final t in (r['tabs'] as List? ?? [])) PluginTab.fromJson(t as Map<String, dynamic>)];
+      pluginHidden = {for (final h in (r['hide'] as List? ?? [])) '$h'};
+      L.overrides = {
+        for (final e in ((r['texts'] as Map?) ?? const {}).entries) '${e.key}': '${e.value}',
+        for (final t in pluginTabs) t.key: t.title,
+      };
+    } catch (_) {
+      // A backend from before plugins: nothing to show.
+      return;
+    }
+    pluginsRevision++;
+    notifyListeners();
+  }
+
   Future<void> refreshAll() async {
+    unawaited(refreshPlugins());
     try {
       final o = await api.overview();
       vpsList = ((o['vps'] as List?) ?? []).map((e) => Vps.fromJson(e)).toList();
@@ -508,6 +548,9 @@ class AppState extends ChangeNotifier {
       case 'local_net':
         _applyLocalNet(payload);
         break;
+      case 'plugins':
+        unawaited(refreshPlugins());
+        return;
       case 'action':
         actions.insert(0, ActionLog.fromJson(payload as Map<String, dynamic>));
         if (actions.length > 300) actions.removeLast();
@@ -585,6 +628,21 @@ class AppState extends ChangeNotifier {
     alertStream.close();
     super.dispose();
   }
+}
+
+/// A sidebar tab a plugin added with beacle.slot("nav.tab", ...).
+class PluginTab {
+  final String plugin, id, title, icon;
+  const PluginTab(this.plugin, this.id, this.title, this.icon);
+  PluginTab.fromJson(Map<String, dynamic> j)
+      : plugin = '${j['plugin'] ?? ''}',
+        id = '${j['id'] ?? ''}',
+        title = '${j['title'] ?? j['id'] ?? ''}',
+        icon = '${j['icon'] ?? ''}';
+
+  /// Its localization key: the title is served through L.overrides, so the
+  /// sidebar, top bar and search treat it like any built-in page.
+  String get key => 'plugin:$plugin/$id';
 }
 
 /// One fleet-wide metric sample for Overview charts.
