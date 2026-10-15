@@ -1,0 +1,13 @@
+{
+  "id": "temps",
+  "name": "Temperatures",
+  "version": "1.0.0",
+  "permissions": {
+    "read": ["/sys/class/thermal", "/sys/class/hwmon"],
+    "exec": ["nvidia-smi"]
+  },
+  "metrics": {
+    "cpu_temp": { "label": "CPU", "unit": "°C", "warn": 80, "crit": 90 },
+    "gpu_temp": { "label": "GPU", "unit": "°C", "warn": 85, "crit": 95 }
+  }
+}

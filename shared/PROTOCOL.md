@@ -51,8 +51,8 @@ once at startup (and reconnects automatically). All traffic is JSON
 | `alert`             | agent → backend | (reserved)     | backend evaluates snapshots today |
 | `command`           | backend → agent | `command`      | proxied UI/API request |
 | `command_result`    | agent → backend | `result`       | correlated by `request_id` |
-| `log_stream`        | either          | (reserved)     | future plugins |
-| `file_transfer`     | either          | (reserved)     | future plugins |
+| `log_stream`        | either          | (reserved)     | |
+| `file_transfer`     | either          | (reserved)     | |
 | `terminal`          | either          | `terminal`     | interactive shell frames (2.0), see below |
 | `error`             | backend → agent | `error`        | registration failed |
 
@@ -203,6 +203,27 @@ New in 1.2:
     accounts are killed and deleted with their home every 30 s; only accounts
     with the agent's GECOS marker are ever deleted.
 
+### Plugins
+
+Lua plugins (2.2), written as in [docs/plugins](../docs/plugins/README.md).
+The agent runs the `agent.lua` parts; the backend owns installation and
+pushes them as ordinary commands — no new frame type.
+
+- `POST /api/plugins/sync` — body `[]PluginBundle`
+  (`{id, version, sha256, manifest, agent_lua}`): the complete set this agent
+  should run. Bundles with a known `sha256` keep running, changed ones
+  restart, missing ones stop and their files go. The agent keeps a copy in
+  `<config dir>/plugins/<id>/` and starts them again after a restart.
+  Answers `[]PluginStatus`. The backend sends it after every
+  `register_ack` and whenever a plugin is installed, changed, switched or
+  removed. An agent before 2.2.0 answers 404 (shown as "agent too old");
+  `"disable_plugins": true` in `config.json` answers 403.
+- `POST /api/plugins/call` — `PluginCall` `{id, action, args}` runs a
+  `beacle.on` handler; answers `{"result": …}`, or 500 with its error.
+- Metrics frames carry `plugins` (`{"<id>.<metric>": number}`) and
+  `plugin_status` (`[{id, version, error}]`) in `SystemMetrics`; history
+  samples carry the same `plugins` map, buffered offline like the rest.
+
 ## UI → Backend
 
 REST under `/api/*`, live stream at `GET /ws` (JSON `WSMessage` frames).
@@ -216,6 +237,14 @@ closing it hangs the shell up. Requests with an `Origin` header (browsers)
 are refused, here and on the whole panel API.
 
 **Power save:** `POST /api/ui/power-mode` with `{"mode":"active"|"eco"|"sleep"}`.
+
+**Plugins (2.2):** `GET/POST /api/plugins`, `POST /api/plugins/inspect`,
+`PATCH/DELETE /api/plugins/{id}`, `GET /api/plugins/{id}/log`,
+`GET /api/plugins/ui?slot=&server=&tab=`, `POST /api/plugins/{id}/action` —
+listed in [docs/plugins/api.md](../docs/plugins/api.md#panel-http-api). A
+`plugins` frame on `/ws` (no payload) means: fetch `GET /api/plugins` again.
+Alerts of type `plugin_metric` have the key `<id>.<metric>|warn` or `|crit`;
+`VPSThresholds.plugins` holds per-server warn levels by `<id>.<metric>`.
 
 **No internet here (2.1):** `GET /api/overview` carries `local_net`
 (`{"online": bool, "since": time}`), and a `local_net` frame on `/ws`

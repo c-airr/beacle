@@ -190,7 +190,9 @@ Do **not** upload app or agent binaries by hand. The workflow builds them on `wi
 
 ### v2.0 — platform
 
-- **Plugin system** — extend Beacle with custom panels and data frames without forking core
+- **Plugin system** — ships in 2.2: Lua plugins add metrics, alerts, tabs and
+  server cards without forking core, installed from Settings with one click
+  ([how to write one](docs/plugins/README.md))
 - **Architecture refresh** — cleaner separation for long-term maintenance
 - **No Tailscale requirement** — WireGuard transport ships in 2.0
 - **SSH terminal and file explorer** — ship in 2.0, through the agent (no SSH

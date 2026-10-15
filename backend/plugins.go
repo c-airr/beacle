@@ -157,8 +157,10 @@ func readPackage(src string) (map[string]string, error) {
 	}
 	defer zr.Close()
 	for _, f := range zr.File {
-		name := path.Base(f.Name)
-		if dir := path.Dir(f.Name); dir != "." && strings.Contains(dir, "/") {
+		// Windows PowerShell's Compress-Archive writes backslashes.
+		entry := strings.ReplaceAll(f.Name, `\`, "/")
+		name := path.Base(entry)
+		if dir := path.Dir(entry); dir != "." && strings.Contains(dir, "/") {
 			continue // deeper than one top folder
 		}
 		if !slices.Contains(pluginFiles, name) || f.FileInfo().IsDir() {

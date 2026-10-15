@@ -60,11 +60,17 @@ func writePkgDir(t *testing.T, files map[string]string) string {
 
 func writePkgZip(t *testing.T, files map[string]string) string {
 	t.Helper()
+	return writePkgZipSep(t, files, "/")
+}
+
+// sep is how the zip tool separates the top folder from the file.
+func writePkgZipSep(t *testing.T, files map[string]string, sep string) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "temps.zip")
 	f, _ := os.Create(path)
 	zw := zip.NewWriter(f)
 	for name, src := range files {
-		w, _ := zw.Create("temps/" + name) // as zipping the folder makes it
+		w, _ := zw.Create("temps" + sep + name) // as zipping the folder makes it
 		w.Write([]byte(src))
 	}
 	zw.Close()
@@ -113,6 +119,13 @@ func TestInstallFromZipRendersSlots(t *testing.T) {
 	}
 }
 
+func TestInstallFromWindowsPowerShellZip(t *testing.T) {
+	p, _ := newTestPlugins(t)
+	if _, err := p.Install(writePkgZipSep(t, map[string]string{"manifest.json": testManifest, "agent.lua": "--"}, `\`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestInstallFromFolderIsLinkedAndKeepsState(t *testing.T) {
 	p, _ := newTestPlugins(t)
 	dir := writePkgDir(t, map[string]string{"manifest.json": testManifest, "agent.lua": `beacle.metric("cpu_temp", 1)`})
@@ -137,6 +150,31 @@ func TestInstallFromFolderIsLinkedAndKeepsState(t *testing.T) {
 	if p2.list["temps"] == nil || p2.list["temps"].state.Enabled {
 		t.Fatalf("after restart: %+v", p2.list["temps"])
 	}
+}
+
+// The shipped example renders every slot it registers without an error, with
+// and without readings.
+func TestShippedTempsPluginRenders(t *testing.T) {
+	p, store := newTestPlugins(t)
+	e := store.CreateVPS("panther", "panther", "100.1.1.1")
+	if _, err := p.Install(filepath.Join("..", "plugins", "temps")); err != nil {
+		t.Fatal(err)
+	}
+	check := func() {
+		t.Helper()
+		for _, slot := range []string{"servers.column", "server.section", "nav.tab"} {
+			for _, r := range p.Render(slot, e.VPS.ID, "") {
+				if r.Error != "" {
+					t.Errorf("%s: %s", slot, r.Error)
+				}
+			}
+		}
+	}
+	check()
+	store.SetSnapshot(&shared.VPSSnapshot{VPS: e.VPS, Metrics: shared.SystemMetrics{
+		Plugins: map[string]float64{"temps.cpu_temp": 61.5, "temps.gpu_temp": 70},
+	}})
+	check()
 }
 
 func TestInspectFlagsNewPermissions(t *testing.T) {

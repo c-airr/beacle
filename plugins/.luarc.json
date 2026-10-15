@@ -1,0 +1,5 @@
+{
+  "runtime.version": "Lua 5.1",
+  "workspace.library": ["beacle.d.lua"],
+  "diagnostics.globals": ["beacle", "ui"]
+}

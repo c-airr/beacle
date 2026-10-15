@@ -4,6 +4,27 @@
 
 ### Added
 
+- **Plugins** — extend Beacle in Lua without touching Beacle itself. A
+  plugin is a .zip (or a folder) with a manifest and up to two scripts:
+  `agent.lua` runs inside the agent on every server and reports metrics,
+  `backend.lua` runs in the panel and decides what it shows. **Settings →
+  Plugins** installs one with a click — showing first what files,
+  programs and hosts it may touch — and the panel sends each part where it
+  belongs, to every server, including ones that connect later. Plugin
+  metrics are kept in history, charted, and alert at the levels the
+  manifest declares (each server can set its own warning level in its edit
+  dialog), through the same webhooks as everything else. On screen a
+  plugin can add a tab to the sidebar, a card to a server's page or the
+  Overview, and a value beside each server in the list — numbers, bars,
+  charts, tables, buttons and fields that run code on a server — rename
+  any text and hide parts of the panel. A linked folder reloads on every
+  save while you write one. Scripts run sandboxed: no file, program or host
+  the manifest does not name, and a time limit on every call. Comes with a
+  temperature plugin (CPU and GPU, from hwmon, thermal zones and
+  nvidia-smi) as an example; the guide and the full API are in
+  `docs/plugins`. Needs the 2.2.0 agent; `disable_plugins` in an agent's
+  `config.json` refuses plugins on that server.
+
 - **Snippets in the SSH tab** — a panel beside the shells keeps commands
   you type often. Clicking one pastes it into the current tab without
   pressing Enter; ▶ runs it. **Run on…** sends one command, a snippet or

@@ -108,6 +108,7 @@ func (h *PluginHost) start(b shared.PluginBundle) {
 	p.rt = plugin.New(m, filepath.Join(h.dir, b.ID, "store.json"))
 	p.rt.OpenSystem()
 	p.rt.OpenMetrics()
+	p.rt.OpenHTTP()
 	if err := p.rt.Load(b.AgentLua, b.ID+"/agent.lua"); err != nil {
 		log.Printf("plugin %s: %v", b.ID, err)
 	}
