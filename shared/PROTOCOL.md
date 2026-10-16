@@ -168,8 +168,18 @@ New in 1.2:
   so no offline alert fires; the marker expires after 15 min.
 - `POST /api/watchdog/config` — watchdog config pushed by the backend
   (persisted as `watchdog.json`, mode 0600). `POST /api/watchdog/send` with
-  a `WebhookMessage` — immediate delivery to all targets. `GET
-  /api/watchdog/status` — enabled/role/counts (never secret URLs).
+  a `WebhookMessage` — delivery to all targets, answering
+  `WatchdogSendResult` `{"sent","reason"}`. A message with `alert` =
+  `agent_down`/`agent_offline` and a `vps_id` is checked first: if that
+  peer's agent answers its liveness route the watcher sends nothing
+  (`sent:false` + reason); otherwise it pings the host and sends "agent
+  down" or "offline" as it sees it. `GET /api/watchdog/status` —
+  enabled/role/counts (never secret URLs).
+- `GET /beacle/alive` on `<tailscale-ip>:<listen_port>` (default 8931) — the
+  agent's only inbound socket, unauthenticated, bound to the Tailscale
+  address only (not served on WireGuard agents). Answers `AgentLiveness`
+  `{"id","version","backend"}`; watchers use it to tell a dead agent from a
+  panel that lost its tunnel.
 - File explorer (wire paths are absolute POSIX paths; errors are 400 bad
   path, 403 protected/disabled, 404 missing, 409 conflict):
   - `GET /api/fs/dir?path=&hidden=1` — `FSListing` with mtime, owner,
@@ -257,8 +267,12 @@ reconnect.
 **Webhooks (2.0):** `GET /api/webhooks` — targets plus the elected
 primary/secondary watchers. `PUT /api/webhooks` with `{"targets": [...]}` —
 Discord (`kind`, webhook `url`), ntfy (topic `url`), Telegram (`url` = bot
-token, `chat_id`). `POST /api/webhooks/test` — test message down the real
-path, answers `{"via": ...}`. VPS statuses `restarting` and `powered_off`
+token, `chat_id`). `PUT /api/webhooks/senders` with
+`{"primary_id","secondary_id"}` — pins either watcher seat to a server, `""`
+for automatic (automatic keeps the two seats in different networks when it
+can); `GET` also returns `pinned_primary` / `pinned_secondary`. `POST
+/api/webhooks/test` — test message down the real path, answers `{"via":
+...}`; 502 when no watcher is reachable (nothing is sent from the PC). VPS statuses `restarting` and `powered_off`
 ride the normal `vps_list` stream.
 The desktop app sends `eco` when idle, `sleep` when minimized/background.
 WebSockets stay connected; backend only sets agent power mode.

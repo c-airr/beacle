@@ -29,11 +29,25 @@ type WebhookTarget struct {
 	ChatID string `json:"chat_id,omitempty"` // telegram only
 }
 
-// WebhookMessage is one notification.
+// WebhookMessage is one notification. VPSID and Alert name what it is about
+// when it is an alert, so a watcher can check the claim from where it stands
+// before passing it on (see agent/watchdog.go). Both are blank for anything
+// else — tests, recoveries — which is sent as is.
 type WebhookMessage struct {
 	Title    string `json:"title"`
 	Body     string `json:"body"`
 	Severity string `json:"severity"` // info | warning | critical
+	VPSID    string `json:"vps_id,omitempty"`
+	VPSName  string `json:"vps_name,omitempty"`
+	Alert    string `json:"alert,omitempty"` // AlertType
+}
+
+// WatchdogSendResult is a watcher's answer to a send request. Sent=false with
+// a Reason means the watcher checked the alert and found it untrue from its
+// side (the agent answers it), so nothing went out — on purpose.
+type WatchdogSendResult struct {
+	Sent   bool   `json:"sent"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // WatchdogPeer is one fleet member a watcher keeps an eye on.
@@ -41,6 +55,30 @@ type WatchdogPeer struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Host string `json:"host"` // Tailscale IPv4
+	// AgentPort is where the peer's agent answers liveness probes from other
+	// agents (see agent/liveness.go). Zero means DefaultAgentPort.
+	AgentPort int `json:"agent_port,omitempty"`
+}
+
+// Reachability alert texts, shared so the panel and a watcher that rewrites
+// the alert after checking it word it the same (the app translates them by
+// matching this exact English).
+const (
+	MsgAgentDown    = "Agent is not responding — the VPS itself still answers"
+	MsgAgentOffline = "VPS offline — no answer on its address"
+)
+
+// AgentLivenessPath is the one unauthenticated route an agent serves to the
+// tailnet: proof that the process is up, so a watcher can tell a dead agent
+// from a panel that merely lost its tunnel.
+const AgentLivenessPath = "/beacle/alive"
+
+// AgentLiveness is the body of AgentLivenessPath.
+type AgentLiveness struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+	// Backend reports whether this agent's own tunnel to the panel is up.
+	Backend bool `json:"backend"`
 }
 
 // WatchdogConfig is pushed by the backend to the elected watchers. Disabled

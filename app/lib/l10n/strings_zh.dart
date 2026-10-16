@@ -432,6 +432,10 @@ const _zh = <String, String>{
   'whTest': '发送测试',
   'whSaved': '已保存 —— 守望者会在几秒内生效。',
   'whTestSent': '测试已通过 {via} 发送。',
+  'whAuto': '自动',
+  'whNow': '当前：{name}',
+  'whNowNone': '当前：无 — 没有在线的代理',
+  'whPinOffline': '{pin} 离线 — 由 {name} 代替',
   // settings
   'setGeneral': '常规',
   'setUpdates': '更新',

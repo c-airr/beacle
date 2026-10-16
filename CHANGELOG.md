@@ -41,6 +41,21 @@
   badge once it is that close, and in its tooltip always, with the issuer.
   Caddy renews with 30 days left, so this means a renewal has been failing
   for two weeks. Needs the 2.2.0 agent.
+- **Senders checked from the fleet, and chosen by hand** — an "agent
+  down" or "VPS offline" alert is no longer sent the moment this computer
+  loses sight of a server: the watcher sending it first asks that
+  server's agent itself and pings the host, and sends nothing when the
+  agent answers — a blink in the PC's connection used to page for every
+  agent at once. When it does send, the message says what the watcher
+  saw ("confirmed by …"). Nothing is ever sent from this computer any
+  more: with neither watcher reachable the alert stays in the panel and
+  the watchers' own supervision takes over. The automatic pick keeps the
+  two senders in different networks (two servers behind the same home
+  router never hold both seats unless there is nothing else), and
+  **Settings → Notifications** can pin either seat to a chosen server; an
+  offline pin is stood in for by the automatic pick. The check needs the
+  2.2.0 agent on the watched server — it answers on its Tailscale address,
+  port 8931 — older agents are reported as before.
 - **When a disk will be full** — a disk that keeps filling shows "full in
   ~4 days at the current rate" under its bar on the server's page (hours
   when it is under two days). The rate is a straight line through the

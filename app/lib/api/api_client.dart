@@ -165,6 +165,12 @@ class ApiClient {
   Future<void> setWebhooks(List<WebhookTarget> targets) =>
       put('/api/webhooks', body: {'targets': targets.map((t) => t.toJson()).toList()});
 
+  /// Pins the primary/backup sender to a server; '' puts a seat back on
+  /// automatic.
+  Future<void> setWebhookSenders(String primaryId, String secondaryId) =>
+      put('/api/webhooks/senders',
+          body: {'primary_id': primaryId, 'secondary_id': secondaryId});
+
   Future<String> testWebhooks() async =>
       ((await post('/api/webhooks/test')) as Map)['via'] as String? ?? '';
 

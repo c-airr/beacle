@@ -9,8 +9,8 @@ func (c *linuxCollector) SetWatchdogConfig(wc shared.WatchdogConfig) error {
 	return wd.setConfig(c.cfg, wc)
 }
 
-func (c *linuxCollector) SendWatchdogMessage(msg shared.WebhookMessage) error {
-	return wd.sendAll(msg)
+func (c *linuxCollector) SendWatchdogMessage(msg shared.WebhookMessage) (shared.WatchdogSendResult, error) {
+	return wd.deliver(msg)
 }
 
 func (c *linuxCollector) WatchdogStatus() (shared.WatchdogStatus, error) {

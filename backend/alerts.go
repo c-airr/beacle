@@ -169,6 +169,9 @@ func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertS
 			Title:    fmt.Sprintf("[%s] %s: %s", sev, vps.Name, alertTitle(t)),
 			Body:     msg,
 			Severity: string(sev),
+			VPSID:    vps.ID,
+			VPSName:  vps.Name,
+			Alert:    string(t),
 		})
 	}
 }
@@ -619,11 +622,11 @@ func (e *AlertEngine) sweepOffline() {
 			if hostUp {
 				e.clear(v.ID, shared.AlertAgentOffline, "")
 				e.fire(v, shared.AlertAgentDown, shared.SeverityCritical, "",
-					"Agent is not responding — the VPS itself still answers")
+					shared.MsgAgentDown)
 			} else {
 				e.clear(v.ID, shared.AlertAgentDown, "")
 				e.fire(v, shared.AlertAgentOffline, shared.SeverityCritical, "",
-					"VPS offline — no answer on its address")
+					shared.MsgAgentOffline)
 			}
 			e.mu.Unlock()
 		}

@@ -67,5 +67,7 @@ func main() {
 	api.kickSession = ws.KickSession
 	// Fleet watchdog: idle unless this agent is an elected watcher.
 	go runWatchdog(cfg, ws)
+	// Lets watchers check this agent is alive before paging about it.
+	go runLiveness(cfg, ws)
 	ws.Run()
 }

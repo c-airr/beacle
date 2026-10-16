@@ -706,12 +706,17 @@ class WebhookTarget {
       };
 }
 
-/// Webhook destinations plus the currently elected fleet watchers.
+/// Webhook destinations, the currently elected fleet watchers and any pins.
 class WebhooksConfig {
   final List<WebhookTarget> targets;
   final Vps? primary, secondary;
+
+  /// Servers chosen by hand for each seat; empty means automatic.
+  final String pinnedPrimary, pinnedSecondary;
   WebhooksConfig.fromJson(Map<String, dynamic> j)
       : targets = _list(j['targets'], WebhookTarget.fromJson),
+        pinnedPrimary = _s(j['pinned_primary']),
+        pinnedSecondary = _s(j['pinned_secondary']),
         primary = j['primary'] is Map<String, dynamic>
             ? Vps.fromJson(j['primary'] as Map<String, dynamic>)
             : null,

@@ -63,7 +63,7 @@ type Collector interface {
 	// Watchdog: fleet supervision from the inside while the backend tunnel
 	// is down. Config is pushed by the backend and persisted locally.
 	SetWatchdogConfig(cfg shared.WatchdogConfig) error
-	SendWatchdogMessage(msg shared.WebhookMessage) error
+	SendWatchdogMessage(msg shared.WebhookMessage) (shared.WatchdogSendResult, error)
 	WatchdogStatus() (shared.WatchdogStatus, error)
 
 	SystemdUnits() ([]shared.SystemdUnit, error)

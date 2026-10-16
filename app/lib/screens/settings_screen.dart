@@ -1137,6 +1137,61 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     }
   }
 
+  Future<void> _setSenders(String primaryId, String secondaryId) async {
+    setState(() => whStatus = null);
+    try {
+      context.read<AppState>().onUserAction();
+      await context.read<AppState>().api.setWebhookSenders(primaryId, secondaryId);
+      // The backend re-elects and pushes the fleet in the background; the
+      // election itself is immediate, so the reload already shows the result.
+      await _loadWebhooks();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => whStatus = '$e');
+    }
+  }
+
+  /// One sender seat: automatic or a chosen server, with who actually holds
+  /// the seat right now underneath (a chosen server that is offline is
+  /// stood in for by the automatic pick).
+  Widget _senderChoice(
+    AppState state, {
+    required String label,
+    required String pinned,
+    required String other,
+    required Vps? current,
+    required ValueChanged<String> onChanged,
+  }) {
+    final l = context.l;
+    final options = <String, String>{'': l.t('whAuto')};
+    for (final v in state.vpsList) {
+      if (v.status == 'pending' || v.id == other) continue;
+      options[v.id] = v.name;
+    }
+    // Keep a pin to a server the list no longer shows selectable.
+    if (pinned.isNotEmpty && !options.containsKey(pinned)) {
+      options[pinned] = pinned;
+    }
+    final now = current?.name;
+    final String detail;
+    if (now == null) {
+      detail = l.t('whNowNone');
+    } else if (pinned.isNotEmpty && current!.id != pinned) {
+      detail = l.f('whPinOffline', {'pin': options[pinned] ?? pinned, 'name': now});
+    } else {
+      detail = l.f('whNow', {'name': now});
+    }
+    return _choice(
+      label: label,
+      detail: detail,
+      value: pinned,
+      options: options,
+      onChanged: (v) {
+        if (v != pinned) onChanged(v);
+      },
+    );
+  }
+
   Future<void> _testWebhooks() async {
     setState(() {
       whTesting = true;
@@ -1175,15 +1230,26 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               if (whLoading && webhooks == null)
                 const SizedBox(
                     width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              else if (webhooks?.primary == null)
-                Text(context.l.t('whNoWatchers'),
-                    style: TextStyle(fontSize: 12, color: BeacleColors.warn))
-              else ...[
-                _field(context.l.t('whPrimary'), webhooks!.primary!.name,
-                    tone: BeacleColors.ok),
-                if (webhooks!.secondary != null)
-                  _field(context.l.t('whSecondary'), webhooks!.secondary!.name,
-                      tone: BeacleColors.text),
+              else if (webhooks != null) ...[
+                if (webhooks!.primary == null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(context.l.t('whNoWatchers'),
+                        style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
+                  ),
+                _senderChoice(state,
+                    label: context.l.t('whPrimary'),
+                    pinned: webhooks!.pinnedPrimary,
+                    other: webhooks!.pinnedSecondary,
+                    current: webhooks!.primary,
+                    onChanged: (id) => _setSenders(id, webhooks!.pinnedSecondary)),
+                const SizedBox(height: 12),
+                _senderChoice(state,
+                    label: context.l.t('whSecondary'),
+                    pinned: webhooks!.pinnedSecondary,
+                    other: webhooks!.pinnedPrimary,
+                    current: webhooks!.secondary,
+                    onChanged: (id) => _setSenders(webhooks!.pinnedPrimary, id)),
               ],
             ],
           ),

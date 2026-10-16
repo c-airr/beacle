@@ -419,7 +419,7 @@ const _en = <String, String>{
   'setNotify': 'Notifications',
   'whSenders': 'SENDERS (FLEET WATCHERS)',
   'whExplainer':
-      'Alerts are sent by the two most stable servers, not this computer — so they arrive even when the panel is closed. The backup only speaks while the primary is unreachable.',
+      'Alerts are sent by two servers, not this computer — so they arrive even when the panel is closed. Before reporting an agent or server as down, the sender checks it itself, so a blink in this computer\'s connection pages nobody. Automatic picks the two most stable servers in different networks (when there are any). The backup only speaks while the primary is unreachable.',
   'whNoWatchers': 'No watchers — no agents online.',
   'whPrimary': 'Primary sender',
   'whSecondary': 'Backup sender',
@@ -432,6 +432,10 @@ const _en = <String, String>{
   'whTest': 'Send test',
   'whSaved': 'Saved — watchers pick it up within seconds.',
   'whTestSent': 'Test sent via {via}.',
+  'whAuto': 'Automatic',
+  'whNow': 'Now: {name}',
+  'whNowNone': 'Now: nobody — no agents online',
+  'whPinOffline': '{pin} is offline — {name} stands in',
   // settings
   'setGeneral': 'General',
   'setUpdates': 'Updates',

@@ -369,11 +369,12 @@ func (s *APIServer) Routes() http.Handler {
 			jsonErr(w, 400, "bad json")
 			return
 		}
-		if err := s.col.SendWatchdogMessage(msg); err != nil {
+		res, err := s.col.SendWatchdogMessage(msg)
+		if err != nil {
 			jsonErr(w, 500, err.Error())
 			return
 		}
-		jsonOut(w, 200, map[string]any{"ok": true})
+		jsonOut(w, 200, res)
 	}))
 	mux.HandleFunc("GET /api/watchdog/status", a(func(w http.ResponseWriter, r *http.Request) {
 		st, err := s.col.WatchdogStatus()

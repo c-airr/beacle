@@ -432,6 +432,10 @@ const _es = <String, String>{
   'whTest': 'Enviar prueba',
   'whSaved': 'Guardado — los vigilantes lo aplican en segundos.',
   'whTestSent': 'Prueba enviada mediante {via}.',
+  'whAuto': 'Automático',
+  'whNow': 'Ahora: {name}',
+  'whNowNone': 'Ahora: nadie — ningún agente en línea',
+  'whPinOffline': '{pin} está desconectado — lo sustituye {name}',
   // settings
   'setGeneral': 'General',
   'setUpdates': 'Actualizaciones',

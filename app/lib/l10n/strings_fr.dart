@@ -432,6 +432,10 @@ const _fr = <String, String>{
   'whTest': 'Envoyer un test',
   'whSaved': 'Enregistré — les veilleurs le prennent en compte en quelques secondes.',
   'whTestSent': 'Test envoyé via {via}.',
+  'whAuto': 'Automatique',
+  'whNow': 'Actuellement : {name}',
+  'whNowNone': 'Actuellement : personne — aucun agent en ligne',
+  'whPinOffline': '{pin} est hors ligne — {name} le remplace',
   // settings
   'setGeneral': 'Général',
   'setUpdates': 'Mises à jour',

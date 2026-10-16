@@ -559,11 +559,31 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetWebhooks(w http.ResponseWriter, r *http.Request) {
 	primary, secondary := s.webhooks.Elect()
+	pinP, pinS := s.webhooks.Pins()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"targets":   s.webhooks.Targets(),
-		"primary":   primary,
-		"secondary": secondary,
+		"targets":          s.webhooks.Targets(),
+		"primary":          primary,
+		"secondary":        secondary,
+		"pinned_primary":   pinP,
+		"pinned_secondary": pinS,
 	})
+}
+
+// handlePutWebhookSenders pins the primary/backup watcher ("" = automatic).
+func (s *Server) handlePutWebhookSenders(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Primary   string `json:"primary_id"`
+		Secondary string `json:"secondary_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	if err := s.webhooks.SetPins(req.Primary, req.Secondary); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) handlePutWebhooks(w http.ResponseWriter, r *http.Request) {
@@ -635,6 +655,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/alerts/{id}/resolve", s.handleResolveAlert)
 	mux.HandleFunc("GET /api/webhooks", s.handleGetWebhooks)
 	mux.HandleFunc("PUT /api/webhooks", s.handlePutWebhooks)
+	mux.HandleFunc("PUT /api/webhooks/senders", s.handlePutWebhookSenders)
 	mux.HandleFunc("POST /api/webhooks/test", s.handleTestWebhooks)
 	mux.HandleFunc("GET /api/actions", s.handleActions)
 	mux.HandleFunc("/api/links", s.handleLinks)

@@ -419,7 +419,7 @@ const _pl = <String, String>{
   'setNotify': 'Powiadomienia',
   'whSenders': 'NADAWCY (STRAŻNICY FLOTY)',
   'whExplainer':
-      'Alerty wysyłają dwa najstabilniejsze serwery, nie ten komputer — dotrą nawet przy zamkniętym panelu. Zapasowy odzywa się tylko gdy główny jest nieosiągalny.',
+      'Alerty wysyłają dwa serwery, nie ten komputer — dotrą nawet przy zamkniętym panelu. Zanim nadawca zgłosi niedziałającego agenta lub serwer, sam to sprawdza, więc chwilowa utrata łączności tego komputera nikogo nie budzi. Automatycznie wybierane są dwa najstabilniejsze serwery w różnych sieciach (jeśli się da). Zapasowy odzywa się tylko gdy główny jest nieosiągalny.',
   'whNoWatchers': 'Brak nadawców — żaden agent online.',
   'whPrimary': 'Główny nadawca',
   'whSecondary': 'Nadawca zapasowy',
@@ -432,6 +432,10 @@ const _pl = <String, String>{
   'whTest': 'Wyślij test',
   'whSaved': 'Zapisano — strażnicy podłapią w kilka sekund.',
   'whTestSent': 'Test wysłany przez {via}.',
+  'whAuto': 'Automatycznie',
+  'whNow': 'Teraz: {name}',
+  'whNowNone': 'Teraz: nikt — żaden agent online',
+  'whPinOffline': '{pin} jest offline — zastępuje go {name}',
   // settings
   'setGeneral': 'Ogólne',
   'setUpdates': 'Aktualizacje',

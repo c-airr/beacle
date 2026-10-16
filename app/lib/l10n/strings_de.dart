@@ -432,6 +432,10 @@ const _de = <String, String>{
   'whTest': 'Test senden',
   'whSaved': 'Gespeichert — die Wächter übernehmen es innerhalb von Sekunden.',
   'whTestSent': 'Test über {via} gesendet.',
+  'whAuto': 'Automatisch',
+  'whNow': 'Jetzt: {name}',
+  'whNowNone': 'Jetzt: niemand — kein Agent online',
+  'whPinOffline': '{pin} ist offline — {name} springt ein',
   // settings
   'setGeneral': 'Allgemein',
   'setUpdates': 'Updates',

@@ -480,9 +480,9 @@ func (c *devCollector) SetWatchdogConfig(wc shared.WatchdogConfig) error {
 	return nil
 }
 
-func (c *devCollector) SendWatchdogMessage(msg shared.WebhookMessage) error {
+func (c *devCollector) SendWatchdogMessage(msg shared.WebhookMessage) (shared.WatchdogSendResult, error) {
 	if len(devWatchdog.Webhooks) == 0 {
-		return fmt.Errorf("no webhooks configured")
+		return shared.WatchdogSendResult{}, fmt.Errorf("no webhooks configured")
 	}
 	var firstErr error
 	sent := 0
@@ -496,9 +496,9 @@ func (c *devCollector) SendWatchdogMessage(msg shared.WebhookMessage) error {
 		sent++
 	}
 	if sent == 0 {
-		return firstErr
+		return shared.WatchdogSendResult{}, firstErr
 	}
-	return nil
+	return shared.WatchdogSendResult{Sent: true}, nil
 }
 
 func (c *devCollector) WatchdogStatus() (shared.WatchdogStatus, error) {

@@ -111,6 +111,87 @@ func (w *watchdog) sendAll(msg shared.WebhookMessage) error {
 	return nil
 }
 
+// Seams for tests: the network probes a verification runs.
+var (
+	probeAgent = agentAlive
+	probeHost  = peerUp
+)
+
+var verifyRetryGap = 2 * time.Second
+
+// deliver is the panel's send path. Reachability alerts are the panel's view
+// from one computer — a blink in its own connection used to page for every
+// agent at once — so they are checked again from here before anything goes
+// out. Everything else (metrics, services, certificates) was measured by the
+// agent concerned and is passed on as is.
+func (w *watchdog) deliver(msg shared.WebhookMessage) (shared.WatchdogSendResult, error) {
+	msg, send, reason := w.verify(msg)
+	if !send {
+		log.Printf("watchdog: not sending %q: %s", msg.Title, reason)
+		return shared.WatchdogSendResult{Sent: false, Reason: reason}, nil
+	}
+	if err := w.sendAll(msg); err != nil {
+		return shared.WatchdogSendResult{}, err
+	}
+	return shared.WatchdogSendResult{Sent: true}, nil
+}
+
+// verify decides whether a reachability alert holds from this watcher, and
+// rewrites it to what this watcher actually sees: the panel may say "agent
+// down" for a host this side cannot reach at all, or the other way round.
+// Only positive proof — the agent answering — suppresses an alert; a peer
+// this watcher knows nothing about is passed on unchecked.
+func (w *watchdog) verify(msg shared.WebhookMessage) (shared.WebhookMessage, bool, string) {
+	if msg.VPSID == "" || (msg.Alert != string(shared.AlertAgentDown) && msg.Alert != string(shared.AlertAgentOffline)) {
+		return msg, true, ""
+	}
+	wc := w.snapshot()
+	self := wc.SelfID
+	var peer *shared.WatchdogPeer
+	for i := range wc.Peers {
+		if wc.Peers[i].ID == wc.SelfID {
+			self = wc.Peers[i].Name
+		}
+		if wc.Peers[i].ID == msg.VPSID {
+			peer = &wc.Peers[i]
+		}
+	}
+	if msg.VPSID == wc.SelfID {
+		return msg, false, "the alert is about this watcher, and it is running"
+	}
+	if peer == nil {
+		return msg, true, ""
+	}
+	alive := probeAgent(*peer)
+	if !alive {
+		// One more try: a single lost packet must not decide it either way.
+		time.Sleep(verifyRetryGap)
+		alive = probeAgent(*peer)
+	}
+	if alive {
+		return msg, false, peer.Name + "'s agent answers " + self
+	}
+	name := msg.VPSName
+	if name == "" {
+		name = peer.Name
+	}
+	sev := msg.Severity
+	if sev == "" {
+		sev = "critical"
+	}
+	if probeHost(peer.Host) {
+		msg.Alert = string(shared.AlertAgentDown)
+		msg.Title = "[" + sev + "] " + name + ": agent down"
+		msg.Body = shared.MsgAgentDown
+	} else {
+		msg.Alert = string(shared.AlertAgentOffline)
+		msg.Title = "[" + sev + "] " + name + ": VPS offline"
+		msg.Body = shared.MsgAgentOffline
+	}
+	msg.Body += " (confirmed by " + self + ")"
+	return msg, true, ""
+}
+
 // peerUp probes one host: SSH first, ping as the fallback.
 func peerUp(host string) bool {
 	if host == "" {
