@@ -1,6 +1,11 @@
 # Changelog
 
-## 2.2.5 (unreleased)
+## 2.2.5 — 2026-10-18
+
+Plugins that can do what the panel does: its API, settings, alerts, events
+and history of this computer, with the install dialog saying plainly what
+a plugin may do. Demo plugins in `plugins/demo`, and a fix for agents that
+could pass for another server.
 
 ### Added
 
