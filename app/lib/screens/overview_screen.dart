@@ -313,7 +313,14 @@ List<_AttentionItem> _attentionItems(AppState state, L l) {
     );
   }
 
+  // CPU, RAM and disk come from the backend's alerts, with each server's own
+  // thresholds; an offline server already alerted is not listed twice.
+  final alertedOffline = {
+    for (final a in state.alerts)
+      if (!a.resolved && (a.type == 'agent_offline' || a.type == 'agent_down')) a.vpsId,
+  };
   for (final v in state.vpsList) {
+    if (!v.online && alertedOffline.contains(v.id)) continue;
     if (!v.online || state.isReportStale(v)) {
       add(
         _AttentionItem(
@@ -328,27 +335,6 @@ List<_AttentionItem> _attentionItems(AppState state, L l) {
     }
     final snap = state.snapshots[v.id];
     if (snap == null) continue;
-    final m = snap.metrics;
-    if (m.memPercent >= 90) {
-      add(_AttentionItem(severity: 'critical', title: v.name, message: 'RAM ${m.memPercent.toStringAsFixed(0)}%', vpsId: v.id),
-          'ram:${v.id}');
-    } else if (m.memPercent >= 80) {
-      add(_AttentionItem(severity: 'warning', title: v.name, message: 'RAM ${m.memPercent.toStringAsFixed(0)}%', vpsId: v.id),
-          'ram:${v.id}');
-    }
-    if (m.cpuPercent >= 90) {
-      add(_AttentionItem(severity: 'critical', title: v.name, message: 'CPU ${m.cpuPercent.toStringAsFixed(0)}%', vpsId: v.id),
-          'cpu:${v.id}');
-    }
-    for (final d in m.disks) {
-      if (d.usedPercent >= 95) {
-        add(_AttentionItem(severity: 'critical', title: v.name, message: l.f('ovDisk', {'mount': d.mount, 'p': d.usedPercent.toStringAsFixed(0)}), vpsId: v.id),
-            'disk:${v.id}:${d.mount}');
-      } else if (d.usedPercent >= 85) {
-        add(_AttentionItem(severity: 'warning', title: v.name, message: l.f('ovDisk', {'mount': d.mount, 'p': d.usedPercent.toStringAsFixed(0)}), vpsId: v.id),
-            'disk:${v.id}:${d.mount}');
-      }
-    }
     for (final c in snap.docker.containers) {
       if (c.state == 'restarting') {
         add(_AttentionItem(severity: 'warning', title: v.name, message: l.f('ovDockerRestarting', {'name': c.name}), vpsId: v.id),

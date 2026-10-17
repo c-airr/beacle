@@ -595,7 +595,6 @@ const _en = <String, String>{
   'ovCharts': 'GLOBAL CHARTS',
   'ovChartsFill': 'Charts fill as Beacle collects samples (≈1/min).',
   'ovAgentOutdated': 'Agent data outdated',
-  'ovDisk': 'Disk {mount} {p}%',
   'ovDockerRestarting': 'Docker {name} restarting',
   'ovSystemdFailed': 'Systemd {n} failed',
   // servers

@@ -595,7 +595,6 @@ const _zh = <String, String>{
   'ovCharts': '全局图表',
   'ovChartsFill': '图表会随着 Beacle 采集样本逐渐填满（约每分钟 1 次）。',
   'ovAgentOutdated': '代理程序数据已过时',
-  'ovDisk': '磁盘 {mount} {p}%',
   'ovDockerRestarting': 'Docker {name} 正在重启',
   'ovSystemdFailed': 'Systemd：{n} 个失败',
   // servers

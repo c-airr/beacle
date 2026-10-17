@@ -595,7 +595,6 @@ const _it = <String, String>{
   'ovCharts': 'GRAFICI GLOBALI',
   'ovChartsFill': 'I grafici si riempiono man mano che Beacle raccoglie campioni (≈1/min).',
   'ovAgentOutdated': 'Dati dell’agente non aggiornati',
-  'ovDisk': 'Disco {mount} {p}%',
   'ovDockerRestarting': 'Docker {name} in riavvio',
   'ovSystemdFailed': 'Systemd: {n} in errore',
   // servers

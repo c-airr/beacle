@@ -90,14 +90,23 @@ type webhooksFile struct {
 	Secondary string                 `json:"secondary_id,omitempty"`
 }
 
-func (w *WebhookService) persistLocked() {
+// persistLocked writes through a temporary file: a write cut short must not
+// leave a truncated webhooks.json, which loads as no destinations at all.
+func (w *WebhookService) persistLocked() error {
 	data, err := json.MarshalIndent(webhooksFile{
 		Targets: w.targets, Primary: w.pinPrimary, Secondary: w.pinSecondary,
 	}, "", "  ")
 	if err != nil {
-		return
+		return err
 	}
-	_ = os.WriteFile(w.path, data, 0o600)
+	tmp := w.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("save notifications: %w", err)
+	}
+	if err := os.Rename(tmp, w.path); err != nil {
+		return fmt.Errorf("save notifications: %w", err)
+	}
+	return nil
 }
 
 func newWebhookID() string {
@@ -127,10 +136,10 @@ func (w *WebhookService) SetTargets(targets []shared.WebhookTarget) error {
 	}
 	w.mu.Lock()
 	w.targets = targets
-	w.persistLocked()
+	err := w.persistLocked()
 	w.mu.Unlock()
 	go w.SyncWatchers()
-	return nil
+	return err
 }
 
 // Pins returns the pinned watcher IDs (blank = automatic).
@@ -156,10 +165,10 @@ func (w *WebhookService) SetPins(primary, secondary string) error {
 	}
 	w.mu.Lock()
 	w.pinPrimary, w.pinSecondary = primary, secondary
-	w.persistLocked()
+	err := w.persistLocked()
 	w.mu.Unlock()
 	go w.SyncWatchers()
-	return nil
+	return err
 }
 
 // Enqueue hands an alert to the delivery worker without blocking evaluation.

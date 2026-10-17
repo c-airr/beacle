@@ -595,7 +595,6 @@ const _pl = <String, String>{
   'ovCharts': 'WYKRESY GLOBALNE',
   'ovChartsFill': 'Wykresy wypełniają się w miarę zbierania próbek (≈1/min).',
   'ovAgentOutdated': 'Dane agenta nieaktualne',
-  'ovDisk': 'Dysk {mount} {p}%',
   'ovDockerRestarting': 'Docker {name} się restartuje',
   'ovSystemdFailed': 'Systemd: {n} z błędem',
   // servers

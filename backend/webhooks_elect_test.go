@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -106,5 +107,27 @@ func TestElectEmpty(t *testing.T) {
 	p, s := electWatchers(nil, nil, "x", "y")
 	if p != nil || s != nil {
 		t.Fatal("no candidates must elect nobody")
+	}
+}
+
+func TestWebhookTargetsSurviveARestartAndReportSaveErrors(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := NewWebhookService(dir, store, nil, nil)
+	target := shared.WebhookTarget{Kind: "ntfy", URL: "https://ntfy.sh/example"}
+	if err := w.SetTargets([]shared.WebhookTarget{target}); err != nil {
+		t.Fatal(err)
+	}
+	if got := NewWebhookService(dir, store, nil, nil).Targets(); len(got) != 1 || got[0].URL != target.URL {
+		t.Fatalf("after restart: %+v", got)
+	}
+
+	// A save that cannot happen is an error the panel shows, not a silent "ok".
+	w.path = filepath.Join(dir, "missing", "webhooks.json")
+	if err := w.SetTargets([]shared.WebhookTarget{target}); err == nil {
+		t.Fatal("failed save reported as success")
 	}
 }

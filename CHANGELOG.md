@@ -11,6 +11,24 @@
 
 ### Fixed
 
+- **Another machine on the tailnet could pass for one of your servers** —
+  an agent connecting with only a server's ID (which `/beacle/alive`
+  gives to anyone), or with its Tailscale name and IP, was accepted as
+  that server and even handed its token: it would then get the commands,
+  shells and file uploads meant for it. A server is now opened only by
+  its token. An agent that lost its token gets the server back only from
+  the address that server connects from, while it is offline, and with a
+  new token; and `X-Forwarded-For` counts only from `tailscale serve`.
+- **Needs attention agreed with Alerts** — the Overview flagged CPU, RAM
+  and disks at fixed levels of its own (85 % disk and so on), ignoring
+  each server's alert thresholds: a disk could be listed under *Needs
+  attention* while Alerts said all is well, and an alerted problem showed
+  twice. It now lists the alerts, and an offline server once.
+- **Notification settings could be lost** — `webhooks.json` was written
+  in place and a failed write was ignored: a write cut short (power, full
+  disk) left a file that loaded as no destinations at all, and the panel
+  had said saved. It is written through a temporary file now, and a save
+  that fails says so.
 - **A plugin waiting on a host that does not answer** — `beacle.http` and
   `beacle.exec` now give up a moment before the task or handler they run
   in, and return `nil, err`. They used to use up the whole call, which

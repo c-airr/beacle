@@ -37,22 +37,26 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 		return updated, ackFor(updated), nil
 	}
 
-	// Returning agent without Authorization: match by VPS ID already in config.
-	if req.VPSID != "" {
-		if entry := s.store.GetVPS(req.VPSID); entry != nil && entry.VPS.IsWireGuard() {
-			return nil, shared.RegisterResponse{}, fmt.Errorf("this server is connected over WireGuard")
-		} else if entry != nil && entry.AgentToken != "" {
-			updated := s.store.UpdateVPS(entry.VPS.ID, applyOnline)
-			return updated, ackFor(updated), nil
-		}
+	// A VPS ID is no credential: anyone on the tailnet can read it from
+	// /beacle/alive. A known server is only opened by its token, or reclaimed
+	// below from its own address.
+	known := req.VPSID != "" && s.store.GetVPS(req.VPSID) != nil
+	if entry := s.store.GetVPS(req.VPSID); known && entry.VPS.IsWireGuard() {
+		return nil, shared.RegisterResponse{}, fmt.Errorf("this server is connected over WireGuard")
 	}
 
 	pending := s.store.FindPendingByTailscale(tsName, host)
+	reclaim := false
 	if pending == nil {
-		// Reclaim offline VPS after agent lost local token (reinstall / wiped config).
-		pending = s.store.FindByTailscale(tsName, host)
+		// Reclaim a server whose agent lost its token (reinstall, wiped
+		// config): only from the address that server connects from, never by
+		// the name or IP an agent reports about itself, and not while its
+		// agent is connected. It gets a new token, not the old one.
+		if e := s.store.FindByTailscale("", remoteIP); e != nil && !s.agentHub.Connected(e.VPS.ID) {
+			pending, reclaim = e, true
+		}
 	}
-	if pending == nil {
+	if pending == nil && !known {
 		// The agent already holds credentials from an earlier registration but
 		// the registry no longer knows them (state.json reset / restored from a
 		// backup / panel reinstalled). Adopt it back under its own ID and token
@@ -66,8 +70,11 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 		}
 		return nil, shared.RegisterResponse{}, fmt.Errorf("no matching VPS — add this server in Beacle first")
 	}
+	if pending == nil {
+		return nil, shared.RegisterResponse{}, fmt.Errorf("unknown agent token for this server")
+	}
 	entry := s.store.UpdateVPS(pending.VPS.ID, func(e *VPSEntry) {
-		if e.AgentToken == "" {
+		if e.AgentToken == "" || reclaim {
 			e.AgentToken = newToken()
 		}
 		applyOnline(e)
@@ -147,12 +154,14 @@ func applyAgentOnline(e *VPSEntry, req shared.RegisterRequest, host, tsName stri
 }
 
 func agentRemoteIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	// Only `tailscale serve` on the loopback listener speaks for the real
+	// client; from anyone else the header is whatever they chose to send.
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" && net.ParseIP(host).IsLoopback() {
+		return xff
 	}
 	return host
 }
