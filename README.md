@@ -39,6 +39,8 @@ A desktop panel for managing your VPS fleet, so you don't have to juggle SSH ses
 
 ## Screenshots
 
+*Screenshots use example data. Regenerate them with `BEACLE_SCREENSHOTS=<dir> APPDATA=<empty dir> flutter test integration_test/screenshots_test.dart -d windows` (from `app/`).*
+
 ### Overview — is everything working?
 
 Fleet totals up top, anything that needs attention right below, then a card per VPS.
@@ -65,15 +67,25 @@ Every container across the fleet in one list — logs, exec, stats, restart, sto
 
 ![Docker](docs/screenshots/docker.png)
 
+| Images | Compose |
+|---|---|
+| ![Docker — images](docs/screenshots/docker-images.png) | ![Docker — compose](docs/screenshots/docker-compose.png) |
+
 ### Services
 
 systemd units, processes, screen and nohup sessions side by side, sortable by CPU or memory.
 
 ![Services](docs/screenshots/services.png)
 
+Processes you can kill, cron jobs and systemd timers, and the firewall with the ports that are actually listening — each one tab over.
+
+| Processes | Cron | Firewall |
+|---|---|---|
+| ![Services — processes](docs/screenshots/services-processes.png) | ![Services — cron](docs/screenshots/services-cron.png) | ![Services — firewall](docs/screenshots/services-firewall.png) |
+
 ### Proxy
 
-Caddy sites with their upstreams and TLS state, edited from the GUI instead of by hand. The port checker tells you whether anything is actually listening.
+Caddy sites with their upstreams and TLS state, edited from the GUI instead of by hand. A certificate close to expiry is flagged. The port checker tells you whether anything is actually listening.
 
 ![Proxy](docs/screenshots/proxy.png)
 
@@ -89,11 +101,31 @@ Thresholds breached, with hysteresis so a flapping disk doesn't spam you. Mute, 
 
 ![Alerts](docs/screenshots/alerts.png)
 
+### SSH
+
+A shell on any server through the agent — no keys or open port 22 — plus saved hosts for machines without one. Snippets keep the commands you type often, and run one on several servers at once.
+
+![SSH](docs/screenshots/ssh.png)
+
+### Files
+
+Browse, edit, upload and rename files on a server, with the folder tree on the left.
+
+![Files](docs/screenshots/files.png)
+
 ### Settings
 
-Theme, language, startup and tray behaviour — plus agent updates and backend status on the other tabs.
+Theme, language, startup and tray behaviour — plus app and agent updates, backend status, notifications, WireGuard and plugins on the other tabs.
 
 ![Settings](docs/screenshots/settings.png)
+
+| Updates | Status |
+|---|---|
+| ![Settings — updates](docs/screenshots/settings-updates.png) | ![Settings — status](docs/screenshots/settings-status.png) |
+
+| Notifications | WireGuard | Plugins |
+|---|---|---|
+| ![Settings — notifications](docs/screenshots/settings-notifications.png) | ![Settings — WireGuard](docs/screenshots/settings-wireguard.png) | ![Settings — plugins](docs/screenshots/settings-plugins.png) |
 
 ---
 
