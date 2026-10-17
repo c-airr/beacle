@@ -78,8 +78,9 @@ type pluginSlot struct {
 }
 
 // uiPrelude defines the ui.* block constructors. Kept on one line so error
-// line numbers in backend.lua stay right.
-const uiPrelude = `ui = {} for _, t in ipairs({"label","stat","bar","chart","table","button","input","row","column"}) do ui[t] = function(p) if type(p) ~= "table" then p = { text = tostring(p) } end local c = {} for i, v in ipairs(p) do c[i] = v end for i = #p, 1, -1 do p[i] = nil end if #c > 0 then p.children = c end p.type = t return p end end `
+// line numbers in backend.lua stay right. ui.card is a column marked card:
+// a panel from before cards draws it as a plain column.
+const uiPrelude = `ui = {} for _, t in ipairs({"label","stat","bar","chart","table","button","input","row","column"}) do ui[t] = function(p) if type(p) ~= "table" then p = { text = tostring(p) } end local c = {} for i, v in ipairs(p) do c[i] = v end for i = #p, 1, -1 do p[i] = nil end if #c > 0 then p.children = c end p.type = t return p end end ui.card = function(p) p = ui.column(p) p.card = true return p end `
 
 func NewPlugins(dataDir string, store *Store, hub *Hub, agentHub *AgentHub) *Plugins {
 	p := &Plugins{

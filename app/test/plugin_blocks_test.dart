@@ -6,6 +6,7 @@ import 'package:beacle/l10n/language.dart';
 import 'package:beacle/l10n/strings.dart';
 import 'package:beacle/models/models.dart';
 import 'package:beacle/state/app_state.dart';
+import 'package:beacle/widgets/common.dart';
 import 'package:beacle/widgets/plugin_blocks.dart';
 
 Future<void> _pump(WidgetTester tester, AppState state, SlotRender render) async {
@@ -72,6 +73,27 @@ void main() {
     expect(find.text('core0'), findsOneWidget);
     expect(find.text('invisible'), findsNothing, reason: 'unknown blocks are skipped');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a card is a titled frame around its blocks', (tester) async {
+    await _pump(
+        tester,
+        state,
+        SlotRender.fromJson({
+          'plugin': 'temps',
+          'blocks': [
+            {
+              'type': 'row',
+              'children': [
+                {'type': 'column', 'card': true, 'title': 'Pico', 'children': [{'type': 'label', 'text': '33.6'}]},
+                {'type': 'column', 'children': [{'type': 'label', 'text': 'plain'}]},
+              ],
+            },
+          ],
+        }));
+    expect(find.widgetWithText(PanelCard, 'Pico'), findsOneWidget);
+    expect(find.widgetWithText(PanelCard, '33.6'), findsOneWidget);
+    expect(find.widgetWithText(PanelCard, 'plain'), findsNothing, reason: 'a plain column has no frame');
   });
 
   testWidgets('a failing view shows its error instead of blocks', (tester) async {

@@ -239,12 +239,15 @@ class PluginBlocks extends StatelessWidget {
           ],
         );
       case 'column':
-        return Column(
+        final column = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final c in children) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: _block(context, c)),
           ],
         );
+        // ui.card: the same column, framed like the panel's own cards.
+        if (b['card'] != true) return column;
+        return PanelCard(title: b['title'] == null ? null : '${b['title']}', child: column);
     }
     return const SizedBox.shrink(); // a block type this panel does not know
   }

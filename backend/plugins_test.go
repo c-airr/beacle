@@ -19,7 +19,8 @@ const testBackend = `
 beacle.text("alerts", "Fires")
 beacle.hide("overview.links")
 beacle.slot("nav.tab", { id = "temps", title = "Temps", icon = "thermostat" }, function()
-  return { ui.label("hello"), ui.row{ ui.stat{ metric = "temps.cpu_temp" }, ui.bar{ value = 40 } } }
+  return { ui.label("hello"), ui.row{ ui.stat{ metric = "temps.cpu_temp" }, ui.bar{ value = 40 } },
+           ui.card{ title = "Pico", ui.label("33.6") } }
 end)
 beacle.slot("server.section", { title = "Temperatures" }, function(server)
   return { ui.label(server.name) }
@@ -102,6 +103,10 @@ func TestInstallFromZipRendersSlots(t *testing.T) {
 	row := blocks[1].(map[string]any)
 	if blocks[0].(map[string]any)["text"] != "hello" || row["type"] != "row" || len(row["children"].([]any)) != 2 {
 		t.Fatalf("blocks: %v", blocks)
+	}
+	// A card is a column a panel from before cards can still draw.
+	if card := blocks[2].(map[string]any); card["type"] != "column" || card["card"] != true || card["title"] != "Pico" || len(card["children"].([]any)) != 1 {
+		t.Fatalf("card: %v", card)
 	}
 
 	sec := p.Render("server.section", e.VPS.ID, "")

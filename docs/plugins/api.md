@@ -103,7 +103,9 @@ plugin deletes its stores.
 `url` must be `http://` or `https://` with a host listed in
 `permissions.http`; redirects to other hosts are refused. `content_type`
 defaults to `application/json`. A response is a `body` (up to 1 MiB) and
-its HTTP `status` — a 404 is an answer, not an error. 10 s timeout.
+its HTTP `status` — a 404 is an answer, not an error. 10 s timeout, cut
+short so a host that does not answer returns `nil, err` while the task,
+handler or slot it runs in still has time to handle it.
 
 ## agent.lua
 
@@ -124,7 +126,8 @@ entry of `permissions.exec`; a bare name is looked up in `PATH`. There is no
 shell — no pipes, globs or variables — and no stdin. Standard output is
 returned (up to 1 MiB, the rest dropped), standard error is discarded. A
 program that runs and exits non-zero returns its output and code; one that
-cannot start, or runs past 5 s, returns `nil, err`.
+cannot start, or runs past 5 s (less when the call it runs in ends sooner),
+returns `nil, err`.
 
 ### `beacle.metric(name, value)`
 
@@ -246,6 +249,14 @@ Blocks side by side, each taking an equal share of the width.
 
 Blocks one under another (a list of blocks returned from a slot already is
 one).
+
+### `ui.card{ title, block, … }`
+
+Blocks one under another in a framed card, like the panel's own, with an
+optional `title` on top. Put several in a `ui.row` for tiles side by side.
+New in 2.2.5. To run on older panels too, start backend.lua with
+`ui.card = ui.card or ui.column`: there the tiles are drawn without frame or
+title.
 
 ## Hide ids
 

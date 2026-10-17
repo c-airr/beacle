@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -199,5 +201,29 @@ func TestManifestValidation(t *testing.T) {
 		if _, err := ParseManifest([]byte(bad)); err == nil {
 			t.Errorf("accepted %s", bad)
 		}
+	}
+}
+
+func TestHTTPGivesUpBeforeTheCall(t *testing.T) {
+	stuck := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-stuck:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(stuck)
+
+	r := newTest(t, Manifest{Permissions: Permissions{HTTP: []string{"127.0.0.1"}}}, `
+beacle.on("get", function(url) local body, err = beacle.http.get(url); return { body = body, err = err } end)`)
+	// A host that does not answer: the plugin gets nil, err with time left to
+	// handle it, instead of the call failing with it.
+	got, err := r.Handle("get", srv.URL, 2*time.Second)
+	if err != nil {
+		t.Fatalf("call failed instead of returning an error to the plugin: %v", err)
+	}
+	if m := got.(map[string]any); m["body"] != nil || m["err"] == nil {
+		t.Fatalf("got %v, want no body and an error", m)
 	}
 }

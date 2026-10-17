@@ -201,3 +201,10 @@ function ui.row(children) end
 ---@param children Block[]
 ---@return Block
 function ui.column(children) end
+
+---A tile: blocks one under another in a framed card, with an optional title.
+---Put several in a ui.row to lay them side by side. New in 2.2.5; for older
+---panels too, start with `ui.card = ui.card or ui.column`.
+---@param p { title?: string, [integer]: Block }
+---@return Block
+function ui.card(p) end

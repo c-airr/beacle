@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.5 (unreleased)
+
+### Added
+
+- **Tiles for plugins** — `ui.card{ title, … }` frames its blocks like the
+  panel's own cards; several in a `ui.row` sit side by side. A plugin
+  that starts with `ui.card = ui.card or ui.column` also runs on an older
+  panel, with tiles drawn unframed.
+
+### Fixed
+
+- **A plugin waiting on a host that does not answer** — `beacle.http` and
+  `beacle.exec` now give up a moment before the task or handler they run
+  in, and return `nil, err`. They used to use up the whole call, which
+  then failed, and five of those in a row stopped the plugin: a device
+  switched off for a minute took the plugin down with it.
+
 ## 2.2.0 — 2026-10-17
 
 Plugins in Lua, SSH snippets, alerts checked by the fleet before they

@@ -22,6 +22,9 @@ const (
 	readMax     = 1 << 20
 	execTimeout = 5 * time.Second
 	httpTimeout = 10 * time.Second
+	// hostMargin is the most a host function leaves of the call it runs in;
+	// a short call (a 500 ms slot) keeps a tenth of what is left instead.
+	hostMargin = time.Second
 )
 
 // OpenSystem adds beacle.read, beacle.list and beacle.exec, limited to what
@@ -139,7 +142,7 @@ func (r *Runtime) luaExec(L *lua.LState) int {
 			args = append(args, t.RawGetInt(i).String())
 		}
 	}
-	ctx, cancel := context.WithTimeout(callCtx(L), execTimeout)
+	ctx, cancel := hostTimeout(L, execTimeout)
 	defer cancel()
 	c := exec.CommandContext(ctx, cmd, args...)
 	out := &cappedBuffer{n: readMax}
@@ -183,7 +186,7 @@ func (r *Runtime) luaHTTP(method string) lua.LGFunction {
 		if !slices.Contains(r.Manifest.Permissions.HTTP, u.Hostname()) {
 			return fail(L, "permission denied: "+u.Hostname()+" not in permissions.http")
 		}
-		ctx, cancel := context.WithTimeout(callCtx(L), httpTimeout)
+		ctx, cancel := hostTimeout(L, httpTimeout)
 		defer cancel()
 		var body io.Reader
 		if method == "POST" {
@@ -216,6 +219,19 @@ func (r *Runtime) luaHTTP(method string) lua.LGFunction {
 		L.Push(lua.LNumber(resp.StatusCode))
 		return 2
 	}
+}
+
+// hostTimeout bounds a host function by its own limit, cut so it gives up
+// a little before the call it runs in. A host that never answered used to
+// take the whole call with it: the task failed instead of the plugin getting
+// nil, err to handle, and five such tasks in a row stopped the plugin.
+func hostTimeout(L *lua.LState, limit time.Duration) (context.Context, context.CancelFunc) {
+	ctx := callCtx(L)
+	if deadline, ok := ctx.Deadline(); ok {
+		left := time.Until(deadline)
+		limit = min(limit, max(left-min(hostMargin, left/10), 0))
+	}
+	return context.WithTimeout(ctx, limit)
 }
 
 // callCtx is the deadline of the call this host function runs in.
