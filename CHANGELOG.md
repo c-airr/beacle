@@ -1,6 +1,9 @@
 # Changelog
 
-## 2.2.0 (unreleased)
+## 2.2.0 — 2026-10-17
+
+Plugins in Lua, SSH snippets, alerts checked by the fleet before they
+page, and warnings for expiring certificates and filling disks.
 
 ### Added
 
