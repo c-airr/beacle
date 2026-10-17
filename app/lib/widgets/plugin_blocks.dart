@@ -150,7 +150,7 @@ class PluginBlocks extends StatelessWidget {
     return m.contains('.') ? m : '${render.plugin}.$m';
   }
 
-  Widget _block(BuildContext context, Object? raw) {
+  Widget _block(BuildContext context, Object? raw, {bool fill = false}) {
     if (raw is! Map) return const SizedBox.shrink();
     final b = raw.cast<String, dynamic>();
     final children = (b['children'] as List?) ?? const [];
@@ -229,15 +229,19 @@ class PluginBlocks extends StatelessWidget {
           onSubmit: (text) => _run(context, '${b['action'] ?? ''}', {'value': text}),
         );
       case 'row':
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        // A row with cards in it is a row of tiles, one height like the
+        // Overview's (see PanelCard for why IntrinsicHeight).
+        final tiles = children.any((c) => c is Map && c['card'] == true);
+        final row = Row(
+          crossAxisAlignment: tiles ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
           children: [
             for (var i = 0; i < children.length; i++) ...[
               if (i > 0) const SizedBox(width: 16),
-              Expanded(child: _block(context, children[i])),
+              Expanded(child: _block(context, children[i], fill: tiles)),
             ],
           ],
         );
+        return tiles ? IntrinsicHeight(child: row) : row;
       case 'column':
         final column = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -247,7 +251,7 @@ class PluginBlocks extends StatelessWidget {
         );
         // ui.card: the same column, framed like the panel's own cards.
         if (b['card'] != true) return column;
-        return PanelCard(title: b['title'] == null ? null : '${b['title']}', child: column);
+        return PanelCard(title: b['title'] == null ? null : '${b['title']}', expand: fill, child: column);
     }
     return const SizedBox.shrink(); // a block type this panel does not know
   }

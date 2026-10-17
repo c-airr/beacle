@@ -15,6 +15,9 @@ local LHM = "http://127.0.0.1:8085/data.json"
 local DEVICE = ""
 local DEVICE_NAME = "Raspberry Pi Pico"
 
+-- The name on this computer's tile.
+local PC_NAME = "This computer"
+
 local TILES_PER_ROW = 3
 
 -- ui.card came with Beacle 2.2.5. Before it a tile is a plain column, with
@@ -135,7 +138,7 @@ end
 
 local function pc_tile()
   if pc.error then
-    return card{ title = "This computer",
+    return card{ title = PC_NAME,
       ui.label{ text = pc.error, tone = "err" },
       ui.label{ text = "Start LibreHardwareMonitor as administrator and turn on Options → Remote Web Server → Run.", tone = "dim" } }
   end
@@ -149,16 +152,17 @@ local function pc_tile()
     names[#names + 1] = ui.label{ text = (pc.gpu.hardware or "GPU") .. " · " .. pc.gpu.name, tone = "dim" }
   end
   if #stats == 0 then
-    return card{ title = "This computer",
+    return card{ title = PC_NAME,
       ui.label{ text = "LibreHardwareMonitor answers but shows no CPU or GPU temperature. Is it running as administrator?", tone = "warn" } }
   end
-  local tile = { title = "This computer", ui.row(stats) }
+  local tile = { title = PC_NAME, ui.row(stats) }
   for _, n in ipairs(names) do tile[#tile + 1] = n end
   return card(tile)
 end
 
 -- The fields a Pico W status page has; anything else is listed below them.
-local KNOWN = { temp_c = true, rssi = true, uptime_s = true, mem_free = true, mem_total = true, flash_free = true, flash_total = true }
+local KNOWN = { temp_c = true, rssi = true, uptime_s = true, mem_free = true, mem_total = true, flash_free = true, flash_total = true,
+                ip = true, mpy = true, reset = true, last_reboot = true, led = true }
 
 local function device_tile()
   if device.error then
@@ -169,7 +173,14 @@ local function device_tile()
   if d.temp_c then stats[#stats + 1] = ui.stat{ value = d.temp_c, label = "Chip", unit = "°C", tone = temp_tone(d.temp_c, 60, 70) } end
   if d.rssi then stats[#stats + 1] = ui.stat{ value = d.rssi, label = "Wi-Fi", unit = "dBm", tone = rssi_tone(d.rssi) } end
   local tile = { title = DEVICE_NAME, ui.row(stats) }
-  if d.uptime_s then tile[#tile + 1] = ui.label{ text = "Up " .. uptime(d.uptime_s), tone = "dim" } end
+  local about = {}
+  if d.uptime_s then about[#about + 1] = "up " .. uptime(d.uptime_s) end
+  if d.ip then about[#about + 1] = d.ip end
+  if d.mpy then about[#about + 1] = "MicroPython " .. d.mpy end
+  if #about > 0 then tile[#tile + 1] = ui.label{ text = table.concat(about, ", "), tone = "dim" } end
+  if d.reset then
+    tile[#tile + 1] = ui.label{ text = "Last reset: " .. d.reset .. (d.last_reboot and (" (" .. d.last_reboot .. ")") or ""), tone = "dim" }
+  end
   if d.mem_free and d.mem_total then
     tile[#tile + 1] = ui.bar{ value = 100 * (1 - d.mem_free / d.mem_total), label = "RAM used", detail = kib(d.mem_free) .. " free" }
   end
@@ -214,8 +225,8 @@ local function grid(tiles, per_row)
 end
 
 beacle.slot("nav.tab", { id = "temp", title = "Temp", icon = "thermostat" }, function()
-  local top = { pc_tile() }
-  if DEVICE ~= "" then top[#top + 1] = device_tile() end
+  local tiles = { pc_tile() }
+  if DEVICE ~= "" then tiles[#tiles + 1] = device_tile() end
 
   -- Servers with a sensor first, then by name.
   local servers = {}
@@ -227,10 +238,6 @@ beacle.slot("nav.tab", { id = "temp", title = "Temp", icon = "thermostat" }, fun
     if sa ~= sb then return sa > sb end
     return a.s.name < b.s.name
   end)
-  local tiles = {}
   for _, r in ipairs(servers) do tiles[#tiles + 1] = server_tile(r.s, r.cpu, r.gpu) end
-
-  local blocks = grid(top, #top)
-  for _, row in ipairs(grid(tiles, TILES_PER_ROW)) do blocks[#blocks + 1] = row end
-  return blocks
+  return grid(tiles, TILES_PER_ROW)
 end)

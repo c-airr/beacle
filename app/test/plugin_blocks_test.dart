@@ -94,6 +94,7 @@ void main() {
     expect(find.widgetWithText(PanelCard, 'Pico'), findsOneWidget);
     expect(find.widgetWithText(PanelCard, '33.6'), findsOneWidget);
     expect(find.widgetWithText(PanelCard, 'plain'), findsNothing, reason: 'a plain column has no frame');
+    expect(find.byType(IntrinsicHeight), findsOneWidget, reason: 'tiles in a row share one height');
   });
 
   testWidgets('a failing view shows its error instead of blocks', (tester) async {
