@@ -164,7 +164,7 @@ func TestInstallFromFolderIsLinkedAndKeepsState(t *testing.T) {
 func TestDemoTempPluginRenders(t *testing.T) {
 	p, store := newTestPlugins(t)
 	e := store.CreateVPS("panther", "panther", "100.1.1.1")
-	if _, err := p.Install(filepath.Join("..", "demo", "temp")); err != nil {
+	if _, err := p.Install(filepath.Join("..", "plugins", "demo", "temp")); err != nil {
 		t.Fatal(err)
 	}
 	check := func() {

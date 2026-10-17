@@ -6,19 +6,19 @@ a server. It is written in Lua, installed from **Settings → Plugins** with one
 click, and from there the panel sends each part where it belongs.
 
 This page walks through writing one. Every function, block and id is listed
-in the [API reference](api.md). The plugins in [`demo/`](../../demo) are
+in the [API reference](api.md). The plugins in [`plugins/demo/`](../../plugins/demo) are
 complete, working examples — reading one next to this page is the quickest
 way in:
 
-- [`uptime`](../../demo/uptime) — backend only: checks web pages from the
+- [`uptime`](../../plugins/demo/uptime) — backend only: checks web pages from the
   panel. The pages come from its settings form (`config`), response times
   are a wildcard metric of this computer with a chart per page, a page that
   stays down raises an alert with notifications, and a switch pauses it.
-- [`temp`](../../demo/temp) — one tab of tiles: this computer's
+- [`temp`](../../plugins/demo/temp) — one tab of tiles: this computer's
   temperatures from LibreHardwareMonitor and a device on the LAN that
   serves JSON (both set in its settings, with a day of history), and every
   server's CPU and GPU from its agent part, with alerts.
-- [`neofetch`](../../demo/neofetch) — runs a program on every server and
+- [`neofetch`](../../plugins/demo/neofetch) — runs a program on every server and
   can post its output to an address on the LAN: the example of what the
   install dialog shows in red.
 
@@ -429,7 +429,7 @@ saving restarts the backend part; the agent parts restart when
 
 ## Editor support
 
-[`demo/beacle.d.lua`](../../demo/beacle.d.lua) describes the whole API
+[`plugins/beacle.d.lua`](../../plugins/beacle.d.lua) describes the whole API
 for the Lua language server, which gives completion, signatures and warnings
 in VS Code (the *Lua* extension by sumneko) and other editors. Put a
 `.luarc.json` in your plugin's folder:
@@ -437,7 +437,7 @@ in VS Code (the *Lua* extension by sumneko) and other editors. Put a
 ```json
 {
   "runtime.version": "Lua 5.1",
-  "workspace.library": ["C:/path/to/beacle/demo/beacle.d.lua"],
+  "workspace.library": ["C:/path/to/beacle/plugins/beacle.d.lua"],
   "diagnostics.globals": ["beacle", "ui"]
 }
 ```

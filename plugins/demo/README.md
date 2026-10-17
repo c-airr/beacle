@@ -1,8 +1,8 @@
 # Demo plugins
 
 Three working Beacle plugins, to install as they are or to copy from. How
-plugins work: [Writing Beacle plugins](../docs/plugins/README.md); every
-function: [API reference](../docs/plugins/api.md). They need Beacle 2.2.5.
+plugins work: [Writing Beacle plugins](../../docs/plugins/README.md); every
+function: [API reference](../../docs/plugins/api.md). They need Beacle 2.2.5.
 
 | Folder | What it shows | Runs on | Install dialog |
 |---|---|---|---|
@@ -68,7 +68,7 @@ card says so.
 
 ## Editor
 
-[`beacle.d.lua`](beacle.d.lua) describes the whole API for
+[`../beacle.d.lua`](../beacle.d.lua) describes the whole API for
 [Lua Language Server](https://luals.github.io/) (VS Code's *Lua*
-extension); [`.luarc.json`](.luarc.json) points it there, so opening this
-folder gives completion and checks.
+extension); [`../.luarc.json`](../.luarc.json) points it there, so opening
+the `plugins` folder gives completion and checks.

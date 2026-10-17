@@ -40,7 +40,7 @@
   your servers and may send to an address outside them. Risky ones are
   in red with a warning, and *View code* shows its Lua before you say
   yes.
-- **Demo plugins in `demo/`** — `temp` (this computer, a Raspberry Pi
+- **Demo plugins in `plugins/demo/`** — `temp` (this computer, a Raspberry Pi
   Pico and every server in one tab), `uptime` and `neofetch` (the one
   the install dialog shows in red), with a README. `temp` replaces the
   2.2.0 example `temps`.

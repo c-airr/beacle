@@ -180,7 +180,7 @@ func TestShippedExamplesRender(t *testing.T) {
 	p, store := newTestPlugins(t)
 	e := store.CreateVPS("panther", "panther", "100.1.1.1")
 	for _, id := range []string{"temp", "uptime", "neofetch"} {
-		if _, err := p.Install(filepath.Join("..", "demo", id)); err != nil {
+		if _, err := p.Install(filepath.Join("..", "plugins", "demo", id)); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
 	}

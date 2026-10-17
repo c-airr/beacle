@@ -9,10 +9,10 @@ import (
 	"beacle/shared"
 )
 
-// The example in demo/temp is what people copy, so it has to load and run
+// The example in plugins/demo/temp is what people copy, so it has to load and run
 // clean. On a Linux machine with sensors this also shows what it reads.
 func TestShippedTempsPluginRuns(t *testing.T) {
-	dir := filepath.Join("..", "demo", "temp")
+	dir := filepath.Join("..", "plugins", "demo", "temp")
 	manifest, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
 		t.Fatal(err)
