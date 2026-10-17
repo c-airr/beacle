@@ -68,6 +68,9 @@ func main() {
 		uptime:    NewUptimeLog(*dataDir),
 	}
 	alerts.SetNotifier(webhooks.Enqueue)
+	plugins.api, plugins.alerts, plugins.history = srv.Routes(), alerts, history
+	alerts.SetEvents(plugins.EmitAlert)
+	plugins.Start()
 	wg.Start(func(w http.ResponseWriter, r *http.Request, e *VPSEntry) {
 		agentHub.ServeAgentWSPinned(w, r, srv, e)
 	})
@@ -81,6 +84,7 @@ func main() {
 	go webhooks.Run()
 	go webhooks.RunSyncLoop()
 	go plugins.WatchLinked()
+	go plugins.RecordLocal()
 
 	if isLoopbackAddr(*addr) {
 		agents := srv.AgentRoutes()

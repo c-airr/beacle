@@ -102,6 +102,48 @@ void main() {
     expect(find.textContaining('boom'), findsOneWidget);
   });
 
+  testWidgets('link, toggle, select and code render; a wildcard metric finds its declaration', (tester) async {
+    state.plugins = [
+      {
+        'id': 'disks',
+        'name': 'Disks',
+        'enabled': true,
+        'metrics': {
+          'used_*': {'label': 'Used', 'unit': '%'},
+        },
+      },
+    ];
+    state.snapshots['a'] = VpsSnapshot.fromJson({
+      'metrics': {
+        'plugins': {'disks.used_sda': 42.0},
+      },
+    });
+    await _pump(
+        tester,
+        state,
+        SlotRender.fromJson({
+          'plugin': 'disks',
+          'blocks': [
+            {'type': 'link', 'text': 'Docs', 'url': 'https://example.com'},
+            {'type': 'toggle', 'label': 'Watch', 'value': true, 'action': 'watch'},
+            {'type': 'select', 'label': 'Mode', 'value': 'b', 'options': ['a', 'b'], 'action': 'mode'},
+            {'type': 'code', 'text': 'line 1\nline 2'},
+            {'type': 'stat', 'metric': 'used_sda'},
+            {'type': 'button', 'label': 'Wipe', 'action': 'wipe', 'confirm': 'Really wipe?'},
+          ],
+        }));
+    expect(find.text('Docs'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(find.text('b'), findsOneWidget, reason: 'the select shows its value');
+    expect(find.text('line 1\nline 2'), findsOneWidget);
+    expect(find.text('Used'), findsOneWidget, reason: 'label from the wildcard declaration');
+    expect(find.text('42%'), findsOneWidget);
+    await tester.tap(find.text('Wipe'));
+    await tester.pumpAndSettle();
+    expect(find.text('Really wipe?'), findsOneWidget, reason: 'confirm asks first');
+    expect(tester.takeException(), isNull);
+  });
+
   test('plugin texts win over every language', () {
     addTearDown(() => L.overrides = const {});
     L.overrides = {'navAlerts': 'Fires'};

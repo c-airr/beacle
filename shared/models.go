@@ -146,9 +146,11 @@ type PluginStatus struct {
 type PluginBundle struct {
 	ID       string          `json:"id"`
 	Version  string          `json:"version"`
-	SHA256   string          `json:"sha256"` // of manifest + agent_lua, to skip unchanged ones
+	SHA256   string          `json:"sha256"` // of manifest + agent_lua + config, to skip unchanged ones
 	Manifest json.RawMessage `json:"manifest"`
 	AgentLua string          `json:"agent_lua"`
+	// Config is the plugin's settings, defaults filled in, secrets left out.
+	Config map[string]any `json:"config,omitempty"`
 }
 
 // PluginCall runs a handler registered with beacle.on in a plugin's agent
@@ -1159,6 +1161,8 @@ const (
 	// AlertPluginMetric: a plugin metric reached the warn or crit level its
 	// manifest declares. Key is "<plugin>.<metric>|warn" or "|crit".
 	AlertPluginMetric AlertType = "plugin_metric"
+	// AlertPlugin: raised by a plugin itself with beacle.alert.
+	AlertPlugin AlertType = "plugin"
 )
 
 type Alert struct {

@@ -5,27 +5,18 @@
 --   every server   CPU and GPU from agent.lua, with a day of history; most
 --                  VPSes have no sensor and say so.
 
--- LibreHardwareMonitor on this computer, with Options → Remote Web Server →
--- Run. It has to run as administrator to see the CPU's sensors.
-local LHM = "http://127.0.0.1:8085/data.json"
-
--- The device's JSON status page, e.g. "http://192.168.1.50/status", and the
--- name on its tile. Empty: no tile. Its host must also be in manifest.json
--- under permissions.http.
-local DEVICE = ""
-local DEVICE_NAME = "Raspberry Pi Pico"
-
--- The name on this computer's tile.
-local PC_NAME = "This computer"
-
-local TILES_PER_ROW = 3
-
--- ui.card came with Beacle 2.2.5. Before it a tile is a plain column, with
--- its title as the first line.
-local card = ui.card or function(p)
-  table.insert(p, 1, ui.label(p.title))
-  return ui.column(p)
-end
+-- Set in Settings → Plugins → Temp:
+--   lhm          LibreHardwareMonitor's data.json, with Options → Remote Web
+--                Server → Run. It has to run as administrator to see the
+--                CPU's sensors.
+--   device       the device's JSON status page; empty: no tile
+--   pc_name, device_name, per_row
+-- A url typed there may be fetched without listing its host in the manifest.
+local LHM = beacle.config("lhm")
+local DEVICE = beacle.config("device") or ""
+local DEVICE_NAME = beacle.config("device_name")
+local PC_NAME = beacle.config("pc_name")
+local TILES_PER_ROW = tonumber(beacle.config("per_row")) or 3
 
 local pc = { error = "not read yet" }
 local device = { error = "not read yet" }
@@ -79,36 +70,34 @@ local function read_lhm(tree)
          pick(found.gpu, { "GPU Core" })
 end
 
+-- Readings of this computer and the device are also metrics of "local",
+-- so the panel keeps a day of them for the charts, and CPU/GPU alert at the
+-- manifest's levels like a server's.
 beacle.every(10, function()
   local body, err = beacle.http.get(LHM)
   local tree = body and beacle.json.decode(body)
   if not tree then
     pc = { error = body and "LibreHardwareMonitor sent something that is not JSON" or ("LibreHardwareMonitor: " .. tostring(err)) }
+    beacle.metric("cpu_temp", nil)
+    beacle.metric("gpu_temp", nil)
     return
   end
   local cpu, gpu = read_lhm(tree)
   pc = { cpu = cpu, gpu = gpu }
+  beacle.metric("cpu_temp", cpu and cpu.value)
+  beacle.metric("gpu_temp", gpu and gpu.value)
 end)
 
--- Before Beacle 2.2.5 a device that is switched off held the request until
--- this task's 10 s ran out, which counted as a failure, and five in a row
--- stopped the plugin. So after a request that did not come back, one tick
--- is skipped.
-local resting = false
 if DEVICE ~= "" then
   beacle.every(10, function()
-    if resting then
-      resting = false
-      return
-    end
-    resting = true
     local body, err = beacle.http.get(DEVICE)
-    resting = false
     local data = body and beacle.json.decode(body)
     if type(data) == "table" then
-      device = { data = data }
+      device = { data = data, at = beacle.now() }
+      beacle.metric("device_temp", tonumber(data.temp_c))
     else
       device = { error = body and "not JSON" or tostring(err) }
+      beacle.metric("device_temp", nil)
     end
   end)
 end
@@ -138,7 +127,7 @@ end
 
 local function pc_tile()
   if pc.error then
-    return card{ title = PC_NAME,
+    return ui.card{ title = PC_NAME,
       ui.label{ text = pc.error, tone = "err" },
       ui.label{ text = "Start LibreHardwareMonitor as administrator and turn on Options → Remote Web Server → Run.", tone = "dim" } }
   end
@@ -152,12 +141,13 @@ local function pc_tile()
     names[#names + 1] = ui.label{ text = (pc.gpu.hardware or "GPU") .. " · " .. pc.gpu.name, tone = "dim" }
   end
   if #stats == 0 then
-    return card{ title = PC_NAME,
+    return ui.card{ title = PC_NAME,
       ui.label{ text = "LibreHardwareMonitor answers but shows no CPU or GPU temperature. Is it running as administrator?", tone = "warn" } }
   end
   local tile = { title = PC_NAME, ui.row(stats) }
   for _, n in ipairs(names) do tile[#tile + 1] = n end
-  return card(tile)
+  if pc.cpu then tile[#tile + 1] = ui.chart{ metric = "cpu_temp", server = "local", hours = 24, title = "CPU, last 24 h" } end
+  return ui.card(tile)
 end
 
 -- The fields a Pico W status page has; anything else is listed below them.
@@ -166,7 +156,7 @@ local KNOWN = { temp_c = true, rssi = true, uptime_s = true, mem_free = true, me
 
 local function device_tile()
   if device.error then
-    return card{ title = DEVICE_NAME, ui.label{ text = device.error, tone = "err" }, ui.label{ text = DEVICE, tone = "dim" } }
+    return ui.card{ title = DEVICE_NAME, ui.label{ text = device.error, tone = "err" }, ui.label{ text = DEVICE, tone = "dim" } }
   end
   local d = device.data
   local stats = {}
@@ -175,6 +165,7 @@ local function device_tile()
   local tile = { title = DEVICE_NAME, ui.row(stats) }
   local about = {}
   if d.uptime_s then about[#about + 1] = "up " .. uptime(d.uptime_s) end
+  about[#about + 1] = "read " .. beacle.date(device.at, "15:04:05")
   if d.ip then about[#about + 1] = d.ip end
   if d.mpy then about[#about + 1] = "MicroPython " .. d.mpy end
   if #about > 0 then tile[#tile + 1] = ui.label{ text = table.concat(about, ", "), tone = "dim" } end
@@ -193,7 +184,8 @@ local function device_tile()
   end
   table.sort(rows, function(a, b) return a[1] < b[1] end)
   if #rows > 0 then tile[#tile + 1] = ui.table{ rows = rows } end
-  return card(tile)
+  if d.temp_c then tile[#tile + 1] = ui.chart{ metric = "device_temp", server = "local", hours = 24, title = "Chip, last 24 h" } end
+  return ui.card(tile)
 end
 
 local function server_tile(s, cpu, gpu)
@@ -208,7 +200,7 @@ local function server_tile(s, cpu, gpu)
   if gpu then now[#now + 1] = ui.stat{ metric = "gpu_temp", server = s.id } end
   if #now > 0 then tile[#tile + 1] = ui.row(now) end
   if cpu then tile[#tile + 1] = ui.chart{ metric = "cpu_temp", server = s.id, hours = 24 } end
-  return card(tile)
+  return ui.card(tile)
 end
 
 -- Tiles in rows; a short last row is padded so its tiles keep their width.

@@ -106,6 +106,7 @@ func (h *PluginHost) start(b shared.PluginBundle) {
 		return
 	}
 	p.rt = plugin.New(m, filepath.Join(h.dir, b.ID, "store.json"))
+	p.rt.Config = b.Config
 	p.rt.OpenSystem()
 	p.rt.OpenMetrics()
 	p.rt.OpenHTTP()
@@ -145,5 +146,5 @@ func (h *PluginHost) Call(c shared.PluginCall) (any, error) {
 	if p == nil || p.rt == nil {
 		return nil, errors.New("plugin not running: " + c.ID)
 	}
-	return p.rt.Handle(c.Action, c.Args, plugin.CallTimeout)
+	return p.rt.Handle(c.Action, c.Args, p.rt.Manifest.CallTimeout())
 }

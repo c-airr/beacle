@@ -1,7 +1,7 @@
 {
   "id": "temp",
   "name": "Temp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "permissions": {
     "read": ["/sys/class/thermal", "/sys/class/hwmon"],
     "exec": ["nvidia-smi"],
@@ -9,6 +9,16 @@
   },
   "metrics": {
     "cpu_temp": { "label": "CPU", "unit": "°C", "warn": 80, "crit": 90 },
-    "gpu_temp": { "label": "GPU", "unit": "°C", "warn": 85, "crit": 95 }
-  }
+    "gpu_temp": { "label": "GPU", "unit": "°C", "warn": 85, "crit": 95 },
+    "device_temp": { "label": "Device", "unit": "°C" }
+  },
+  "config": [
+    { "key": "lhm", "label": "LibreHardwareMonitor", "type": "url", "default": "http://127.0.0.1:8085/data.json",
+      "help": "Its remote web server's data.json, for this computer's tile." },
+    { "key": "pc_name", "label": "Name of this computer's tile", "type": "text", "default": "This computer" },
+    { "key": "device", "label": "Device status page", "type": "url",
+      "help": "A board on the LAN that serves its state as JSON, e.g. http://192.168.1.50/status. Empty: no tile." },
+    { "key": "device_name", "label": "Name of the device's tile", "type": "text", "default": "Raspberry Pi Pico" },
+    { "key": "per_row", "label": "Tiles per row", "type": "select", "options": ["2", "3", "4"], "default": "3" }
+  ]
 }

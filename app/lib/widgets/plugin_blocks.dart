@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -216,10 +217,70 @@ class PluginBlocks extends StatelessWidget {
           ],
         );
       case 'button':
+        final label = '${b['label'] ?? b['action'] ?? ''}';
         return Align(
           alignment: Alignment.centerLeft,
-          child: SmallButton('${b['label'] ?? b['action'] ?? ''}',
-              onPressed: () => _run(context, '${b['action'] ?? ''}', (b['args'] as Map?)?.cast<String, dynamic>() ?? {})),
+          child: SmallButton(label, onPressed: () async {
+            if (b['confirm'] is String && !await _confirm(context, label, '${b['confirm']}')) return;
+            if (context.mounted) {
+              await _run(context, '${b['action'] ?? ''}', (b['args'] as Map?)?.cast<String, dynamic>() ?? {});
+            }
+          }),
+        );
+      case 'link':
+        final url = '${b['url'] ?? ''}';
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: InkWell(
+            onTap: () => openUrl(url),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('${b['text'] ?? url}', style: TextStyle(fontSize: 12.5, color: BeacleColors.accent)),
+              const SizedBox(width: 4),
+              Icon(Icons.open_in_new, size: 12, color: BeacleColors.accent),
+            ]),
+          ),
+        );
+      case 'toggle':
+        return Row(children: [
+          Expanded(child: Text('${b['label'] ?? ''}', style: const TextStyle(fontSize: 12.5))),
+          Switch(
+            value: b['value'] == true,
+            onChanged: (v) =>
+                _run(context, '${b['action'] ?? ''}', {...?(b['args'] as Map?)?.cast<String, dynamic>(), 'value': v}),
+          ),
+        ]);
+      case 'select':
+        final options = [for (final o in (b['options'] as List? ?? const [])) '$o'];
+        final value = options.contains('${b['value']}') ? '${b['value']}' : null;
+        return Row(children: [
+          if ('${b['label'] ?? ''}'.isNotEmpty) ...[
+            Text('${b['label']}', style: const TextStyle(fontSize: 12.5)),
+            const SizedBox(width: 12),
+          ],
+          DropdownButton<String>(
+            value: value,
+            isDense: true,
+            style: TextStyle(fontSize: 12.5, color: BeacleColors.text),
+            items: [for (final o in options) DropdownMenuItem(value: o, child: Text(o))],
+            onChanged: (v) => v == null
+                ? null
+                : _run(context, '${b['action'] ?? ''}', {...?(b['args'] as Map?)?.cast<String, dynamic>(), 'value': v}),
+          ),
+        ]);
+      case 'code':
+        return Container(
+          constraints: BoxConstraints(maxHeight: ((b['height'] as num?) ?? 240).toDouble()),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: BeacleColors.bg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: BeacleColors.border),
+          ),
+          child: SingleChildScrollView(
+            reverse: b['tail'] == true, // a log: keep the newest lines in view
+            child: SelectableText('${b['text'] ?? ''}',
+                style: const TextStyle(fontSize: 11.5, fontFamily: 'Consolas', height: 1.35)),
+          ),
         );
       case 'input':
         return _PluginInput(
@@ -257,7 +318,7 @@ class PluginBlocks extends StatelessWidget {
   }
 
   Map<String, dynamic>? _def(BuildContext context, Map<String, dynamic> b) =>
-      b['metric'] == null ? null : context.read<AppState>().pluginMetrics[_key(b['metric'])];
+      b['metric'] == null ? null : context.read<AppState>().pluginMetricDef(_key(b['metric']));
 
   /// `value` as given, or the live reading of `metric` on the block's server.
   double? _value(BuildContext context, Map<String, dynamic> b) {
@@ -283,6 +344,32 @@ class PluginBlocks extends StatelessWidget {
     }
     onAction();
   }
+}
+
+Future<bool> _confirm(BuildContext context, String action, String question) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(question),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.t('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+        ],
+      ),
+    ) ==
+    true;
+
+/// Opens a web page in the system browser. Only http(s): a plugin must not
+/// be able to start programs through a file: or custom-scheme link.
+Future<void> openUrl(String url) async {
+  final u = Uri.tryParse(url);
+  if (u == null || (u.scheme != 'http' && u.scheme != 'https')) return;
+  final (exe, args) = switch (Platform.operatingSystem) {
+    'windows' => ('explorer', [u.toString()]),
+    'macos' => ('open', [u.toString()]),
+    _ => ('xdg-open', [u.toString()]),
+  };
+  await Process.run(exe, args);
 }
 
 String _fmt(double v) => v == v.truncateToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
@@ -406,8 +493,86 @@ IconData pluginIcon(String name) => switch (name) {
       'network' => Icons.lan_outlined,
       'shield' => Icons.shield_outlined,
       'list' => Icons.list_alt,
+      'home' => Icons.home_outlined,
+      'dashboard' => Icons.dashboard_outlined,
+      'settings' => Icons.settings_outlined,
+      'terminal' => Icons.terminal,
+      'code' => Icons.code,
+      'bug' => Icons.bug_report_outlined,
+      'build' => Icons.build_outlined,
+      'cpu' => Icons.developer_board,
+      'gpu' => Icons.videogame_asset_outlined,
+      'disk' => Icons.album_outlined,
+      'folder' => Icons.folder_outlined,
+      'file' => Icons.description_outlined,
+      'database' => Icons.dns_outlined,
+      'server' => Icons.dns,
+      'docker' => Icons.view_in_ar_outlined,
+      'wifi' => Icons.wifi,
+      'router' => Icons.router_outlined,
+      'globe' => Icons.public,
+      'link' => Icons.link,
+      'lock' => Icons.lock_outline,
+      'key' => Icons.key_outlined,
+      'user' => Icons.person_outline,
+      'users' => Icons.group_outlined,
+      'mail' => Icons.mail_outline,
+      'chat' => Icons.chat_bubble_outline,
+      'bell' => Icons.notifications_none,
+      'warning' => Icons.warning_amber_outlined,
+      'error' => Icons.error_outline,
+      'check' => Icons.check_circle_outline,
+      'info' => Icons.info_outline,
+      'clock' => Icons.schedule,
+      'calendar' => Icons.calendar_today_outlined,
+      'timer' => Icons.timer_outlined,
+      'history' => Icons.history,
+      'sync' => Icons.sync,
+      'download' => Icons.download_outlined,
+      'upload' => Icons.upload_outlined,
+      'search' => Icons.search,
+      'star' => Icons.star_outline,
+      'flag' => Icons.flag_outlined,
+      'battery' => Icons.battery_std,
+      'sun' => Icons.wb_sunny_outlined,
+      'moon' => Icons.dark_mode_outlined,
+      'water' => Icons.water_drop_outlined,
+      'fan' => Icons.toys_outlined,
+      'camera' => Icons.photo_camera_outlined,
+      'music' => Icons.music_note_outlined,
+      'game' => Icons.sports_esports_outlined,
+      'money' => Icons.payments_outlined,
+      'cart' => Icons.shopping_cart_outlined,
+      'robot' => Icons.smart_toy_outlined,
+      'puzzle' => Icons.extension_outlined,
       _ => Icons.extension_outlined,
     };
+
+/// server.actions: what plugins put in a server's header, in one line.
+class PluginServerActions extends StatelessWidget {
+  final String vpsId;
+  const PluginServerActions({super.key, required this.vpsId});
+
+  @override
+  Widget build(BuildContext context) {
+    return PluginSlot(
+      slot: 'server.actions',
+      vpsId: vpsId,
+      builder: (context, renders, reload) => Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (final r in renders)
+            if (r.error.isNotEmpty)
+              PluginBlocks(render: r, vpsId: vpsId, onAction: reload)
+            else
+              for (final b in r.blocks) PluginBlocks(render: r, vpsId: vpsId, onAction: reload, only: b),
+        ],
+      ),
+    );
+  }
+}
 
 /// A whole page from a plugin's nav.tab slot.
 class PluginTabScreen extends StatelessWidget {

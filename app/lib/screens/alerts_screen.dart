@@ -370,7 +370,7 @@ class _AlertRow extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      if (alert.vpsId.isNotEmpty)
+                      if (alert.vpsId.isNotEmpty && alert.vpsId != 'local')
                         SmallButton(
                           context.l.t('alOpenVps'),
                           icon: Icons.open_in_new,

@@ -40,6 +40,7 @@ func newTestPlugins(t *testing.T) (*Plugins, *Store) {
 	}
 	hub := NewHub()
 	p := NewPlugins(dir, store, hub, NewAgentHub(store, hub, nil, nil, nil))
+	p.Start()
 	t.Cleanup(func() {
 		for id := range p.list {
 			if rt, _ := p.runtime(id); rt != nil {
@@ -142,7 +143,7 @@ func TestInstallFromFolderIsLinkedAndKeepsState(t *testing.T) {
 		t.Fatal("a folder install is not linked")
 	}
 	off := false
-	if err := p.SetState("temps", &off, nil); err != nil {
+	if err := p.SetState("temps", &off, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Reinstalling (what a save in the folder does) keeps it switched off.
@@ -152,6 +153,7 @@ func TestInstallFromFolderIsLinkedAndKeepsState(t *testing.T) {
 	}
 	// And so does a backend restart.
 	p2 := NewPlugins(filepath.Dir(p.dir), p.store, p.hub, p.agentHub)
+	p2.Start()
 	if p2.list["temps"] == nil || p2.list["temps"].state.Enabled {
 		t.Fatalf("after restart: %+v", p2.list["temps"])
 	}

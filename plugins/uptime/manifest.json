@@ -1,8 +1,18 @@
 {
   "id": "uptime",
   "name": "Uptime",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "permissions": {
-    "http": ["example.com", "example.org"]
-  }
+    "http": ["*"]
+  },
+  "metrics": {
+    "ms_*": { "label": "Response", "unit": " ms" }
+  },
+  "config": [
+    { "key": "sites", "label": "Pages to check", "type": "text", "default": "https://example.com/ https://example.org/",
+      "help": "Full URLs, separated by spaces or commas." },
+    { "key": "every", "label": "Seconds between two checks", "type": "number", "default": 10,
+      "help": "Each check is one page, in turn." },
+    { "key": "down_after", "label": "Alert after this many failures in a row", "type": "number", "default": 2 }
+  ]
 }

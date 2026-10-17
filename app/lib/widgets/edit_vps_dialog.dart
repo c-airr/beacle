@@ -39,7 +39,8 @@ class _EditVpsDialogState extends State<_EditVpsDialog> {
   /// Plugin metrics that alert, keyed `plugin.metric`: their warn override.
   late final Map<String, TextEditingController> _pluginLevels = {
     for (final e in context.read<AppState>().pluginMetrics.entries)
-      if (((e.value['warn'] as num?) ?? 0) > 0 || ((e.value['crit'] as num?) ?? 0) > 0)
+      // A wildcard metric ("disk_*") has no single name to override.
+      if (!e.key.endsWith('*') && (((e.value['warn'] as num?) ?? 0) > 0 || ((e.value['crit'] as num?) ?? 0) > 0))
         e.key: TextEditingController(text: _numOrEmpty(widget.vps.thresholds?.plugins[e.key])),
   };
 

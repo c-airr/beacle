@@ -13,11 +13,13 @@ way in:
 - [`temps`](../../plugins/temps) — CPU and GPU temperature from every server:
   an agent part, metrics with alerts, a column, a card and a tab.
 - [`uptime`](../../plugins/uptime) — backend only: checks web pages from the
-  panel, with a button per site, a setting kept in the store and an Overview
-  card that shows up only when a site is down.
-- [`temp`](../../plugins/temp) — backend only: this computer's temperatures
-  from LibreHardwareMonitor, a device on the LAN that serves JSON, and the
-  `temps` plugin's readings, drawn by another plugin.
+  panel. The pages come from its settings form (`config`), response times
+  are a wildcard metric of this computer with a chart per page, a page that
+  stays down raises an alert with notifications, and a switch pauses it.
+- [`temp`](../../plugins/temp) — one tab of tiles: this computer's
+  temperatures from LibreHardwareMonitor and a device on the LAN that
+  serves JSON (both set in its settings, with a day of history), and every
+  server's CPU and GPU from its agent part.
 
 - [What a plugin is](#what-a-plugin-is)
 - [Your first plugin in five minutes](#your-first-plugin-in-five-minutes)

@@ -391,6 +391,18 @@ class AppState extends ChangeNotifier {
               '${p['id']}.${e.key}': {'plugin': p['name'], ...(e.value as Map<String, dynamic>)},
       };
 
+  /// A metric's declaration, by its key or a wildcard one ("x.disk_*" covers
+  /// "x.disk_sda").
+  Map<String, dynamic>? pluginMetricDef(String key) {
+    final defs = pluginMetrics;
+    if (defs[key] != null) return defs[key];
+    String? best;
+    for (final k in defs.keys) {
+      if (k.endsWith('*') && key.startsWith(k.substring(0, k.length - 1)) && k.length > (best?.length ?? 0)) best = k;
+    }
+    return best == null ? null : defs[best];
+  }
+
   Future<void> refreshPlugins() async {
     try {
       final r = await api.get('/api/plugins') as Map<String, dynamic>;

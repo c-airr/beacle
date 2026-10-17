@@ -244,6 +244,8 @@ class AppShellState extends State<AppShell> {
   static const _tabAlerts = 6;
 
   void goToServer(String vpsId) {
+    // Plugins raise alerts for "local", this computer, which has no page.
+    if (!context.read<AppState>().vpsList.any((v) => v.id == vpsId)) return;
     context.read<AppState>().bumpActivity();
     setState(() {
       focusedVpsId = vpsId;

@@ -48,6 +48,10 @@ type Runtime struct {
 	storeVal map[string]any
 
 	storePath string
+
+	// Config is the user's settings, defaults filled in (see ConfigValues).
+	// Set before Load.
+	Config map[string]any
 }
 
 type task struct {
@@ -89,6 +93,9 @@ func New(m Manifest, storePath string) *Runtime {
 	L.SetGlobal("beacle", r.lib)
 	L.SetGlobal("print", L.NewFunction(r.luaLog))
 	r.Set("log", r.luaLog)
+	r.Set("now", luaNow)
+	r.Set("date", luaDate)
+	r.Set("config", r.luaConfig)
 	r.Set("every", r.luaEvery)
 	r.Set("on", r.luaOn)
 	r.SetIn("json", "encode", luaJSONEncode)
@@ -121,7 +128,7 @@ func (r *Runtime) Load(src, chunk string) error {
 		r.fail(err)
 		return err
 	}
-	if _, err := r.Call(fn, CallTimeout); err != nil {
+	if _, err := r.Call(fn, r.Manifest.CallTimeout()); err != nil {
 		r.fail(err)
 		return err
 	}
@@ -175,12 +182,19 @@ func (r *Runtime) Handle(name string, args any, timeout time.Duration) (any, err
 	return r.Call(fn, timeout, args)
 }
 
+// HasHandler reports whether beacle.on registered name.
+func (r *Runtime) HasHandler(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.handlers[name] != nil
+}
+
 func (r *Runtime) runTask(t task) {
 	failures := 0
 	tick := time.NewTicker(t.every)
 	defer tick.Stop()
 	for {
-		if _, err := r.Call(t.fn, CallTimeout); err != nil {
+		if _, err := r.Call(t.fn, r.Manifest.CallTimeout()); err != nil {
 			failures++
 			r.Logf("error: %v", err)
 			if failures >= maxFailures {
@@ -348,4 +362,51 @@ func luaJSONDecode(L *lua.LState) int {
 	}
 	L.Push(FromGo(L, v))
 	return 1
+}
+
+// luaNow: beacle.now() is the time in seconds since 1970, with milliseconds.
+func luaNow(L *lua.LState) int {
+	L.Push(lua.LNumber(float64(time.Now().UnixMilli()) / 1000))
+	return 1
+}
+
+// luaDate: beacle.date([t], [layout]) formats t (default now) in this
+// computer's time zone. layout is Go's ("2006-01-02 15:04"); the default is
+// "2006-01-02 15:04:05".
+func luaDate(L *lua.LState) int {
+	t := time.Now()
+	if L.Get(1) != lua.LNil {
+		sec := float64(L.CheckNumber(1))
+		t = time.UnixMilli(int64(sec * 1000))
+	}
+	L.Push(lua.LString(t.Format(L.OptString(2, "2006-01-02 15:04:05"))))
+	return 1
+}
+
+// luaConfig: beacle.config(key) is one setting, beacle.config() all of them.
+func (r *Runtime) luaConfig(L *lua.LState) int {
+	if L.GetTop() == 0 {
+		L.Push(FromGo(L, r.Config))
+		return 1
+	}
+	L.Push(FromGo(L, r.Config[L.CheckString(1)]))
+	return 1
+}
+
+// ConfigValues is what a plugin sees through beacle.config: each field's
+// stored value, else its default. Fields the manifest no longer has are
+// dropped; agent leaves secrets out.
+func ConfigValues(m Manifest, stored map[string]any, agent bool) map[string]any {
+	out := map[string]any{}
+	for _, f := range m.Config {
+		if agent && f.Type == "secret" {
+			continue
+		}
+		if v, ok := stored[f.Key]; ok && v != nil {
+			out[f.Key] = v
+		} else if f.Default != nil {
+			out[f.Key] = f.Default
+		}
+	}
+	return out
 }

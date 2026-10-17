@@ -30,6 +30,23 @@ function beacle.every(seconds, fn) end
 ---@param fn fun(args: table): any
 function beacle.on(name, fn) end
 
+---Seconds since 1970, with milliseconds. (2.2.5)
+---@return number
+function beacle.now() end
+
+---Formats a time (default now) with a Go layout, default "2006-01-02 15:04:05".
+---(2.2.5)
+---@param t? number
+---@param layout? string
+---@return string
+function beacle.date(t, layout) end
+
+---The plugin's settings from Settings → Plugins (manifest "config"); one by
+---key, or all. Agents do not get secrets. (2.2.5)
+---@param key? string
+---@return any
+function beacle.config(key) end
+
 ---@class beacle.json
 beacle.json = {}
 
@@ -67,17 +84,27 @@ function beacle.read(path) end
 ---@return string[]|nil names, string|nil err
 function beacle.list(dir) end
 
----Runs a program listed in permissions.exec, without a shell, for at most 5 s.
----Returns its standard output (up to 1 MiB) and exit code, or nil and an
----error when it could not run at all.
+---Writes a file under a path listed in permissions.write. (2.2.5)
+---@param path string
+---@param data string
+---@param opts? { append?: boolean }
+---@return true|nil ok, string|nil err
+function beacle.write(path, data, opts) end
+
+---Runs a program listed in permissions.exec, without a shell, for at most 5 s
+---(opts.timeout). Returns its standard output and error (up to 1 MiB each)
+---and exit code, or nil and an error when it could not run at all.
 ---@param program string
 ---@param args? string[]
----@return string|nil stdout, number|string code_or_err
-function beacle.exec(program, args) end
+---@param opts? { stdin?: string, env?: table<string, string>, dir?: string, timeout?: number }
+---@return string|nil stdout, number|string code_or_err, string|nil stderr
+function beacle.exec(program, args, opts) end
 
----Reports a reading of a metric declared in manifest.json.
+---Reports a reading of a metric declared in manifest.json (a "disk_*"
+---declaration covers "disk_sda"); nil drops it. In backend.lua the metric
+---belongs to this computer, server "local". (backend: 2.2.5)
 ---@param name string
----@param value number
+---@param value number|nil
 function beacle.metric(name, value) end
 
 -- ---------------------------------------------------------------------------
@@ -96,6 +123,11 @@ function beacle.http.get(url) end
 ---@return string|nil body, number|string status_or_err
 function beacle.http.post(url, body, content_type) end
 
+---Any method, with headers; a table body goes as JSON. (2.2.5)
+---@param req { method?: string, url: string, headers?: table<string, string>, body?: string|table, timeout?: number }
+---@return { status: number, headers: table<string, string>, body: string }|nil response, string|nil err
+function beacle.http.request(req) end
+
 -- ---------------------------------------------------------------------------
 -- backend.lua only
 
@@ -104,13 +136,20 @@ function beacle.http.post(url, body, content_type) end
 ---@field name string
 ---@field status string online | offline | agent_down | high_load | pending | ...
 ---@field online boolean the agent is connected right now
+---@field host string
+---@field public_ip string
+---@field tags string[]
+---@field location string
+---@field agent_version string
 
 ---Every server in the panel.
 ---@return Server[]
 function beacle.servers() end
 
 ---The latest reading of a metric on a server: one of this plugin's by its bare
----name ("cpu_temp"), any plugin's as "plugin.metric". Nil when there is none.
+---name ("cpu_temp"), any plugin's as "plugin.metric", the panel's own as
+---"system.cpu" (mem, disk, load1, rx, tx). Server "local" is this computer.
+---Nil when there is none.
 ---@param server_id string
 ---@param metric string
 ---@return number|nil
@@ -123,11 +162,32 @@ function beacle.value(server_id, metric) end
 ---@return any result, string|nil err
 function beacle.call(server_id, action, args) end
 
+---Calls the panel's API in process, as the app does, for routes listed in
+---permissions.api ("GET /api/vps/*"). Returns the decoded answer and the HTTP
+---status. (2.2.5)
+---@param method string
+---@param path string
+---@param body? string|table
+---@return any answer, number|string status_or_err
+function beacle.api(method, path, body) end
+
+---Raises an alert (Alerts, Needs attention, webhooks); again while open does
+---nothing. No server = this computer. (2.2.5)
+---@param a { key: string, message: string, severity?: "warning"|"critical", server?: string }
+function beacle.alert(a) end
+
+---Resolves an alert raised with beacle.alert. (2.2.5)
+---@param key string
+---@param server? string
+function beacle.resolve(key, server) end
+
 ---@alias SlotName
 ---| "nav.tab"         # a page of its own in the sidebar; opts = { id, title, icon }
 ---| "server.section"  # a card on each server's page; fn gets the server
 ---| "servers.column"  # one small block beside each server in the list; fn gets the server
 ---| "overview.card"   # a card on the Overview
+---| "server.actions"  # small blocks in a server's header; fn gets the server (2.2.5)
+---| "settings.section" # blocks in the plugin's card in Settings → Plugins (2.2.5)
 
 ---Puts blocks somewhere in the panel. `fn` returns a list of blocks (one
 ---block for servers.column), or nil for nothing. It runs while the panel
@@ -182,8 +242,9 @@ function ui.chart(p) end
 ---@return Block
 function ui.table(p) end
 
----Calls beacle.on(action) with args (plus `server` on a server's page).
----@param p { label: string, action: string, args?: table }
+---Calls beacle.on(action) with args (plus `server` on a server's page);
+---with `confirm` the panel asks that question first (2.2.5).
+---@param p { label: string, action: string, args?: table, confirm?: string }
 ---@return Block
 function ui.button(p) end
 
@@ -208,3 +269,23 @@ function ui.column(children) end
 ---@param p { title?: string, [integer]: Block }
 ---@return Block
 function ui.card(p) end
+
+---Opens an http(s) link in the browser. (2.2.5)
+---@param p { text?: string, url: string }
+---@return Block
+function ui.link(p) end
+
+---A switch; flipping it calls beacle.on(action) with args + { value = on }. (2.2.5)
+---@param p { label?: string, value: boolean, action: string, args?: table }
+---@return Block
+function ui.toggle(p) end
+
+---A drop-down; picking calls beacle.on(action) with args + { value = option }. (2.2.5)
+---@param p { label?: string, value?: string, options: string[], action: string, args?: table }
+---@return Block
+function ui.select(p) end
+
+---Monospace text in a scrolling box, e.g. command output. (2.2.5)
+---@param p { text: string, height?: number, tail?: boolean }
+---@return Block
+function ui.code(p) end

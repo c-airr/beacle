@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 )
@@ -73,15 +74,20 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePatchPlugin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Enabled    *bool     `json:"enabled"`
-		DisabledOn *[]string `json:"disabled_on"`
+		Enabled    *bool          `json:"enabled"`
+		DisabledOn *[]string      `json:"disabled_on"`
+		Config     map[string]any `json:"config"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad json")
 		return
 	}
-	if err := s.plugins.SetState(r.PathValue("id"), req.Enabled, req.DisabledOn); err != nil {
-		writeErr(w, http.StatusNotFound, err.Error())
+	if err := s.plugins.SetState(r.PathValue("id"), req.Enabled, req.DisabledOn, req.Config); err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, errNoPlugin) {
+			code = http.StatusNotFound
+		}
+		writeErr(w, code, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})

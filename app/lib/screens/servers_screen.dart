@@ -299,6 +299,7 @@ class _ServerStats extends StatelessWidget {
                   style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
             ]),
             Wrap(spacing: 8, runSpacing: 8, children: [
+              PluginServerActions(vpsId: vps.id),
               SmallButton(context.l.t('sshConnectButton'),
                   icon: Icons.terminal, onPressed: vps.online ? () => AppShell.of(context).openTerminal(vps.id) : null),
               SmallButton(context.l.t('tlButton'),

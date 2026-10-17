@@ -45,6 +45,53 @@ type AlertEngine struct {
 	wg     *WireGuardService
 	// pluginMetrics declares the plugin metrics and their levels; nil-safe.
 	pluginMetrics func() map[string]plugin.MetricDef
+	// events hears every alert raised or resolved (plugins' event:alert);
+	// nil-safe.
+	events func(shared.Alert)
+}
+
+func (e *AlertEngine) SetEvents(f func(shared.Alert)) { e.events = f }
+
+func (e *AlertEngine) emit(a shared.Alert) {
+	if e.events != nil {
+		e.events(a)
+	}
+}
+
+// RaisePlugin and ResolvePlugin are beacle.alert and beacle.resolve. key
+// starts with the plugin's id.
+func (e *AlertEngine) RaisePlugin(vps shared.VPS, sev shared.AlertSeverity, key, msg string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.fire(vps, shared.AlertPlugin, sev, key, msg)
+}
+
+func (e *AlertEngine) ResolvePlugin(vpsID, key string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.clear(vpsID, shared.AlertPlugin, key)
+}
+
+// ResolvePluginAll closes every alert a plugin raised or its metrics did,
+// when it is removed or turned off: nothing would close them otherwise.
+func (e *AlertEngine) ResolvePluginAll(id string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for active := range e.active {
+		parts := strings.SplitN(active, "|", 3)
+		if len(parts) == 3 && (parts[1] == string(shared.AlertPlugin) || parts[1] == string(shared.AlertPluginMetric)) &&
+			(strings.HasPrefix(parts[2], id+"|") || strings.HasPrefix(parts[2], id+".")) {
+			e.clear(parts[0], shared.AlertType(parts[1]), parts[2])
+		}
+	}
+}
+
+// EvaluateLocal runs this computer's plugin metrics (backend parts) through
+// their levels, as EvaluateSnapshot does a server's.
+func (e *AlertEngine) EvaluateLocal(values map[string]float64, defs map[string]plugin.MetricDef) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.evaluatePlugins(localVPS(), values, defs)
 }
 
 func (e *AlertEngine) SetPluginMetrics(f func() map[string]plugin.MetricDef) { e.pluginMetrics = f }
@@ -164,6 +211,7 @@ func (e *AlertEngine) fire(vps shared.VPS, t shared.AlertType, sev shared.AlertS
 		VPSID: vps.ID, VPSName: vps.Name, Type: t, Severity: sev, Message: msg, Key: key,
 	})
 	e.hub.Broadcast(shared.WSAlert, a)
+	e.emit(a)
 	if e.notify != nil {
 		e.notify(shared.WebhookMessage{
 			Title:    fmt.Sprintf("[%s] %s: %s", sev, vps.Name, alertTitle(t)),
@@ -198,6 +246,8 @@ func alertTitle(t shared.AlertType) string {
 		return "agent down"
 	case shared.AlertPluginMetric:
 		return "plugin metric"
+	case shared.AlertPlugin:
+		return "plugin"
 	default:
 		return string(t)
 	}
@@ -216,6 +266,7 @@ func (e *AlertEngine) clear(vpsID string, t shared.AlertType, key string) {
 	delete(e.active, vpsID+"|"+string(t)+"|"+key)
 	for _, a := range e.store.ResolveAlertsFor(vpsID, t, key) {
 		e.hub.Broadcast(shared.WSAlert, a)
+		e.emit(a)
 	}
 }
 
@@ -228,6 +279,7 @@ func (e *AlertEngine) clearReachability(vpsID string) {
 		delete(e.active, vpsID+"|"+string(t)+"|")
 		for _, a := range e.store.ResolveAlertsFor(vpsID, t, "") {
 			e.hub.Broadcast(shared.WSAlert, a)
+			e.emit(a)
 		}
 	}
 	delete(e.reach, vpsID)
@@ -336,7 +388,7 @@ func (e *AlertEngine) EvaluateSnapshot(vps shared.VPS, snap *shared.VPSSnapshot)
 // its own key, as with certificates, so warn going to crit alerts again.
 func (e *AlertEngine) evaluatePlugins(vps shared.VPS, values map[string]float64, defs map[string]plugin.MetricDef) {
 	for key, v := range values {
-		d, ok := defs[key]
+		d, ok := plugin.LookupMetric(defs, key)
 		if !ok {
 			continue
 		}

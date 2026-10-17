@@ -8,6 +8,31 @@
   panel's own cards; several in a `ui.row` sit side by side. A plugin
   that starts with `ui.card = ui.card or ui.column` also runs on an older
   panel, with tiles drawn unframed.
+- **Plugins that do what the panel does** — a backend part can call the
+  panel's own API (`beacle.api`), so start a container, read a server's
+  snapshot or resolve an alert, for the routes its manifest lists under
+  `permissions.api`. Plugins never reach the plugin routes, the
+  terminals or shutdown.
+- **Plugin settings** — a manifest's `config` becomes a form under the
+  plugin in Settings → Plugins (text, secret, number, switch, URL, list);
+  the plugin reads it with `beacle.config`. Secrets stay on this computer.
+  A URL typed there may be called without listing its host.
+- **Plugin alerts, events and history of this computer** —
+  `beacle.alert`/`beacle.resolve` raise alerts like the panel's own, with
+  notifications; `beacle.on("event:alert", …)` hears every alert; and
+  `beacle.metric` in a backend part records history and alerts for things
+  that are not a server (`server = "local"`).
+- **More for plugins** — `beacle.now` and `beacle.date`;
+  `beacle.http.request` with any method and headers (API tokens);
+  `beacle.write` on agents under `permissions.write`; `beacle.exec` with
+  stdin, environment, working directory, a timeout of its own and
+  stderr; a manifest `timeout` up to 5 minutes; wildcard metrics
+  (`"disk_*"`); more server fields and the panel's own CPU/RAM/disk in
+  `beacle.value`; blocks `ui.link`, `ui.toggle`, `ui.select`, `ui.code`
+  and buttons that ask first; slots `server.actions` and
+  `settings.section`; 52 more tab icons.
+- **Agents keep up with plugins** — an agent too old for what a plugin
+  calls is updated by the panel when the plugin is pushed to it.
 
 ### Fixed
 

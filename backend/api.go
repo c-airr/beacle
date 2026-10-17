@@ -364,7 +364,8 @@ func (s *Server) LinkMonitor() {
 // data instead of offering two empty weeks.
 func (s *Server) handleVPSHistory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if s.store.GetVPS(id) == nil {
+	// "local" is this computer: metrics of plugins' backend parts.
+	if id != localID && s.store.GetVPS(id) == nil {
 		writeErr(w, http.StatusNotFound, "vps not found")
 		return
 	}
@@ -688,8 +689,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		dataDir = s.dataDir
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":         true,
-		"service":    "beacle-backend",
+		"ok":      true,
+		"service": "beacle-backend",
 		// 2: panel API on loopback, agents on their own listeners.
 		"api_level":  2,
 		"pid":        os.Getpid(),
