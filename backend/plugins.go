@@ -247,7 +247,13 @@ func (p *Plugins) Inspect(src string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"manifest": bp.manifest, "has_agent": files["agent.lua"] != "", "has_backend": files["backend.lua"] != ""}
+	hasAgent, hasBackend := files["agent.lua"] != "", files["backend.lua"] != ""
+	out := map[string]any{
+		"manifest": bp.manifest, "has_agent": hasAgent, "has_backend": hasBackend,
+		"review": reviewPermissions(bp.manifest, hasAgent, hasBackend),
+		// The code itself, for the "View code" button before installing.
+		"files": map[string]string{"agent.lua": files["agent.lua"], "backend.lua": files["backend.lua"]},
+	}
 	p.mu.Lock()
 	if old := p.list[bp.manifest.ID]; old != nil {
 		out["installed_version"] = old.manifest.Version
@@ -664,6 +670,7 @@ type pluginView struct {
 	Metrics    map[string]plugin.MetricDef  `json:"metrics"`
 	Config     []plugin.ConfigField         `json:"config,omitempty"`
 	Values     map[string]any               `json:"values,omitempty"` // a secret only says whether it is set
+	Review     []permNote                   `json:"review"`
 	HasAgent   bool                         `json:"has_agent"`
 	HasBackend bool                         `json:"has_backend"`
 	Error      string                       `json:"error,omitempty"`
@@ -692,6 +699,7 @@ func (p *Plugins) List() map[string]any {
 			Linked: bp.state.Linked, DisabledOn: append([]string{}, bp.state.DisabledOn...),
 			Perms: bp.manifest.Permissions, Metrics: bp.manifest.Metrics,
 			Config: bp.manifest.Config, Values: maskSecrets(bp.manifest, bp.state.Config),
+			Review:   reviewPermissions(bp.manifest, bp.files["agent.lua"] != "", bp.files["backend.lua"] != ""),
 			HasAgent: bp.files["agent.lua"] != "", HasBackend: bp.files["backend.lua"] != "",
 			Servers: map[string]map[string]string{},
 		}

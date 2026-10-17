@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"beacle/shared"
+	"beacle/shared/plugin"
 )
 
 func TestAPIPermissionPatterns(t *testing.T) {
@@ -203,5 +204,37 @@ func TestShippedExamplesRender(t *testing.T) {
 		if rt, _ := p.runtime(id); rt == nil || rt.Err() != "" {
 			t.Errorf("%s stopped: %v", id, rt)
 		}
+	}
+}
+
+func TestReviewSaysWhatAPluginCanDo(t *testing.T) {
+	kinds := func(n []permNote) map[string]string {
+		out := map[string]string{}
+		for _, x := range n {
+			out[x.Kind] = x.Level
+		}
+		return out
+	}
+	quiet := kinds(reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{Read: []string{"/sys/class/thermal"}}}, true, false))
+	if quiet["read"] != "info" || quiet["agent"] != "info" || len(quiet) != 2 {
+		t.Errorf("harmless plugin: %v", quiet)
+	}
+	if got := kinds(reviewPermissions(plugin.Manifest{}, false, true)); got["none"] != "ok" {
+		t.Errorf("no permissions: %v", got)
+	}
+	risky := kinds(reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{
+		HTTP: []string{"*"}, Exec: []string{"/bin/bash", "df"}, Read: []string{"/opt/beacle-agent", "/"},
+		Write: []string{"/tmp/x"}, API: []string{"GET /api/vps", "POST /api/vps/*/agent/system/reboot"},
+	}}, true, true))
+	for kind, level := range map[string]string{
+		"http_any": "danger", "exec_shell": "danger", "exec": "warn", "read_sensitive": "danger",
+		"write": "danger", "api_write": "danger", "api_read": "warn",
+	} {
+		if risky[kind] != level {
+			t.Errorf("%s: %q, want %q (%v)", kind, risky[kind], level, risky)
+		}
+	}
+	if _, ok := risky["none"]; ok {
+		t.Error("a risky plugin is said to touch nothing")
 	}
 }

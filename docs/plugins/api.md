@@ -505,6 +505,15 @@ in snapshots, history, alerts and per-server levels.
 95 % of the lowest level, or the metric is no longer reported. A server's
 edit dialog can replace `warn` for that server.
 
+**What the user is told.** Before installing, and on the plugin's card,
+the panel turns `permissions` and `config` into sentences — "Can send data
+to any address on the internet", "Runs bash — which can run any command",
+"Reads files under /etc — they can hold passwords…" — with the risky ones
+in red, and offers the code to read. Ask for the least you need: `"*"` in
+`http`, a shell or interpreter in `exec`, `write`, a `read` prefix at or
+above `/etc`, `/root`, `/home`, `/opt`, `/var`, `/srv` or `/boot`, and any
+`api` entry that is not `GET` are all shown as dangerous.
+
 ## Lua environment
 
 Lua 5.1 (gopher-lua). Available: `assert`, `error`, `getmetatable`,

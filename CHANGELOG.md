@@ -31,6 +31,13 @@
   `beacle.value`; blocks `ui.link`, `ui.toggle`, `ui.select`, `ui.code`
   and buttons that ask first; slots `server.actions` and
   `settings.section`; 52 more tab icons.
+- **Know what a plugin can do before installing it** — the install
+  dialog and each plugin's card say it in plain words, worst first:
+  where it can send data (any address is flagged), programs it runs (a
+  shell or interpreter means any command), files it reads that can hold
+  passwords or the agent's token, files it changes, what it does
+  through the panel. Risky ones are in red with a warning, and *View
+  code* shows its Lua before you say yes.
 - **Agents keep up with plugins** — an agent too old for what a plugin
   calls is updated by the panel when the plugin is pushed to it.
 

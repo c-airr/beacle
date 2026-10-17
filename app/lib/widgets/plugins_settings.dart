@@ -114,14 +114,29 @@ class PluginsSettings extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(ctx.l.t('plgNewPerms'), style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
                 ],
-                const SizedBox(height: 10),
-                _Permissions(perms: (m['permissions'] as Map<String, dynamic>?) ?? const {}),
+                const SizedBox(height: 12),
+                Text(ctx.l.t('plgCanDo'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                _Review(notes: (info['review'] as List?) ?? const []),
+                const SizedBox(height: 8),
+                Text(ctx.l.t('plgEnforced'), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                if (_risky(info['review'])) ...[
+                  const SizedBox(height: 10),
+                  Text(ctx.l.t('plgTrustWarn'), style: TextStyle(fontSize: 12, color: BeacleColors.err)),
+                ],
               ],
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () => _showCode(ctx, '${m['name']}', (info['files'] as Map?)?.cast<String, dynamic>() ?? const {}),
+              child: Text(ctx.l.t('plgViewCode')),
+            ),
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.t('cancel'))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.l.t('plgInstall'))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(ctx.l.t('plgInstall'), style: _risky(info['review']) ? TextStyle(color: BeacleColors.err) : null),
+            ),
           ],
         ),
       );
@@ -135,35 +150,77 @@ class PluginsSettings extends StatelessWidget {
   }
 }
 
-class _Permissions extends StatelessWidget {
-  final Map<String, dynamic> perms;
-  const _Permissions({required this.perms});
+bool _risky(Object? review) => review is List && review.any((n) => n is Map && n['level'] == 'danger');
+
+/// The plugin's code, read before installing it.
+Future<void> _showCode(BuildContext context, String name, Map<String, dynamic> files) => showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$name · ${ctx.l.t('plgViewCode')}'),
+        content: SizedBox(
+          width: 760,
+          height: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final e in files.entries)
+                  if ('${e.value ?? ''}'.isNotEmpty) ...[
+                    Text(e.key, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    SelectableText('${e.value}', style: const TextStyle(fontSize: 11.5, fontFamily: 'Consolas', height: 1.35)),
+                    const SizedBox(height: 16),
+                  ],
+              ],
+            ),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(ctx.l.t('close')))],
+      ),
+    );
+
+/// What a plugin can do, in sentences, worst first (GET /api/plugins and
+/// /inspect "review": the limits Beacle enforces, not a guess from its code).
+class _Review extends StatelessWidget {
+  final List<dynamic> notes;
+  const _Review({required this.notes});
+
+  static const _order = {'danger': 0, 'warn': 1, 'info': 2, 'ok': 3};
 
   @override
   Widget build(BuildContext context) {
-    final rows = [
-      for (final (key, label) in [
-        ('read', 'plgPermRead'),
-        ('write', 'plgPermWrite'),
-        ('exec', 'plgPermExec'),
-        ('http', 'plgPermHttp'),
-        ('api', 'plgPermApi'),
-      ])
-        if ((perms[key] as List?)?.isNotEmpty ?? false) (context.l.t(label), (perms[key] as List).join(', ')),
-    ];
-    if (rows.isEmpty) {
-      return Text(context.l.t('plgPermNone'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim));
-    }
+    final list = [for (final n in notes) if (n is Map) n.cast<String, dynamic>()]
+      ..sort((a, b) => (_order[a['level']] ?? 9).compareTo(_order[b['level']] ?? 9));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final (label, value) in rows)
+        for (final n in list)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Text.rich(TextSpan(children: [
-              TextSpan(text: '$label: ', style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
-              TextSpan(text: value, style: const TextStyle(fontSize: 12, fontFamily: 'Consolas')),
-            ])),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(
+                switch (n['level']) {
+                  'danger' => Icons.error_outline,
+                  'warn' => Icons.warning_amber_outlined,
+                  'ok' => Icons.check_circle_outline,
+                  _ => Icons.info_outline,
+                },
+                size: 14,
+                color: switch (n['level']) {
+                  'danger' => BeacleColors.err,
+                  'warn' => BeacleColors.warn,
+                  'ok' => BeacleColors.ok,
+                  _ => BeacleColors.textDim,
+                },
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  context.l.f('plgNote_${n['kind']}', {'items': [for (final i in (n['items'] as List? ?? const [])) '$i'].join(', ')}),
+                  style: TextStyle(fontSize: 12, color: n['level'] == 'danger' ? BeacleColors.err : null),
+                ),
+              ),
+            ]),
           ),
       ],
     );
@@ -213,7 +270,7 @@ class _PluginCard extends StatelessWidget {
           if ('${p['linked'] ?? ''}'.isNotEmpty)
             Text(l.f('plgLinked', {'path': p['linked']}),
                 style: TextStyle(fontSize: 11, color: BeacleColors.textDim, fontFamily: 'Consolas')),
-          _Permissions(perms: (p['permissions'] as Map<String, dynamic>?) ?? const {}),
+          _Review(notes: (p['review'] as List?) ?? const []),
           if (error.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(error, style: TextStyle(fontSize: 12, color: BeacleColors.err)),
