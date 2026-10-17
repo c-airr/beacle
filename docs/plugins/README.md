@@ -6,9 +6,18 @@ a server. It is written in Lua, installed from **Settings → Plugins** with one
 click, and from there the panel sends each part where it belongs.
 
 This page walks through writing one. Every function, block and id is listed
-in the [API reference](api.md). The [temperature plugin](../../plugins/temps)
-in this repository is a complete, working example — reading it next to this
-page is the quickest way in.
+in the [API reference](api.md). The plugins in [`plugins/`](../../plugins) are
+complete, working examples — reading one next to this page is the quickest
+way in:
+
+- [`temps`](../../plugins/temps) — CPU and GPU temperature from every server:
+  an agent part, metrics with alerts, a column, a card and a tab.
+- [`uptime`](../../plugins/uptime) — backend only: checks web pages from the
+  panel, with a button per site, a setting kept in the store and an Overview
+  card that shows up only when a site is down.
+- [`temp`](../../plugins/temp) — backend only: this computer's temperatures
+  from LibreHardwareMonitor, a device on the LAN that serves JSON, and the
+  `temps` plugin's readings, drawn by another plugin.
 
 - [What a plugin is](#what-a-plugin-is)
 - [Your first plugin in five minutes](#your-first-plugin-in-five-minutes)
@@ -274,7 +283,8 @@ as it arrives.
 ## Blocks: building the screen
 
 Blocks are made with the `ui.*` functions and nest with `ui.row` (side by
-side) and `ui.column` (one under another):
+side), `ui.column` (one under another) and `ui.card` (one under another, in
+a framed tile):
 
 ```lua
 return {
@@ -300,6 +310,7 @@ return {
 | `ui.button{ label, action, args }` | A button that runs `beacle.on(action)`. |
 | `ui.input{ action, label, hint }` | A text field; Enter runs `beacle.on(action)`. |
 | `ui.row{ … }`, `ui.column{ … }` | Layout. |
+| `ui.card{ title, … }` | A framed tile; several in a `ui.row` sit side by side. |
 
 `stat`, `bar` and `chart` take either a fixed `value` or a `metric`. A
 `metric` is read on the block's server: on a server's page and in the

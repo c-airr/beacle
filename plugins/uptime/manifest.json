@@ -1,0 +1,8 @@
+{
+  "id": "uptime",
+  "name": "Uptime",
+  "version": "1.0.0",
+  "permissions": {
+    "http": ["example.com", "example.org"]
+  }
+}
