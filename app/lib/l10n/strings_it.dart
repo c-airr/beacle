@@ -970,6 +970,7 @@ const _it = <String, String>{
   'plgNote_write': 'Crea e modifica file sui server in: {items}',
   'plgNote_exec': 'Avvia programmi: {items}',
   'plgNote_exec_shell': 'Avvia {items} — quindi qualsiasi comando, con i permessi dell\'agente',
+  'plgNote_exfil': 'Ciò che legge o esegue sui tuoi server può uscirne: può inviare a {items}',
   'plgNote_http': 'Può inviare dati a: {items}',
   'plgNote_http_any': 'Può inviare dati a qualsiasi indirizzo in internet',
   'plgNote_http_config': 'Si collega agli indirizzi che scrivi nelle sue impostazioni',

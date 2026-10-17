@@ -159,12 +159,12 @@ func TestInstallFromFolderIsLinkedAndKeepsState(t *testing.T) {
 	}
 }
 
-// The shipped example renders every slot it registers without an error, with
-// and without readings.
-func TestShippedTempsPluginRenders(t *testing.T) {
+// The demo renders every slot it registers without an error, with and
+// without readings.
+func TestDemoTempPluginRenders(t *testing.T) {
 	p, store := newTestPlugins(t)
 	e := store.CreateVPS("panther", "panther", "100.1.1.1")
-	if _, err := p.Install(filepath.Join("..", "plugins", "temps")); err != nil {
+	if _, err := p.Install(filepath.Join("..", "demo", "temp")); err != nil {
 		t.Fatal(err)
 	}
 	check := func() {
@@ -179,7 +179,7 @@ func TestShippedTempsPluginRenders(t *testing.T) {
 	}
 	check()
 	store.SetSnapshot(&shared.VPSSnapshot{VPS: e.VPS, Metrics: shared.SystemMetrics{
-		Plugins: map[string]float64{"temps.cpu_temp": 61.5, "temps.gpu_temp": 70},
+		Plugins: map[string]float64{"temp.cpu_temp": 61.5, "temp.gpu_temp": 70},
 	}})
 	check()
 }

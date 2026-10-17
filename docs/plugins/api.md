@@ -2,7 +2,7 @@
 
 Everything a Beacle plugin can call, return and name. For a walk-through,
 see [Writing Beacle plugins](README.md). The same API is described for
-editors in [`plugins/beacle.d.lua`](../../plugins/beacle.d.lua).
+editors in [`demo/beacle.d.lua`](../../demo/beacle.d.lua).
 
 Plugins need Beacle 2.2.0 or later — the panel and, for `agent.lua`, the
 agent on each server. What is marked *2.2.5* needs 2.2.5 on that side; the

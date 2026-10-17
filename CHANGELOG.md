@@ -36,8 +36,14 @@
   where it can send data (any address is flagged), programs it runs (a
   shell or interpreter means any command), files it reads that can hold
   passwords or the agent's token, files it changes, what it does
-  through the panel. Risky ones are in red with a warning, and *View
-  code* shows its Lua before you say yes.
+  through the panel, and — in red — a plugin that runs or reads things on
+  your servers and may send to an address outside them. Risky ones are
+  in red with a warning, and *View code* shows its Lua before you say
+  yes.
+- **Demo plugins in `demo/`** — `temp` (this computer, a Raspberry Pi
+  Pico and every server in one tab), `uptime` and `neofetch` (the one
+  the install dialog shows in red), with a README. `temp` replaces the
+  2.2.0 example `temps`.
 - **Agents keep up with plugins** — an agent too old for what a plugin
   calls is updated by the panel when the plugin is pushed to it.
 

@@ -970,6 +970,7 @@ const _pl = <String, String>{
   'plgNote_write': 'Tworzy i zmienia pliki na serwerach w: {items}',
   'plgNote_exec': 'Uruchamia programy: {items}',
   'plgNote_exec_shell': 'Uruchamia {items} — przez to dowolne polecenie, z uprawnieniami agenta',
+  'plgNote_exfil': 'To, co czyta lub uruchamia na serwerach, może z nich wyjść: może wysyłać do {items}',
   'plgNote_http': 'Może wysyłać dane do: {items}',
   'plgNote_http_any': 'Może wysyłać dane pod dowolny adres w internecie',
   'plgNote_http_config': 'Łączy się z adresami, które wpiszesz w jego ustawieniach',

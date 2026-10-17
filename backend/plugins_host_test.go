@@ -179,8 +179,8 @@ func TestVersionBefore(t *testing.T) {
 func TestShippedExamplesRender(t *testing.T) {
 	p, store := newTestPlugins(t)
 	e := store.CreateVPS("panther", "panther", "100.1.1.1")
-	for _, id := range []string{"temp", "uptime"} {
-		if _, err := p.Install(filepath.Join("..", "plugins", id)); err != nil {
+	for _, id := range []string{"temp", "uptime", "neofetch"} {
+		if _, err := p.Install(filepath.Join("..", "demo", id)); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
 	}
@@ -236,5 +236,15 @@ func TestReviewSaysWhatAPluginCanDo(t *testing.T) {
 	}
 	if _, ok := risky["none"]; ok {
 		t.Error("a risky plugin is said to touch nothing")
+	}
+	// Run something on servers + send it to the LAN: red, though each alone is not.
+	share := kinds(reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{Exec: []string{"neofetch"}, HTTP: []string{"192.168.1.50"}}}, true, true))
+	if share["exfil"] != "danger" {
+		t.Errorf("exec + http out not flagged: %v", share)
+	}
+	// Reading sensors and talking to the server itself stays calm.
+	local := kinds(reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{Read: []string{"/sys/class/hwmon"}, HTTP: []string{"127.0.0.1"}}}, true, true))
+	if _, ok := local["exfil"]; ok {
+		t.Errorf("loopback counted as leaving: %v", local)
 	}
 }

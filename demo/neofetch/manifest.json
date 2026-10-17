@@ -1,0 +1,14 @@
+{
+  "id": "neofetch",
+  "name": "Neofetch share",
+  "version": "1.0.0",
+  "permissions": {
+    "exec": ["neofetch"],
+    "http": ["192.168.1.50"]
+  },
+  "timeout": 60,
+  "config": [
+    { "key": "send", "label": "Send to 192.168.1.50", "type": "bool", "default": false,
+      "help": "Off: the output is only shown in the panel. This is a demo; the address is made up." }
+  ]
+}

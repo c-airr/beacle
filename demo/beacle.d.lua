@@ -5,7 +5,7 @@
 --
 -- Point the language server at this file with a .luarc.json next to your
 -- plugin, like the one in this folder:
---   { "runtime.version": "Lua 5.1", "workspace.library": ["path/to/plugins/beacle.d.lua"] }
+--   { "runtime.version": "Lua 5.1", "workspace.library": ["path/to/demo/beacle.d.lua"] }
 
 ---@class beacle
 beacle = {}

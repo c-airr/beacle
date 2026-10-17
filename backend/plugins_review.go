@@ -55,10 +55,13 @@ func reviewPermissions(m plugin.Manifest, hasAgent, hasBackend bool) []permNote 
 	}
 	p := m.Permissions
 
+	loopback := func(h string) bool { return h == "127.0.0.1" || h == "localhost" || h == "::1" }
 	if slices.Contains(p.HTTP, "*") {
 		add("http_any", "danger")
-	} else if len(p.HTTP) > 0 {
+	} else if slices.ContainsFunc(p.HTTP, func(h string) bool { return !loopback(h) }) {
 		add("http", "warn", p.HTTP...)
+	} else if len(p.HTTP) > 0 {
+		add("http", "info", p.HTTP...) // only the machine it runs on
 	}
 	urlField := slices.ContainsFunc(m.Config, func(f plugin.ConfigField) bool { return f.Type == "url" })
 	if urlField {
@@ -111,6 +114,19 @@ func reviewPermissions(m plugin.Manifest, hasAgent, hasBackend bool) []permNote 
 	}
 	if len(apiRead) > 0 {
 		add("api_read", "warn", apiRead...)
+	}
+
+	// Each of the above on its own may be harmless; together, what it reads
+	// or runs on servers (or gets from the panel) can be carried away.
+	var away []string
+	for _, h := range p.HTTP {
+		if !loopback(h) {
+			away = append(away, h)
+		}
+	}
+	// An address the user types in its settings is theirs to choose: not counted.
+	if len(away) > 0 && ((hasAgent && (len(p.Read) > 0 || len(p.Exec) > 0)) || len(p.API) > 0) {
+		add("exfil", "danger", away...)
 	}
 
 	var secrets []string

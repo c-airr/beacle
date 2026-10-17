@@ -970,6 +970,7 @@ const _zh = <String, String>{
   'plgNote_write': '在服务器上创建和修改以下位置的文件：{items}',
   'plgNote_exec': '运行程序：{items}',
   'plgNote_exec_shell': '运行 {items}——借此可以以代理的权限运行任何命令',
+  'plgNote_exfil': '它在服务器上读取或运行的内容可能被带走：它可以发送到 {items}',
   'plgNote_http': '可以向以下地址发送数据：{items}',
   'plgNote_http_any': '可以向互联网上的任何地址发送数据',
   'plgNote_http_config': '连接你在其设置中填写的地址',
