@@ -863,6 +863,9 @@ type RegisterRequest struct {
 	TailscaleIP   string `json:"tailscale_ip"`
 	// PublicIP is the VPS egress address (e.g. from ipify) used for map geolocation.
 	PublicIP     string `json:"public_ip,omitempty"`
+	// LanIP is the 192.168.x.x on a physical interface, reported so the panel
+	// can show the home-LAN address of CGNAT servers. Empty everywhere else.
+	LanIP        string `json:"lan_ip,omitempty"`
 	AgentVersion string `json:"agent_version"`
 	// AgentDigest is the sha256 of the running binary, in GitHub's
 	// "sha256:<hex>" form so it compares directly with a release asset's
@@ -1045,6 +1048,9 @@ type VPS struct {
 	Host          string    `json:"host"` // Tailscale IPv4, or the public IP on WireGuard
 	TailscaleName string    `json:"tailscale_name"`
 	PublicIP      string    `json:"public_ip,omitempty"`
+	// LanIP is the 192.168.x.x the agent saw on its own NIC. Only home
+	// (CGNAT) servers report one; datacenter boxes leave it empty.
+	LanIP         string    `json:"lan_ip,omitempty"`
 	// Transport is how the agent reaches the panel: TransportTailscale (also
 	// when blank, for servers added before 2.0) or TransportWireGuard.
 	Transport string `json:"transport,omitempty"`

@@ -936,7 +936,7 @@ class PingResult {
 }
 
 class Vps {
-  final String id, name, host, tailscaleName, publicIp, location, status, agentVersion;
+  final String id, name, host, tailscaleName, publicIp, lanIp, location, status, agentVersion;
   final String transport, wgEndpoint, wgTunnelIp, wgPublicKey;
 
   /// sha256 of the binary this agent is running, as `sha256:<hex>`. Empty for
@@ -963,6 +963,7 @@ class Vps {
         host = _s(j['host']),
         tailscaleName = _s(j['tailscale_name']),
         publicIp = _s(j['public_ip']),
+        lanIp = _s(j['lan_ip']),
         transport = _s(j['transport']),
         wgEndpoint = _s(j['wg_endpoint']),
         wgTunnelIp = _s(j['wg_tunnel_ip']),

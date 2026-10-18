@@ -150,6 +150,10 @@ func applyAgentOnline(e *VPSEntry, req shared.RegisterRequest, host, tsName stri
 	if host != "" {
 		e.VPS.Host = host
 	}
+	// Blank from agents too old to send one; keep the stored value then.
+	if req.LanIP != "" {
+		e.VPS.LanIP = req.LanIP
+	}
 	applyPublicIPGeo(e, req.PublicIP)
 }
 

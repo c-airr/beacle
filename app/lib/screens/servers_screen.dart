@@ -433,6 +433,29 @@ class _ServerStats extends StatelessWidget {
                   ]),
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: PanelCard(
+                  expand: true,
+                  title: context.l.t('srvIps'),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    _info(context.l.t('srvIpPublic'), vps.publicIp),
+                    if (_isCgnat(vps.publicIp))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(context.l.t('srvIpCgnat'),
+                            style: TextStyle(fontSize: 11, color: BeacleColors.warn, height: 1.4)),
+                      ),
+                    if (!vps.isWireGuard)
+                      _info(context.l.t('srvIpTailscale'),
+                          vps.tailscaleName.isNotEmpty ? '${vps.host} · ${vps.tailscaleName}' : vps.host),
+                    if (vps.lanIp.isNotEmpty) _info(context.l.t('srvIpLan'), vps.lanIp),
+                    const SizedBox(height: 6),
+                    Text(context.l.t('srvIpPublicHint'),
+                        style: TextStyle(fontSize: 11, color: BeacleColors.textDim, height: 1.4)),
+                  ]),
+                ),
+              ),
             ],
           ),
         ),
@@ -616,6 +639,14 @@ class _RamPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 100.64.0.0/10: carrier NAT — the address accepts no traffic from outside.
+bool _isCgnat(String ip) {
+  final p = ip.split('.');
+  if (p.length != 4) return false;
+  final second = int.tryParse(p[1]);
+  return p[0] == '100' && second != null && second >= 64 && second <= 127;
 }
 
 /// "full in ~4 days" for a disk with a forecast. Hours under two days, where

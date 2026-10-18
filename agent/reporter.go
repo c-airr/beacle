@@ -68,6 +68,7 @@ func (r *Reporter) RegisterRequest() shared.RegisterRequest {
 		TailscaleName: tailscaleName(),
 		TailscaleIP:   tailscaleIPv4(),
 		PublicIP:      fetchPublicIP(),
+		LanIP:         lanIPv4(),
 		AgentVersion:  AgentVersion,
 		AgentDigest:   selfDigest(),
 		Arch:          runtime.GOARCH,

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -68,4 +69,70 @@ func fetchPublicIP() string {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// lanCandidate is one unicast address on one interface, for pickLanIP.
+type lanCandidate struct {
+	ifName string
+	up     bool
+	ip     net.IP
+}
+
+// pickLanIP returns the first 192.168.x.x among up, non-virtual interfaces.
+func pickLanIP(cands []lanCandidate) string {
+	for _, c := range cands {
+		if !c.up || isVirtualIface(c.ifName) {
+			continue
+		}
+		if ip4 := c.ip.To4(); ip4 != nil && ip4[0] == 192 && ip4[1] == 168 {
+			return ip4.String()
+		}
+	}
+	return ""
+}
+
+func isVirtualIface(name string) bool {
+	for _, p := range []string{"lo", "docker", "veth", "br-", "virbr", "tailscale", "tun", "tap", "wg", "zt"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// lanIPv4 reports the machine's home-LAN address for the Servers IP list.
+// Datacenter boxes have no 192.168.x.x on a physical NIC, so they report
+// nothing and the panel shows no LAN row for them.
+// shortcut: homes on 10/172.16 LANs report nothing too; widen if one shows up.
+func lanIPv4() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	var cands []lanCandidate
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			ipNet, ok := a.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := ipNet.IP
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+				continue
+			}
+			cands = append(cands, lanCandidate{
+				ifName: iface.Name,
+				up:     iface.Flags&net.FlagUp != 0,
+				ip:     ip,
+			})
+		}
+	}
+	return pickLanIP(cands)
 }
