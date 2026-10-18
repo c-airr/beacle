@@ -2,8 +2,11 @@ package main
 
 import (
 	"archive/zip"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,6 +185,76 @@ func TestDemoTempPluginRenders(t *testing.T) {
 		Plugins: map[string]float64{"temp.cpu_temp": 61.5, "temp.gpu_temp": 70},
 	}})
 	check()
+}
+
+// LibreHardwareMonitor reports "-" for sensors with no reading (empty DIMM
+// slots do). That string has no digits, and parsing it used to fail every
+// poll until the plugin stopped itself after five in a row.
+func TestDemoTempPluginSkipsDashSensors(t *testing.T) {
+	p, store := newTestPlugins(t)
+	e := store.CreateVPS("panther", "panther", "100.1.1.1")
+	lhm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"Children":[{"Children":[
+		  {"SensorId":"/memory/dimm/1/temperature/0","Type":"Temperature","Text":"Memory","Value":"-"},
+		  {"SensorId":"/amdcpu/0/temperature/2","Type":"Temperature","Text":"CPU Package","Value":"52.5"}
+		]}]}`))
+	}))
+	defer lhm.Close()
+	if _, err := p.Install(filepath.Join("..", "plugins", "demo", "temp")); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetState("temp", nil, nil, map[string]any{"lhm": lhm.URL}); err != nil {
+		t.Fatal(err)
+	}
+	// The poll task runs when the backend restarts; wait for it to read the
+	// fake LHM. Parsed, the tile names the CPU; unparsed, it keeps saying
+	// the readings never arrived.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var texts []string
+		for _, r := range p.Render("nav.tab", e.VPS.ID, "") {
+			if r.Error != "" {
+				t.Fatalf("nav.tab: %s", r.Error)
+			}
+			texts = append(texts, pluginTexts(r.Blocks)...)
+		}
+		joined := strings.Join(texts, "\n")
+		if strings.Contains(joined, "CPU Package") {
+			break
+		}
+		if rt, _ := p.runtime("temp"); rt != nil && rt.Err() != "" {
+			t.Fatalf("plugin stopped: %s", rt.Err())
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("tile never parsed the readings: %q", joined)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// pluginTexts collects every label, text and title in rendered blocks.
+func pluginTexts(v any) []string {
+	var out []string
+	var walk func(x any)
+	walk = func(x any) {
+		switch x := x.(type) {
+		case map[string]any:
+			for k, val := range x {
+				if k == "text" || k == "title" || k == "label" {
+					if s, ok := val.(string); ok {
+						out = append(out, s)
+					}
+				}
+				walk(val)
+			}
+		case []any:
+			for _, e := range x {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	return out
 }
 
 func TestInspectFlagsNewPermissions(t *testing.T) {

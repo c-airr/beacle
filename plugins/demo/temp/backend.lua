@@ -16,16 +16,18 @@ local LHM = beacle.config("lhm")
 local DEVICE = beacle.config("device") or ""
 local DEVICE_NAME = beacle.config("device_name")
 local PC_NAME = beacle.config("pc_name")
-local TILES_PER_ROW = tonumber(beacle.config("per_row")) or 3
+local TILES_PER_ROW = tonumber(beacle.config("per_row") or "") or 3
 
 local pc = { error = "not read yet" }
 local device = { error = "not read yet" }
 
 -- LibreHardwareMonitor formats values with this computer's locale:
--- "45.5 °C" or "45,5 °C".
+-- "45.5 °C" or "45,5 °C". Sensors with no reading say "-" (empty DIMM
+-- slots do), which has no digits and parses to nil instead of failing.
 local function number(text)
   if type(text) == "number" then return text end
-  return tonumber((tostring(text or ""):gsub(",", ".")):match("%-?%d+%.?%d*"))
+  local digits = tostring(text or ""):gsub(",", "."):match("%-?%d+%.?%d*")
+  return digits and tonumber(digits) or nil
 end
 
 -- data.json is a tree: computer → hardware → sensor groups → sensors. A
@@ -94,7 +96,7 @@ if DEVICE ~= "" then
     local data = body and beacle.json.decode(body)
     if type(data) == "table" then
       device = { data = data, at = beacle.now() }
-      beacle.metric("device_temp", tonumber(data.temp_c))
+      beacle.metric("device_temp", number(data.temp_c))
     else
       device = { error = body and "not JSON" or tostring(err) }
       beacle.metric("device_temp", nil)
