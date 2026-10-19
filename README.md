@@ -239,6 +239,10 @@ Do **not** upload app or agent binaries by hand. The workflow builds them on `wi
 
 Dart (Flutter) · Go · WebSocket · Tailscale
 
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, how to build and test, and what a PR should include.
+
 ## License
 
 Beacle 2.0 and later is licensed under the
