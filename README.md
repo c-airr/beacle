@@ -241,7 +241,7 @@ Dart (Flutter) · Go · WebSocket · Tailscale
 
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, how to build and test, and what a PR should include.
+Issues and pull requests are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
