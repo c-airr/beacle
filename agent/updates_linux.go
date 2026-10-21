@@ -117,29 +117,9 @@ func aptUpdates() (shared.OSUpdates, error) {
 	if err != nil {
 		return res, fmt.Errorf("apt list: %v", err)
 	}
-	// Lines look like: openssl/jammy-updates 3.0.2-0ubuntu1.12 amd64 [upgradable from: 3.0.2-0ubuntu1.10]
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "Listing") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		name := fields[0]
-		if i := strings.IndexByte(name, '/'); i >= 0 {
-			name = name[:i]
-		}
-		latest := fields[1]
-		current := ""
-		if i := strings.Index(line, "[upgradable from:"); i >= 0 {
-			current = strings.TrimSuffix(strings.TrimSpace(line[i+len("[upgradable from:"):]), "]")
-		}
-		res.Packages = append(res.Packages, shared.OSPackage{
-			Name: name, Current: current, Latest: latest,
-			Security: aptIsSecurity(name, latest),
-		})
+	res.Packages = parseAptUpgradable(out)
+	for i := range res.Packages {
+		res.Packages[i].Security = aptIsSecurity(res.Packages[i].Name, res.Packages[i].Latest)
 	}
 	// Ask apt what an upgrade would really install. Whatever it would leave
 	// behind is held, or the panel offers an upgrade that changes nothing,
@@ -157,6 +137,31 @@ func aptUpdates() (shared.OSUpdates, error) {
 		}
 	}
 	return res, nil
+}
+
+// parseAptUpgradable reads `apt list --upgradable`. Lines look like:
+// openssl/jammy-updates 3.0.2-0ubuntu1.12 amd64 [upgradable from: 3.0.2-0ubuntu1.10]
+// runCmd merges stderr into the output, so apt's "WARNING: apt does not have
+// a stable CLI interface" line is in there too; only lines whose first field
+// is name/suite are packages.
+func parseAptUpgradable(out string) []shared.OSPackage {
+	var pkgs []shared.OSPackage
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		name, _, ok := strings.Cut(fields[0], "/")
+		if !ok || name == "" {
+			continue
+		}
+		current := ""
+		if i := strings.Index(line, "[upgradable from:"); i >= 0 {
+			current = strings.TrimSuffix(strings.TrimSpace(line[i+len("[upgradable from:"):]), "]")
+		}
+		pkgs = append(pkgs, shared.OSPackage{Name: name, Current: current, Latest: fields[1]})
+	}
+	return pkgs
 }
 
 // aptSimulatedInstalls reads `apt-get -s upgrade`: one "Inst name [old] (new

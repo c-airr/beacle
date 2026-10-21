@@ -28,3 +28,22 @@ Conf linux-generic (5.15.0.130.128 Ubuntu:22.04/jammy-updates [amd64])
 		t.Error("kept-back mariadb-client counted as installed")
 	}
 }
+
+func TestParseAptUpgradableSkipsWarning(t *testing.T) {
+	out := `WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+Listing...
+openssl/jammy-updates,jammy-security 3.0.2-0ubuntu1.12 amd64 [upgradable from: 3.0.2-0ubuntu1.10]
+tmux/noble-updates 3.4-1ubuntu0.2 amd64 [upgradable from: 3.4-1ubuntu0.1]
+`
+	pkgs := parseAptUpgradable(out)
+	if len(pkgs) != 2 {
+		t.Fatalf("got %d packages, want 2: %+v", len(pkgs), pkgs)
+	}
+	if pkgs[0].Name != "openssl" || pkgs[0].Latest != "3.0.2-0ubuntu1.12" || pkgs[0].Current != "3.0.2-0ubuntu1.10" {
+		t.Errorf("openssl parsed wrong: %+v", pkgs[0])
+	}
+	if pkgs[1].Name != "tmux" {
+		t.Errorf("second package = %q, want tmux", pkgs[1].Name)
+	}
+}
