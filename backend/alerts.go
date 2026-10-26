@@ -39,6 +39,10 @@ type AlertEngine struct {
 	quietUntil time.Time
 	// net is this computer's own internet line. See sweepOffline.
 	net *LocalNet
+	// tailnetLost is set while the internet is up but no server at all has
+	// a socket: this computer's own tunnel, not the fleet. Owned by the
+	// sweep goroutine.
+	tailnetLost bool
 	// notify hands fired alerts to the webhook delivery queue. Set by main;
 	// nil-safe so tests and old call paths never notice.
 	notify func(shared.WebhookMessage)
@@ -561,11 +565,16 @@ func (e *AlertEngine) sweepOffline() {
 	// A server whose socket is gone is either down itself or out of reach
 	// because this computer is offline. Only the second explains every
 	// server going at once, so ask the line before believing any of them.
-	missing := false
+	missing, watched, live := false, 0, 0
 	for _, v := range vpsList {
-		if v.Status != shared.VPSPending && (e.agentHub == nil || !e.agentHub.Connected(v.ID)) {
+		if v.Status == shared.VPSPending {
+			continue
+		}
+		watched++
+		if e.agentHub != nil && e.agentHub.Connected(v.ID) {
+			live++
+		} else {
 			missing = true
-			break
 		}
 	}
 	netUp := true
@@ -578,6 +587,25 @@ func (e *AlertEngine) sweepOffline() {
 			return
 		}
 	}
+	// The line is up and still not one server has a socket: this computer's
+	// Tailscale is off, or still finding its peers after the line came back.
+	// Nothing could deliver an alert now either — the watchers are among the
+	// missing. When the first server is back the rest get the same grace,
+	// because the tunnel finds its peers one at a time.
+	if netUp && e.agentHub != nil && watched >= 2 {
+		switch {
+		case live == 0:
+			if !e.tailnetLost {
+				log.Printf("offline sweep: no server reachable with the internet up, alerts held")
+			}
+			e.tailnetLost = true
+		case e.tailnetLost:
+			e.tailnetLost = false
+			e.holdAlerts(localOutageGrace)
+			return
+		}
+	}
+	alertable := netUp && !e.tailnetLost
 
 	for _, v := range vpsList {
 		if v.Status == shared.VPSPending {
@@ -647,7 +675,7 @@ func (e *AlertEngine) sweepOffline() {
 			})
 			e.hub.Broadcast(shared.WSVPSList, e.store.ListVPS())
 		}
-		if !netUp {
+		if !alertable {
 			// Out of reach because this computer is offline, not because the
 			// server is. The panel shows one "no internet" banner instead; the
 			// last data stays, and nothing is alerted that is not known.

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **"VPS offline" on Discord when it was your own internet that dropped** —
+  a watcher on the same line as the panel (a server at home) came back
+  from the same outage and "confirmed" every other server as offline
+  before its tunnel had found them again. A watcher that cannot reach any
+  other server now says so instead, and the panel asks the other watcher.
+  The panel itself holds alerts while not one server answers with the
+  internet up (its own Tailscale coming back), and gives the rest a grace
+  when the first one is back.
+- **Watchers stopped supervising the fleet on their first check** — the
+  loop waited for an answer from itself, so with the panel closed nobody
+  was told about a server going down. It now runs, probes a server's agent
+  before SSH and ping, and does not blame the fleet when it is the one cut
+  off. It no longer sends "Beacle backend offline" when the panel is
+  closed or this computer's internet drops.
+
 ## 2.2.5 — 2026-10-18
 
 Plugins that can do what the panel does: its API, settings, alerts, events
