@@ -33,6 +33,7 @@ panel updates an older agent itself when it pushes a plugin to it (see
 | `beacle.now`, `beacle.date` *2.2.5* | ✓ | ✓ |
 | `beacle.config` *2.2.5* | ✓ (no secrets) | ✓ |
 | `beacle.json.encode/decode` | ✓ | ✓ |
+| `beacle.base64.encode/decode` *2.2.6* | ✓ | ✓ |
 | `beacle.store.get/set` | ✓ | ✓ |
 | `beacle.http.get/post` | ✓ | ✓ |
 | `beacle.http.request` *2.2.5* | ✓ | ✓ |
@@ -43,6 +44,7 @@ panel updates an older agent itself when it pushes a plugin to it (see
 | `beacle.servers`, `beacle.value`, `beacle.call` | | ✓ |
 | `beacle.api` *2.2.5* | | ✓ |
 | `beacle.alert`, `beacle.resolve` *2.2.5* | | ✓ |
+| `beacle.configure` *2.2.6* | | ✓ |
 | `beacle.slot`, `beacle.text`, `beacle.hide` | | ✓ |
 | `ui.*` | | ✓ |
 
@@ -123,6 +125,12 @@ plugin, so read them at the top of the file if you like. On an agent,
 
 Lists become JSON arrays, other tables objects. An empty table encodes as
 `[]`. Numbers decode as Lua numbers, `null` as `nil`.
+
+### `beacle.base64.encode(text)` → `string` / `beacle.base64.decode(text)` → `string` | `nil, err` *2.2.6*
+
+Standard base64, with padding on the way out and optional on the way in —
+what an `Authorization: Basic` header wants:
+`"Basic " .. beacle.base64.encode(user .. ":" .. password)`.
 
 ### `beacle.store.get(key)` → `value`
 
@@ -282,6 +290,15 @@ Useful ones:
 | `GET /api/vps/{id}/agent/fs/read?path=…` · `PUT …/fs/write` | Files |
 | `POST /api/webhooks/test` | Send a test notification |
 
+### `beacle.configure{ key = value, … }` → `true` | `nil, err` *2.2.6*
+
+Saves the plugin's settings from its own setup screen (the `plugin.setup`
+slot), checked against the manifest's `config` like the settings form's:
+a number must be a number, a `select` one of its options, a `url` start
+with `http://` or `https://`. Keys left out keep their value, secrets too.
+The plugin restarts with the new settings once the handler that called it
+has returned — anything kept only in Lua variables starts over.
+
 ### `beacle.alert{ key, message, severity?, server? }` *2.2.5*
 
 Raises an alert like the panel's own: in Alerts, under *Needs attention*,
@@ -316,6 +333,14 @@ Hides a part of the panel. See [Hide ids](#hide-ids).
 | `overview.card` | A card on the Overview, below *Needs attention* | — | list of blocks | `title` |
 | `server.actions` *2.2.5* | In a server's header, before its buttons | `Server` | list of small blocks (`button`, `link`, `toggle`), or `nil` | — |
 | `settings.section` *2.2.5* | Inside the plugin's own card in Settings → Plugins | — | list of blocks | — |
+| `plugin.setup` *2.2.6* | The plugin's own setup screen: **Configure** on its card in Settings → Plugins, opened by itself right after an install from the Marketplace | — | list of blocks | — |
+
+`plugin.setup` is for plugins meant for anyone, where the settings are
+choices rather than a few fields: where your service is, a key, which of
+the things found there to watch. Build it from `ui.input`, `ui.select`,
+`ui.checklist`, `ui.toggle` and buttons; keep what is typed in a Lua table
+and save it with `beacle.configure` (above).
+A plugin without it keeps the form its manifest's `config` describes.
 
 A plugin can register a slot more than once (two cards, two tabs). Slots of
 different plugins appear in order of plugin id.
@@ -394,10 +419,18 @@ A drop-down of the strings in `options`. Picking one runs
 Monospace, selectable text in a scrolling box `height` px high (default
 240) — command output, a log. `tail = true` keeps the end in view.
 
-### `ui.input{ action, label, hint, value }`
+### `ui.input{ action, args, label, hint, value, secret }`
 
-A text field with an initial `value`. Enter (or its ↵ button) runs
-`beacle.on(action)` with `{ value = text }`, plus `server`.
+A text field with an initial `value`. Enter, its ↵ button or leaving the
+field (*2.2.6*) runs `beacle.on(action)` with `args` (*2.2.6*) plus
+`value = text` and `server`. With `secret = true` (*2.2.6*) what is typed is
+masked and `value` is never shown: say in `hint` whether one is saved.
+
+### `ui.checklist{ label, options, values, action, args }` *2.2.6*
+
+A tick box for each string in `options`, ticked when it is in `values`.
+Ticking or unticking one runs `beacle.on(action)` with `args` plus `values`
+(the ticked options, in their order) and `server`.
 
 ### `ui.row{ block, … }`
 
@@ -559,12 +592,13 @@ use for scripting an install.
 | Method | Path | Body | |
 |---|---|---|---|
 | `GET` | `/api/plugins` | — | Plugins with state per server, plus `texts`, `hide`, `tabs` |
-| `POST` | `/api/plugins/inspect` | `{ "path": "…" }` or `{ "zip": "<base64>" }` | Validate and describe a package without installing |
-| `POST` | `/api/plugins` | same | Install or update; a folder `path` installs it linked |
+| `POST` | `/api/plugins/inspect` | `{ "path": "…" }`, `{ "zip": "<base64>" }` or `{ "catalog": "<id>", "ref": "…" }` *2.2.6* | Validate and describe a package without installing |
+| `POST` | `/api/plugins` | same | Install or update; a folder `path` installs it linked. Answers `{ id, version, setup }`, `setup` when it has a `plugin.setup` screen |
 | `PATCH` | `/api/plugins/{id}` | `{ "enabled": bool, "disabled_on": [server ids], "config": { … } }` | Any field may be left out; `config` replaces the settings (a `secret` left out keeps its value) |
 | `DELETE` | `/api/plugins/{id}` | — | Remove, everywhere |
 | `GET` | `/api/plugins/{id}/log` | — | The backend part's log lines |
-| `GET` | `/api/plugins/ui?slot=…&server=…&tab=…` | — | Run one slot's functions |
+| `GET` | `/api/plugins/ui?slot=…&server=…&tab=…` | — | Run one slot's functions (`plugin.setup`: `tab` is the plugin id) |
+| `GET` | `/api/plugins/catalog?ref=…&version=…` *2.2.6* | — | The Marketplace: `plugins/index.json` of the Beacle repository at `ref` (the app's commit or version; `main` when that has none), with what is installed and what has an update |
 | `POST` | `/api/plugins/{id}/action` | `{ "action": "…", "args": { … } }` | Run a `beacle.on` handler |
 
 The backend pushes agent parts to agents itself (`POST /api/plugins/sync`

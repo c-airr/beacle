@@ -58,6 +58,19 @@ function beacle.json.encode(value) end
 ---@return any value, string|nil err
 function beacle.json.decode(text) end
 
+---Standard base64, e.g. for an Authorization: Basic header. (2.2.6)
+---@class beacle.base64
+beacle.base64 = {}
+
+---@param text string
+---@return string
+function beacle.base64.encode(text) end
+
+---Padding is optional.
+---@param text string
+---@return string|nil text, string|nil err
+function beacle.base64.decode(text) end
+
 ---Small key-value storage that survives restarts, 64 KiB per plugin and side.
 ---@class beacle.store
 beacle.store = {}
@@ -181,6 +194,13 @@ function beacle.alert(a) end
 ---@param server? string
 function beacle.resolve(key, server) end
 
+---Saves settings from the plugin's own setup screen (slot "plugin.setup"),
+---checked against manifest.json's config; keys left out keep their value.
+---The plugin restarts with them once the calling handler returns. (2.2.6)
+---@param values table<string, any>
+---@return true|nil ok, string|nil err
+function beacle.configure(values) end
+
 ---@alias SlotName
 ---| "nav.tab"         # a page of its own in the sidebar; opts = { id, title, icon }
 ---| "server.section"  # a card on each server's page; fn gets the server
@@ -188,6 +208,7 @@ function beacle.resolve(key, server) end
 ---| "overview.card"   # a card on the Overview
 ---| "server.actions"  # small blocks in a server's header; fn gets the server (2.2.5)
 ---| "settings.section" # blocks in the plugin's card in Settings → Plugins (2.2.5)
+---| "plugin.setup" # the plugin's own setup screen, under Configure (2.2.6)
 
 ---Puts blocks somewhere in the panel. `fn` returns a list of blocks (one
 ---block for servers.column), or nil for nothing. It runs while the panel
@@ -249,7 +270,7 @@ function ui.table(p) end
 function ui.button(p) end
 
 ---Enter calls beacle.on(action) with { value = text } (plus `server`).
----@param p { action: string, label?: string, hint?: string, value?: string }
+---@param p { action: string, args?: table, label?: string, hint?: string, value?: string, secret?: boolean }
 ---@return Block
 function ui.input(p) end
 
@@ -289,3 +310,8 @@ function ui.select(p) end
 ---@param p { text: string, height?: number, tail?: boolean }
 ---@return Block
 function ui.code(p) end
+
+---Tick boxes; a change runs action with args + values (the ticked options). (2.2.6)
+---@param p { label?: string, options: string[], values?: string[], action: string, args?: table }
+---@return Block
+function ui.checklist(p) end

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+
+- **Marketplace** — Settings → Plugins → *Marketplace* lists the plugins in
+  this repository (`plugins/index.json`) and installs or updates one with a
+  click, through the same "what it can do" dialog as a .zip. The list and
+  the code come from GitHub at the commit the app was built from, so it is
+  the code reviewed with that release.
+- **Setup screens built by the plugin** — a plugin meant for anyone draws
+  its own settings screen in the `plugin.setup` slot (where your service
+  is, a key, which of the things found there to watch) and saves it with
+  `beacle.configure{…}`. *Configure* on its card opens it, and it opens by
+  itself after an install from the Marketplace. New blocks and helpers for
+  it: `ui.checklist`, `ui.input{ secret = true, args }` (also committed
+  when leaving the field) and `beacle.base64`.
+- **Uptime Kuma plugin** — your Uptime Kuma's monitors in a tab, with
+  response times, alerts while one is down and an Overview card. Reads
+  `/metrics` with an API key or a public status page; set up on its own
+  screen.
+
 ### Fixed
 
 - **"VPS offline" on Discord when it was your own internet that dropped** —

@@ -8,6 +8,7 @@ import '../l10n/strings.dart';
 import '../native_dialogs.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../update/app_updater.dart';
 import 'common.dart';
 import 'plugin_blocks.dart';
 
@@ -25,6 +26,7 @@ class PluginsSettings extends StatelessWidget {
         Text(l.t('plgIntro'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.5)),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          SmallButton(l.t('plgMarketplace'), icon: Icons.storefront_outlined, onPressed: () => _marketplace(context)),
           SmallButton(l.t('plgInstallZip'), icon: Icons.add, onPressed: () => _installZip(context)),
           SmallButton(l.t('plgLinkFolder'), icon: Icons.folder_open_outlined, onPressed: () => _linkFolder(context)),
         ]),
@@ -90,6 +92,29 @@ class PluginsSettings extends StatelessWidget {
     await _install(context, {'path': path});
   }
 
+  /// The plugins in the Beacle repository, as of this build of the app.
+  Future<void> _marketplace(BuildContext context) async {
+    final state = context.read<AppState>();
+    final ref = appCommit.isNotEmpty ? appCommit : appVersion;
+    Map<String, dynamic> catalog;
+    try {
+      catalog = await state.api.get('/api/plugins/catalog?ref=${Uri.encodeQueryComponent(ref)}'
+          '&version=${Uri.encodeQueryComponent(appVersion)}') as Map<String, dynamic>;
+    } catch (e) {
+      if (context.mounted) showToast(context, context.l.f('plgCatalogError', {'error': '$e'}), error: true);
+      return;
+    }
+    if (!context.mounted) return;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _MarketplaceDialog(plugins: [
+        for (final p in (catalog['plugins'] as List? ?? const [])) (p as Map).cast<String, dynamic>(),
+      ]),
+    );
+    if (picked == null || !context.mounted) return;
+    await _install(context, {'catalog': picked, 'ref': '${catalog['ref'] ?? ref}'});
+  }
+
   /// Shows what the package may do, then installs it on a yes.
   Future<void> _install(BuildContext context, Map<String, dynamic> src) async {
     final state = context.read<AppState>();
@@ -141,9 +166,12 @@ class PluginsSettings extends StatelessWidget {
         ),
       );
       if (ok != true || !context.mounted) return;
-      await state.api.post('/api/plugins', body: src);
+      final done = await state.api.post('/api/plugins', body: src) as Map?;
       await state.refreshPlugins();
-      if (context.mounted) showToast(context, context.l.f('plgInstalled', {'name': m['name']}));
+      if (!context.mounted) return;
+      showToast(context, context.l.f('plgInstalled', {'name': m['name']}));
+      // A plugin with its own setup screen is set up right away.
+      if (done?['setup'] == true) await openPluginSetup(context, '${m['id']}', '${m['name']}');
     } catch (e) {
       if (context.mounted) showToast(context, '$e', error: true);
     }
@@ -246,6 +274,12 @@ class _PluginCard extends StatelessWidget {
     return PanelCard(
       title: '${p['name']}  ${p['version']}',
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (enabled && p['setup'] == true)
+          IconButton(
+            icon: const Icon(Icons.settings_suggest_outlined, size: 16),
+            tooltip: l.t('plgConfigure'),
+            onPressed: () => openPluginSetup(context, _id, '${p['name']}'),
+          ),
         if ((p['config'] as List?)?.isNotEmpty ?? false)
           IconButton(
             icon: const Icon(Icons.tune, size: 16),
@@ -504,6 +538,91 @@ class _SettingsDialogState extends State<_SettingsDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: Text(context.l.t('cancel'))),
         TextButton(onPressed: () => Navigator.pop(context, _result()), child: Text(context.l.t('save'))),
       ],
+    );
+  }
+}
+
+/// A plugin's own setup screen (its plugin.setup slot), drawn by its Lua.
+/// Saving restarts the plugin, so the screen follows it closely meanwhile.
+Future<void> openPluginSetup(BuildContext context, String id, String name) => showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$name · ${ctx.l.t('plgConfigure')}'),
+        content: SizedBox(
+          width: 560,
+          child: PluginSlot(
+            slot: 'plugin.setup',
+            tab: id,
+            refresh: const Duration(seconds: 2),
+            builder: (context, renders, reload) => SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final r in renders) PluginBlocks(render: r, onAction: reload)],
+              ),
+            ),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(ctx.l.t('close')))],
+      ),
+    );
+
+/// The catalog: a card per plugin with what it is and an install, update or
+/// "installed" button. Returns the id picked to install.
+class _MarketplaceDialog extends StatelessWidget {
+  final List<Map<String, dynamic>> plugins;
+  const _MarketplaceDialog({required this.plugins});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l;
+    return AlertDialog(
+      title: Text(l.t('plgMarketplace')),
+      content: SizedBox(
+        width: 620,
+        height: 460,
+        child: ListView(
+          children: [
+            Text(l.t('plgMarketplaceIntro'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.5)),
+            const SizedBox(height: 12),
+            for (final p in plugins)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: PanelCard(
+                  title: '${p['name']}  ${p['version']}',
+                  trailing: _action(context, p),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${p['description'] ?? ''}', style: const TextStyle(fontSize: 12.5, height: 1.4)),
+                      if ((p['tags'] as List?)?.isNotEmpty ?? false) ...[
+                        const SizedBox(height: 6),
+                        Text((p['tags'] as List).join(' · '),
+                            style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(l.t('close')))],
+    );
+  }
+
+  Widget _action(BuildContext context, Map<String, dynamic> p) {
+    final l = context.l;
+    if (p['compatible'] == false) {
+      return Text(l.f('plgNeedsBeacle', {'v': p['min_beacle']}), style: TextStyle(fontSize: 11, color: BeacleColors.warn));
+    }
+    final installed = p['installed_version'];
+    if (installed != null && p['update'] != true) {
+      return Text(l.f('plgInstalledTag', {'v': installed}), style: TextStyle(fontSize: 11, color: BeacleColors.ok));
+    }
+    return SmallButton(
+      installed != null ? l.f('plgUpdateTo', {'v': p['version']}) : l.t('plgInstall'),
+      icon: installed != null ? Icons.upgrade : Icons.download_outlined,
+      onPressed: () => Navigator.pop(context, '${p['id']}'),
     );
   }
 }
