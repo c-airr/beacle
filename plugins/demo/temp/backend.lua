@@ -139,7 +139,7 @@ local function pc_tile()
     names[#names + 1] = ui.label{ text = (pc.cpu.hardware or "CPU") .. " · " .. pc.cpu.name, tone = "dim" }
   end
   if pc.gpu then
-    stats[#stats + 1] = ui.stat{ value = pc.gpu.value, label = "GPU", unit = "°C", tone = temp_tone(pc.gpu.value, 80, 90) }
+    stats[#stats + 1] = ui.stat{ value = pc.gpu.value, label = "GPU", unit = "°C", tone = temp_tone(pc.gpu.value, 85, 95) }
     names[#names + 1] = ui.label{ text = (pc.gpu.hardware or "GPU") .. " · " .. pc.gpu.name, tone = "dim" }
   end
   if #stats == 0 then
@@ -161,12 +161,14 @@ local function device_tile()
     return ui.card{ title = DEVICE_NAME, ui.label{ text = device.error, tone = "err" }, ui.label{ text = DEVICE, tone = "dim" } }
   end
   local d = device.data
+  -- Boards send numbers as text too ("45.2"); Lua will not compare those.
+  local temp_c, rssi, up_s = number(d.temp_c), number(d.rssi), number(d.uptime_s)
   local stats = {}
-  if d.temp_c then stats[#stats + 1] = ui.stat{ value = d.temp_c, label = "Chip", unit = "°C", tone = temp_tone(d.temp_c, 60, 70) } end
-  if d.rssi then stats[#stats + 1] = ui.stat{ value = d.rssi, label = "Wi-Fi", unit = "dBm", tone = rssi_tone(d.rssi) } end
+  if temp_c then stats[#stats + 1] = ui.stat{ value = temp_c, label = "Chip", unit = "°C", tone = temp_tone(temp_c, 60, 70) } end
+  if rssi then stats[#stats + 1] = ui.stat{ value = rssi, label = "Wi-Fi", unit = "dBm", tone = rssi_tone(rssi) } end
   local tile = { title = DEVICE_NAME, ui.row(stats) }
   local about = {}
-  if d.uptime_s then about[#about + 1] = "up " .. uptime(d.uptime_s) end
+  if up_s then about[#about + 1] = "up " .. uptime(up_s) end
   about[#about + 1] = "read " .. beacle.date(device.at, "15:04:05")
   if d.ip then about[#about + 1] = d.ip end
   if d.mpy then about[#about + 1] = "MicroPython " .. d.mpy end
@@ -174,11 +176,13 @@ local function device_tile()
   if d.reset then
     tile[#tile + 1] = ui.label{ text = "Last reset: " .. d.reset .. (d.last_reboot and (" (" .. d.last_reboot .. ")") or ""), tone = "dim" }
   end
-  if d.mem_free and d.mem_total then
-    tile[#tile + 1] = ui.bar{ value = 100 * (1 - d.mem_free / d.mem_total), label = "RAM used", detail = kib(d.mem_free) .. " free" }
+  local mem_free, mem_total = number(d.mem_free), number(d.mem_total)
+  if mem_free and mem_total and mem_total > 0 then
+    tile[#tile + 1] = ui.bar{ value = 100 * (1 - mem_free / mem_total), label = "RAM used", detail = kib(mem_free) .. " free" }
   end
-  if d.flash_free and d.flash_total then
-    tile[#tile + 1] = ui.bar{ value = 100 * (1 - d.flash_free / d.flash_total), label = "Flash used", detail = kib(d.flash_free) .. " free" }
+  local flash_free, flash_total = number(d.flash_free), number(d.flash_total)
+  if flash_free and flash_total and flash_total > 0 then
+    tile[#tile + 1] = ui.bar{ value = 100 * (1 - flash_free / flash_total), label = "Flash used", detail = kib(flash_free) .. " free" }
   end
   local rows = {}
   for key, value in pairs(d) do
@@ -186,7 +190,7 @@ local function device_tile()
   end
   table.sort(rows, function(a, b) return a[1] < b[1] end)
   if #rows > 0 then tile[#tile + 1] = ui.table{ rows = rows } end
-  if d.temp_c then tile[#tile + 1] = ui.chart{ metric = "device_temp", server = "local", hours = 24, title = "Chip, last 24 h" } end
+  if temp_c then tile[#tile + 1] = ui.chart{ metric = "device_temp", server = "local", hours = 24, title = "Chip, last 24 h" } end
   return ui.card(tile)
 end
 

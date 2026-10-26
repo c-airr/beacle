@@ -27,6 +27,12 @@
   — `git`, `tar`, `sed`, `docker`, `systemd-run`, `timeout`, `nice` and
   the like take a command in their arguments, and `python3.11` slipped
   past `python3`. They are now in red as "any command", with the shells.
+- **Demo plugins** — `uptime`: two pages on one host (a site and its
+  `/health`) drew into one chart, and a page taken out of the settings
+  while down kept its alert open for good. `temp`: one failed `nvidia-smi`
+  switched the GPU reading off until the agent restarted, a board sending
+  its readings as text broke the whole Temp tab, and this computer's GPU
+  tile turned yellow and red at the CPU's levels instead of 85/95 °C.
 
 ## 2.2.5 — 2026-10-18
 
