@@ -29,9 +29,19 @@ func TestAPIPermissionPatterns(t *testing.T) {
 		{"POST", "/api/plugins/x/action", false},   // never, whatever the manifest says
 		{"GET", "/api/vps/a/agent/plugins", false}, // nor an agent's plugins
 		{"GET", "/api/vps/a/terminal", false},
+		// A fragment is cut off before the request is made, so the blocked
+		// route it hides is the one that would run.
+		{"GET", "/api/vps/a#/terminal", false},
+		{"GET", "/api/vps/a/terminal#x", false},
 	} {
 		if got := apiAllowed(perms, c.method, c.path); got != c.ok {
 			t.Errorf("%s %s: allowed=%v, want %v", c.method, c.path, got, c.ok)
+		}
+	}
+	// Even a plugin granted every route never stops the panel.
+	for _, p := range []string{"/api/shutdown", "/api/shutdown#x"} {
+		if apiAllowed([]string{"* /api/*"}, "POST", p) {
+			t.Errorf("POST %s allowed", p)
 		}
 	}
 }

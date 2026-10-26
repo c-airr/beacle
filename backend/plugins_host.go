@@ -44,10 +44,10 @@ func apiBlocked(p string) bool {
 }
 
 // apiAllowed checks "METHOD /path" against permissions.api. The path must be
-// in its clean form, so a pattern cannot be walked out of with "..", "//" or
-// an escaped character.
+// in its clean form, so a pattern cannot be walked out of with "..", "//",
+// an escaped character or a "#" that the request drops.
 func apiAllowed(perms []string, method, p string) bool {
-	if !strings.HasPrefix(p, "/api/") || path.Clean(p) != p || strings.ContainsAny(p, `%\`) || apiBlocked(p) {
+	if !strings.HasPrefix(p, "/api/") || path.Clean(p) != p || strings.ContainsAny(p, `%\#`) || apiBlocked(p) {
 		return false
 	}
 	for _, a := range perms {
