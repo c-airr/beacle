@@ -5,52 +5,88 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 // A package arrives as the .zip itself (the app reads the file it picked,
-// which a sandboxed app may not be able to hand on as a path) or as a folder
-// path, which installs it linked.
+// which a sandboxed app may not be able to hand on as a path), as a folder
+// path, which installs it linked, or as an id in the plugin catalog.
 type pluginSrcReq struct {
-	Path string `json:"path"`
-	Zip  []byte `json:"zip"` // base64 in JSON
+	Path    string `json:"path"`
+	Zip     []byte `json:"zip"` // base64 in JSON
+	Catalog string `json:"catalog"`
+	Ref     string `json:"ref"` // the app's commit or version, for the catalog
 }
 
 const pluginZipMax = 8 << 20
 
-// decodePath returns a path to read the package from; done removes a zip
-// written to a temporary file for that.
-func decodePath(w http.ResponseWriter, r *http.Request) (path string, done func(), ok bool) {
+// readSource reads the package a request names. linked is the folder it
+// stays linked to, or "".
+func readSource(w http.ResponseWriter, r *http.Request) (files map[string]string, linked string, ok bool) {
 	var req pluginSrcReq
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginZipMax*2)).Decode(&req); err != nil || (req.Path == "") == (len(req.Zip) == 0) {
-		writeErr(w, http.StatusBadRequest, "path or zip required")
-		return "", nil, false
+	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginZipMax*2)).Decode(&req)
+	given := 0
+	for _, set := range []bool{req.Path != "", len(req.Zip) > 0, req.Catalog != ""} {
+		if set {
+			given++
+		}
 	}
-	if req.Path != "" {
-		return req.Path, func() {}, true
+	if err != nil || given != 1 {
+		writeErr(w, http.StatusBadRequest, "path, zip or catalog required")
+		return nil, "", false
 	}
-	f, err := os.CreateTemp("", "beacle-plugin-*.zip")
-	if err == nil {
-		_, err = f.Write(req.Zip)
-		f.Close()
+	switch {
+	case req.Catalog != "":
+		files, err = catalogSource(req.Catalog, req.Ref)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return nil, "", false
+		}
+		return files, "", true
+	case req.Path != "":
+		files, err = readPackage(req.Path)
+		if err == nil {
+			if st, serr := os.Stat(req.Path); serr == nil && st.IsDir() {
+				linked, _ = filepath.Abs(req.Path)
+			}
+		}
+	default:
+		var f *os.File
+		if f, err = os.CreateTemp("", "beacle-plugin-*.zip"); err == nil {
+			_, err = f.Write(req.Zip)
+			f.Close()
+			if err == nil {
+				files, err = readPackage(f.Name())
+			}
+			os.Remove(f.Name())
+		}
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return "", nil, false
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return nil, "", false
 	}
-	return f.Name(), func() { os.Remove(f.Name()) }, true
+	return files, linked, true
 }
 
 func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.plugins.List())
 }
 
+func (s *Server) handlePluginCatalog(w http.ResponseWriter, r *http.Request) {
+	out, err := s.plugins.Catalog(r.URL.Query().Get("ref"), r.URL.Query().Get("version"))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) handleInspectPlugin(w http.ResponseWriter, r *http.Request) {
-	path, done, ok := decodePath(w, r)
+	files, _, ok := readSource(w, r)
 	if !ok {
 		return
 	}
-	defer done()
-	info, err := s.plugins.Inspect(path)
+	info, err := s.plugins.InspectFiles(files)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -59,17 +95,16 @@ func (s *Server) handleInspectPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	path, done, ok := decodePath(w, r)
+	files, linked, ok := readSource(w, r)
 	if !ok {
 		return
 	}
-	defer done()
-	bp, err := s.plugins.Install(path)
+	bp, err := s.plugins.InstallFiles(files, linked)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": bp.manifest.ID, "version": bp.manifest.Version})
+	writeJSON(w, http.StatusOK, map[string]any{"id": bp.manifest.ID, "version": bp.manifest.Version, "setup": bp.hasSetup()})
 }
 
 func (s *Server) handlePatchPlugin(w http.ResponseWriter, r *http.Request) {

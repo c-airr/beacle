@@ -90,7 +90,7 @@ type pluginSlot struct {
 // uiPrelude defines the ui.* block constructors. Kept on one line so error
 // line numbers in backend.lua stay right. ui.card is a column marked card:
 // a panel from before cards draws it as a plain column.
-const uiPrelude = `ui = {} for _, t in ipairs({"label","stat","bar","chart","table","button","input","row","column","link","toggle","select","code"}) do ui[t] = function(p) if type(p) ~= "table" then p = { text = tostring(p) } end local c = {} for i, v in ipairs(p) do c[i] = v end for i = #p, 1, -1 do p[i] = nil end if #c > 0 then p.children = c end p.type = t return p end end ui.card = function(p) p = ui.column(p) p.card = true return p end `
+const uiPrelude = `ui = {} for _, t in ipairs({"label","stat","bar","chart","table","button","input","row","column","link","toggle","select","code","checklist"}) do ui[t] = function(p) if type(p) ~= "table" then p = { text = tostring(p) } end local c = {} for i, v in ipairs(p) do c[i] = v end for i = #p, 1, -1 do p[i] = nil end if #c > 0 then p.children = c end p.type = t return p end end ui.card = function(p) p = ui.column(p) p.card = true return p end `
 
 func NewPlugins(dataDir string, store *Store, hub *Hub, agentHub *AgentHub) *Plugins {
 	p := &Plugins{
@@ -243,6 +243,11 @@ func (p *Plugins) Inspect(src string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return p.InspectFiles(files)
+}
+
+// InspectFiles is Inspect for a package already read (from the catalog).
+func (p *Plugins) InspectFiles(files map[string]string) (map[string]any, error) {
 	bp, err := parsePackage(files)
 	if err != nil {
 		return nil, err
@@ -281,14 +286,23 @@ func (p *Plugins) Install(src string) (*backendPlugin, error) {
 	if err != nil {
 		return nil, err
 	}
+	linked := ""
+	if st, err := os.Stat(src); err == nil && st.IsDir() {
+		linked, _ = filepath.Abs(src)
+	}
+	return p.InstallFiles(files, linked)
+}
+
+// InstallFiles is Install for a package already read. linked is the folder
+// it stays linked to, or "" for a copy (a .zip, the catalog).
+func (p *Plugins) InstallFiles(files map[string]string, linked string) (*backendPlugin, error) {
 	bp, err := parsePackage(files)
 	if err != nil {
 		return nil, err
 	}
-	if st, err := os.Stat(src); err == nil && st.IsDir() {
-		abs, _ := filepath.Abs(src)
-		bp.state.Linked = abs
-		bp.modTime = linkedModTime(abs)
+	if linked != "" {
+		bp.state.Linked = linked
+		bp.modTime = linkedModTime(linked)
 	}
 	id := bp.manifest.ID
 	p.mu.Lock()
@@ -437,6 +451,7 @@ func (p *Plugins) startBackend(bp *backendPlugin) {
 	rt.Set("value", p.luaValue(bp.manifest.ID))
 	rt.Set("call", p.luaCall(bp.manifest))
 	rt.Set("api", p.luaAPI(bp.manifest))
+	rt.Set("configure", p.luaConfigure(bp.manifest.ID))
 	rt.Set("alert", p.luaAlert(bp.manifest.ID))
 	rt.Set("resolve", p.luaResolve(bp.manifest.ID))
 	rt.Set("slot", func(L *lua.LState) int {
@@ -659,8 +674,26 @@ func linkedModTime(dir string) time.Time {
 // ---------------------------------------------------------------------------
 // What the panel reads
 
+// setupSlot is a plugin's own settings screen, built in Lua: what to
+// watch, where, how often. The panel opens it from Settings → Plugins and
+// right after an install from the catalog.
+const setupSlot = "plugin.setup"
+
+// hasSetup reports whether the running backend part registered setupSlot.
+func (bp *backendPlugin) hasSetup() bool {
+	bp.mu.Lock()
+	defer bp.mu.Unlock()
+	for _, s := range bp.slots {
+		if s.name == setupSlot {
+			return true
+		}
+	}
+	return false
+}
+
 type pluginView struct {
 	ID         string                       `json:"id"`
+	Setup      bool                         `json:"setup"`
 	Name       string                       `json:"name"`
 	Version    string                       `json:"version"`
 	Enabled    bool                         `json:"enabled"`
@@ -706,6 +739,7 @@ func (p *Plugins) List() map[string]any {
 		if bp.rt != nil {
 			v.Error = bp.rt.Err()
 		}
+		v.Setup = bp.hasSetup()
 		if v.HasAgent && bp.state.Enabled {
 			for _, vps := range vpsList {
 				v.Servers[vps.ID] = p.serverState(bp, vps.ID)
@@ -805,7 +839,12 @@ func (p *Plugins) Render(slot, vpsID, tab string) []slotRender {
 		}
 		bp.mu.Lock()
 		for _, s := range bp.slots {
-			if s.name == slot && (tab == "" || fmt.Sprint(s.opts["id"]) == tab) {
+			// plugin.setup is one plugin's own screen: tab names the plugin.
+			match := tab == "" || fmt.Sprint(s.opts["id"]) == tab
+			if slot == setupSlot {
+				match = tab == id
+			}
+			if s.name == slot && match {
 				jobs = append(jobs, job{id, bp.rt, s})
 			}
 		}

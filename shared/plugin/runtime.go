@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -100,6 +101,8 @@ func New(m Manifest, storePath string) *Runtime {
 	r.Set("on", r.luaOn)
 	r.SetIn("json", "encode", luaJSONEncode)
 	r.SetIn("json", "decode", luaJSONDecode)
+	r.SetIn("base64", "encode", luaBase64Encode)
+	r.SetIn("base64", "decode", luaBase64Decode)
 	r.SetIn("store", "get", r.luaStoreGet)
 	r.SetIn("store", "set", r.luaStoreSet)
 	return r
@@ -361,6 +364,27 @@ func luaJSONDecode(L *lua.LState) int {
 		return 2
 	}
 	L.Push(FromGo(L, v))
+	return 1
+}
+
+// luaBase64Encode: beacle.base64.encode(text), standard alphabet with
+// padding — what an Authorization: Basic header wants.
+func luaBase64Encode(L *lua.LState) int {
+	L.Push(lua.LString(base64.StdEncoding.EncodeToString([]byte(L.CheckString(1)))))
+	return 1
+}
+
+// luaBase64Decode: beacle.base64.decode(text) → text | nil, err. Padding is
+// optional.
+func luaBase64Decode(L *lua.LState) int {
+	in := strings.TrimRight(strings.TrimSpace(L.CheckString(1)), "=")
+	b, err := base64.RawStdEncoding.DecodeString(in)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+	L.Push(lua.LString(b))
 	return 1
 }
 
