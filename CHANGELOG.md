@@ -23,6 +23,10 @@
   enough to get its token and the commands meant for it. A waiting server
   is now matched by the address the agent connects from, or the name
   Tailscale gives that address.
+- **The install dialog called some programs harmless that run anything**
+  — `git`, `tar`, `sed`, `docker`, `systemd-run`, `timeout`, `nice` and
+  the like take a command in their arguments, and `python3.11` slipped
+  past `python3`. They are now in red as "any command", with the shells.
 
 ## 2.2.5 — 2026-10-18
 
