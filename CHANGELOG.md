@@ -18,6 +18,11 @@
   before SSH and ping, and does not blame the fleet when it is the one cut
   off. It no longer sends "Beacle backend offline" when the panel is
   closed or this computer's internet drops.
+- **A server waiting for its agent could be taken by another machine on
+  the tailnet** — saying the server's name or IP in its register frame was
+  enough to get its token and the commands meant for it. A waiting server
+  is now matched by the address the agent connects from, or the name
+  Tailscale gives that address.
 
 ## 2.2.5 — 2026-10-18
 
