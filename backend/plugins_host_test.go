@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -28,9 +29,19 @@ func TestAPIPermissionPatterns(t *testing.T) {
 		{"POST", "/api/plugins/x/action", false},   // never, whatever the manifest says
 		{"GET", "/api/vps/a/agent/plugins", false}, // nor an agent's plugins
 		{"GET", "/api/vps/a/terminal", false},
+		// A fragment is cut off before the request is made, so the blocked
+		// route it hides is the one that would run.
+		{"GET", "/api/vps/a#/terminal", false},
+		{"GET", "/api/vps/a/terminal#x", false},
 	} {
 		if got := apiAllowed(perms, c.method, c.path); got != c.ok {
 			t.Errorf("%s %s: allowed=%v, want %v", c.method, c.path, got, c.ok)
+		}
+	}
+	// Even a plugin granted every route never stops the panel.
+	for _, p := range []string{"/api/shutdown", "/api/shutdown#x"} {
+		if apiAllowed([]string{"* /api/*"}, "POST", p) {
+			t.Errorf("POST %s allowed", p)
 		}
 	}
 }
@@ -246,5 +257,27 @@ func TestReviewSaysWhatAPluginCanDo(t *testing.T) {
 	local := kinds(reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{Read: []string{"/sys/class/hwmon"}, HTTP: []string{"127.0.0.1"}}}, true, true))
 	if _, ok := local["exfil"]; ok {
 		t.Errorf("loopback counted as leaving: %v", local)
+	}
+}
+
+// These run whatever their arguments say — a pager, a hook, a container with
+// the host's disk, a unit, a cron line — so the install dialog must call
+// them "any command", not "runs a program". Versioned interpreters too.
+func TestReviewKnowsProgramsThatRunAnything(t *testing.T) {
+	for _, prog := range []string{
+		"git", "/usr/bin/tar", "docker", "podman", "systemd-run", "nsenter", "chroot", "sed",
+		"crontab", "timeout", "nice", "setsid", "nohup", "strace", "rsync", "vim", "make",
+		"python3.11", "/usr/bin/perl5.36", "php8.2", "lua5.4", "nodejs",
+	} {
+		got := reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{Exec: []string{prog}}}, true, false)
+		if !slices.ContainsFunc(got, func(n permNote) bool { return n.Kind == "exec_shell" }) {
+			t.Errorf("%s reviewed as %v, want exec_shell", prog, got)
+		}
+	}
+	for _, prog := range []string{"df", "sensors", "neofetch", "uptime", "nvidia-smi"} {
+		got := reviewPermissions(plugin.Manifest{Permissions: plugin.Permissions{Exec: []string{prog}}}, true, false)
+		if slices.ContainsFunc(got, func(n permNote) bool { return n.Kind == "exec_shell" }) {
+			t.Errorf("%s called any command", prog)
+		}
 	}
 }

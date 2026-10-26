@@ -13,11 +13,12 @@ import (
 
 func withProbes(t *testing.T, agent, host bool) {
 	t.Helper()
-	pa, ph, gap := probeAgent, probeHost, verifyRetryGap
+	pa, ph, gap, iu := probeAgent, probeHost, verifyRetryGap, internetUp
 	verifyRetryGap = 0
 	probeAgent = func(shared.WatchdogPeer) bool { return agent }
 	probeHost = func(string) bool { return host }
-	t.Cleanup(func() { probeAgent, probeHost, verifyRetryGap = pa, ph, gap })
+	internetUp = func() bool { return true }
+	t.Cleanup(func() { probeAgent, probeHost, verifyRetryGap, internetUp = pa, ph, gap, iu })
 }
 
 func verifyFixture() *watchdog {
@@ -41,7 +42,7 @@ func agentDownMsg(id string) shared.WebhookMessage {
 // the panel's connection blinked, not the agent. Nothing goes out.
 func TestVerifySuppressesWhenAgentAnswers(t *testing.T) {
 	withProbes(t, true, true)
-	_, send, reason := verifyFixture().verify(agentDownMsg("arm"))
+	_, send, reason, _ := verifyFixture().verify(agentDownMsg("arm"))
 	if send {
 		t.Fatal("alert sent although arm's agent answers the watcher")
 	}
@@ -52,7 +53,7 @@ func TestVerifySuppressesWhenAgentAnswers(t *testing.T) {
 
 func TestVerifyConfirmsAgentDown(t *testing.T) {
 	withProbes(t, false, true)
-	msg, send, _ := verifyFixture().verify(agentDownMsg("arm"))
+	msg, send, _, _ := verifyFixture().verify(agentDownMsg("arm"))
 	if !send || msg.Alert != string(shared.AlertAgentDown) || !strings.Contains(msg.Body, "confirmed by maslo") {
 		t.Fatalf("send=%v msg=%+v", send, msg)
 	}
@@ -62,7 +63,7 @@ func TestVerifyConfirmsAgentDown(t *testing.T) {
 // the message says what the watcher sees.
 func TestVerifyRewritesToOffline(t *testing.T) {
 	withProbes(t, false, false)
-	msg, send, _ := verifyFixture().verify(agentDownMsg("arm"))
+	msg, send, _, _ := verifyFixture().verify(agentDownMsg("arm"))
 	if !send || msg.Alert != string(shared.AlertAgentOffline) || !strings.Contains(msg.Title, "VPS offline") {
 		t.Fatalf("send=%v msg=%+v", send, msg)
 	}
@@ -71,7 +72,7 @@ func TestVerifyRewritesToOffline(t *testing.T) {
 func TestVerifyPassesOtherAlertsUntouched(t *testing.T) {
 	withProbes(t, true, true)
 	in := shared.WebhookMessage{Title: "[warning] arm: CPU high", Body: "x", VPSID: "arm", Alert: string(shared.AlertCPUHigh)}
-	out, send, _ := verifyFixture().verify(in)
+	out, send, _, _ := verifyFixture().verify(in)
 	if !send || out != in {
 		t.Fatalf("metric alert changed or dropped: %+v", out)
 	}
@@ -79,7 +80,7 @@ func TestVerifyPassesOtherAlertsUntouched(t *testing.T) {
 
 func TestVerifyUnknownPeerPassesThrough(t *testing.T) {
 	withProbes(t, true, true)
-	_, send, _ := verifyFixture().verify(agentDownMsg("stranger"))
+	_, send, _, _ := verifyFixture().verify(agentDownMsg("stranger"))
 	if !send {
 		t.Fatal("an alert about a server the watcher cannot check must still go out")
 	}
@@ -87,7 +88,7 @@ func TestVerifyUnknownPeerPassesThrough(t *testing.T) {
 
 func TestVerifyAboutSelf(t *testing.T) {
 	withProbes(t, false, false)
-	_, send, _ := verifyFixture().verify(agentDownMsg("maslo"))
+	_, send, _, _ := verifyFixture().verify(agentDownMsg("maslo"))
 	if send {
 		t.Fatal("a watcher answering the request is alive; it must not report itself down")
 	}

@@ -1,7 +1,7 @@
 {
   "id": "temp",
   "name": "Temp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "permissions": {
     "read": ["/sys/class/thermal", "/sys/class/hwmon"],
     "exec": ["nvidia-smi"],

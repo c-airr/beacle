@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Marketplace** — Settings → Plugins → *Marketplace* lists the plugins in
+  this repository (`plugins/index.json`) and installs or updates one with a
+  click, through the same "what it can do" dialog as a .zip. The list and
+  the code come from GitHub at the commit the app was built from, so it is
+  the code reviewed with that release.
+- **Setup screens built by the plugin** — a plugin meant for anyone draws
+  its own settings screen in the `plugin.setup` slot (where your service
+  is, a key, which of the things found there to watch) and saves it with
+  `beacle.configure{…}`. *Configure* on its card opens it, and it opens by
+  itself after an install from the Marketplace. New blocks and helpers for
+  it: `ui.checklist`, `ui.input{ secret = true, args }` (also committed
+  when leaving the field) and `beacle.base64`.
+- **Uptime Kuma plugin** — your Uptime Kuma's monitors in a tab, with
+  response times, alerts while one is down and an Overview card. Reads
+  `/metrics` with an API key or a public status page; set up on its own
+  screen.
+
+### Fixed
+
+- **"VPS offline" on Discord when it was your own internet that dropped** —
+  a watcher on the same line as the panel (a server at home) came back
+  from the same outage and "confirmed" every other server as offline
+  before its tunnel had found them again. A watcher that cannot reach any
+  other server now says so instead, and the panel asks the other watcher.
+  The panel itself holds alerts while not one server answers with the
+  internet up (its own Tailscale coming back), and gives the rest a grace
+  when the first one is back.
+- **Watchers stopped supervising the fleet on their first check** — the
+  loop waited for an answer from itself, so with the panel closed nobody
+  was told about a server going down. It now runs, probes a server's agent
+  before SSH and ping, and does not blame the fleet when it is the one cut
+  off. It no longer sends "Beacle backend offline" when the panel is
+  closed or this computer's internet drops.
+- **A server waiting for its agent could be taken by another machine on
+  the tailnet** — saying the server's name or IP in its register frame was
+  enough to get its token and the commands meant for it. A waiting server
+  is now matched by the address the agent connects from, or the name
+  Tailscale gives that address.
+- **The install dialog called some programs harmless that run anything**
+  — `git`, `tar`, `sed`, `docker`, `systemd-run`, `timeout`, `nice` and
+  the like take a command in their arguments, and `python3.11` slipped
+  past `python3`. They are now in red as "any command", with the shells.
+- **Demo plugins** — `uptime`: two pages on one host (a site and its
+  `/health`) drew into one chart, and a page taken out of the settings
+  while down kept its alert open for good. `temp`: one failed `nvidia-smi`
+  switched the GPU reading off until the agent restarted, a board sending
+  its readings as text broke the whole Temp tab, and this computer's GPU
+  tile turned yellow and red at the CPU's levels instead of 85/95 °C.
+
 ## 2.2.5 — 2026-10-18
 
 Plugins that can do what the panel does: its API, settings, alerts, events

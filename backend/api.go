@@ -664,6 +664,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/plugins", s.handleListPlugins)
 	mux.HandleFunc("POST /api/plugins", s.handleInstallPlugin)
 	mux.HandleFunc("POST /api/plugins/inspect", s.handleInspectPlugin)
+	mux.HandleFunc("GET /api/plugins/catalog", s.handlePluginCatalog)
 	mux.HandleFunc("GET /api/plugins/ui", s.handlePluginUI)
 	mux.HandleFunc("PATCH /api/plugins/{id}", s.handlePatchPlugin)
 	mux.HandleFunc("DELETE /api/plugins/{id}", s.handleDeletePlugin)

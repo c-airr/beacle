@@ -150,4 +150,30 @@ void main() {
     expect(const L(AppLanguage.pl).t('navAlerts'), 'Fires');
     expect(const L(AppLanguage.en).t('navServers'), isNot('Fires'));
   });
+
+  testWidgets('a setup screen: a masked secret and a checklist', (tester) async {
+    await _pump(
+        tester,
+        state,
+        SlotRender.fromJson({
+          'plugin': 'temps',
+          'blocks': [
+            {'type': 'input', 'label': 'API key', 'secret': true, 'value': 'never shown', 'action': 'set'},
+            {
+              'type': 'checklist',
+              'label': 'Monitors',
+              'options': ['Web', 'DB'],
+              'values': ['Web'],
+              'action': 'pick',
+            },
+          ],
+        }));
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.obscureText, isTrue);
+    expect(field.controller?.text, isEmpty, reason: 'a secret is never put back into the field');
+    expect(find.text('Monitors'), findsOneWidget);
+    final boxes = tester.widgetList<CheckboxListTile>(find.byType(CheckboxListTile)).toList();
+    expect(boxes.map((b) => b.value), [true, false]);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -227,3 +227,17 @@ beacle.on("get", function(url) local body, err = beacle.http.get(url); return { 
 		t.Fatalf("got %v, want no body and an error", m)
 	}
 }
+
+func TestBase64RoundTrip(t *testing.T) {
+	r := New(Manifest{ID: "b64"}, "")
+	defer r.Close()
+	if err := r.Load(`
+		assert(beacle.base64.encode(":key") == "OmtleQ==")
+		assert(beacle.base64.decode("OmtleQ==") == ":key")
+		assert(beacle.base64.decode("OmtleQ") == ":key")
+		local v, err = beacle.base64.decode("!!")
+		assert(v == nil and err)
+	`, "t"); err != nil {
+		t.Fatal(err)
+	}
+}

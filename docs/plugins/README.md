@@ -512,6 +512,23 @@ end)
 apply to; switch the plugin off on servers in Settings so the agent part
 does not run there at all.
 
+## Plugins for everyone: a setup screen and the Marketplace
+
+A plugin you write for your own machines can hard-code what it watches. One
+meant for anyone cannot: give it a setup screen. Register the
+`plugin.setup` slot, draw the choices with `ui.input`, `ui.select`,
+`ui.checklist` and buttons, keep what is typed in a Lua table and save it
+with `beacle.configure{ … }` — the plugin restarts with it.
+[`plugins/uptime-kuma`](../../plugins/uptime-kuma/backend.lua) is a whole
+example: an address and a key, *Connect*, then which monitors to watch.
+
+The Marketplace (Settings → Plugins → *Marketplace*) lists
+[`plugins/index.json`](../../plugins/index.json). To add a plugin there,
+put its folder under `plugins/` and an entry in the index with its `id`,
+`name`, `description`, `version` (both as in its manifest — a test checks),
+`path` and `min_beacle`; the panel fetches both at the commit the app was
+built from, so it reaches people with the next release.
+
 ## Troubleshooting
 
 | Symptom | Why, and what to do |

@@ -120,3 +120,24 @@ func (s *Server) handleTailscaleDevices(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, devs)
 }
+
+// tailnetName is the name Tailscale itself gives the device at ip — unlike
+// the name in an agent's register frame, which is whatever it chose to say.
+// Blank when Tailscale does not know the address. A seam for tests.
+var tailnetName = func(ip string) string {
+	if ip == "" {
+		return ""
+	}
+	devs, err := tailscaleStatus()
+	if err != nil {
+		return ""
+	}
+	for _, d := range devs {
+		for _, addr := range d.IPs {
+			if addr == ip {
+				return d.Name
+			}
+		}
+	}
+	return ""
+}

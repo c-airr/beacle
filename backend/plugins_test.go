@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -333,4 +334,105 @@ func TestPluginMetricAlertFiresAndResolves(t *testing.T) {
 	if a := open(); len(a) != 0 {
 		t.Fatalf("vanished metric still alerting: %+v", a)
 	}
+}
+
+// chartMetrics collects the metric of every ui.chart in rendered blocks.
+func chartMetrics(v any) []string {
+	var out []string
+	var walk func(x any)
+	walk = func(x any) {
+		switch x := x.(type) {
+		case map[string]any:
+			if x["type"] == "chart" {
+				if m, ok := x["metric"].(string); ok {
+					out = append(out, m)
+				}
+			}
+			for _, c := range x {
+				walk(c)
+			}
+		case []any:
+			for _, c := range x {
+				walk(c)
+			}
+		}
+	}
+	walk(v)
+	return out
+}
+
+// Two pages on one host — the site and its health check — are two charts.
+// The metric used to be named after the host alone, so both drew into one.
+func TestDemoUptimePagesOnOneHostKeepTheirOwnChart(t *testing.T) {
+	p, store := newTestPlugins(t)
+	e := store.CreateVPS("panther", "panther", "100.1.1.1")
+	if _, err := p.Install(filepath.Join("..", "plugins", "demo", "uptime")); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetState("uptime", nil, nil, map[string]any{"sites": "https://example.com/ https://example.com/health https://example.org/"}); err != nil {
+		t.Fatal(err)
+	}
+	var metrics []string
+	for _, r := range p.Render("nav.tab", e.VPS.ID, "") {
+		if r.Error != "" {
+			t.Fatal(r.Error)
+		}
+		raw, _ := json.Marshal(r.Blocks)
+		var blocks any
+		_ = json.Unmarshal(raw, &blocks)
+		metrics = append(metrics, chartMetrics(blocks)...)
+	}
+	if len(metrics) != 3 || metrics[0] == metrics[1] || metrics[1] == metrics[2] || metrics[0] == metrics[2] {
+		t.Fatalf("charts %q, want three different metrics", metrics)
+	}
+	if metrics[2] != "ms_example_org" {
+		t.Errorf("a page alone on its host should keep its old name, got %q", metrics[2])
+	}
+}
+
+// A page that was down when it was taken out of the settings kept its alert
+// open for good: nothing checks it any more, so nothing resolved it.
+func TestDemoUptimeRemovedPageResolvesItsAlert(t *testing.T) {
+	p, store := newTestPlugins(t)
+	alerts := NewAlertEngine(store, p.hub)
+	p.alerts = alerts
+	if _, err := p.Install(filepath.Join("..", "plugins", "demo", "uptime")); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetState("uptime", nil, nil, map[string]any{"sites": "http://127.0.0.1:1/", "down_after": 1.0}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the dead page's alert", func() bool { return openAlerts(store) == 1 })
+	if err := p.SetState("uptime", nil, nil, map[string]any{"sites": "http://127.0.0.1:2/", "down_after": 5.0}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the removed page's alert to close", func() bool { return openAlerts(store) == 0 })
+}
+
+// A board that sends its readings as text ("45.2") used to break the whole
+// Temp tab: comparing a string with a number is an error in Lua.
+func TestDemoTempDeviceWithTextReadings(t *testing.T) {
+	p, store := newTestPlugins(t)
+	e := store.CreateVPS("panther", "panther", "100.1.1.1")
+	board := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"temp_c":"45.2","rssi":"-70","uptime_s":"3600"}`))
+	}))
+	defer board.Close()
+	if _, err := p.Install(filepath.Join("..", "plugins", "demo", "temp")); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetState("temp", nil, nil, map[string]any{"device": board.URL, "lhm": "http://127.0.0.1:1/"}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the board's tile", func() bool {
+		for _, r := range p.Render("nav.tab", e.VPS.ID, "") {
+			if r.Error != "" {
+				t.Fatalf("nav.tab: %s", r.Error)
+			}
+			if strings.Contains(strings.Join(pluginTexts(r.Blocks), "\n"), "up 1h") {
+				return true
+			}
+		}
+		return false
+	})
 }

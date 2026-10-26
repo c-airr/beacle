@@ -44,10 +44,10 @@ func apiBlocked(p string) bool {
 }
 
 // apiAllowed checks "METHOD /path" against permissions.api. The path must be
-// in its clean form, so a pattern cannot be walked out of with "..", "//" or
-// an escaped character.
+// in its clean form, so a pattern cannot be walked out of with "..", "//",
+// an escaped character or a "#" that the request drops.
 func apiAllowed(perms []string, method, p string) bool {
-	if !strings.HasPrefix(p, "/api/") || path.Clean(p) != p || strings.ContainsAny(p, `%\`) || apiBlocked(p) {
+	if !strings.HasPrefix(p, "/api/") || path.Clean(p) != p || strings.ContainsAny(p, `%\#`) || apiBlocked(p) {
 		return false
 	}
 	for _, a := range perms {
@@ -135,6 +135,43 @@ func (p *Plugins) alertTarget(L *lua.LState, server string) shared.VPS {
 		L.ArgError(1, "no server "+server)
 	}
 	return e.VPS
+}
+
+// luaConfigure: beacle.configure{ key = value, … } saves settings from a
+// plugin's own setup screen, checked against its manifest's config as the
+// form's are; keys left out keep their value. The plugin restarts with them
+// once the handler that called it has returned. Returns true, or nil, err.
+func (p *Plugins) luaConfigure(id string) lua.LGFunction {
+	return func(L *lua.LState) int {
+		in, _ := plugin.ToGo(L.CheckTable(1)).(map[string]any)
+		p.mu.Lock()
+		bp := p.list[id]
+		if bp == nil {
+			p.mu.Unlock()
+			return luaFail(L, "plugin removed")
+		}
+		merged := map[string]any{}
+		for k, v := range bp.state.Config {
+			merged[k] = v
+		}
+		for k, v := range in {
+			merged[k] = v
+		}
+		_, err := cleanConfig(bp.manifest, bp.state.Config, merged)
+		p.mu.Unlock()
+		if err != nil {
+			return luaFail(L, err.Error())
+		}
+		// Not here: restarting stops this runtime, which waits for the call
+		// in progress — this one.
+		go func() {
+			if err := p.SetState(id, nil, nil, merged); err != nil {
+				log.Printf("plugin %s: saving its settings: %v", id, err)
+			}
+		}()
+		L.Push(lua.LTrue)
+		return 1
+	}
 }
 
 // luaAlert: beacle.alert{key, message, severity = "warning"|"critical",

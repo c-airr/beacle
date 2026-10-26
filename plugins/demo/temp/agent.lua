@@ -55,15 +55,17 @@ local function from_thermal_zones()
 end
 
 -- nvidia-smi prints one line per GPU. Once it is known to be missing, it is
--- not looked for again until the agent restarts.
+-- not looked for again until the agent restarts; a run that fails (the
+-- driver busy, a timeout) only skips this reading.
 local has_nvidia = true
 local function nvidia()
   if not has_nvidia then return nil end
   local out, code = beacle.exec("nvidia-smi", { "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits" })
-  if not out or code ~= 0 then
-    has_nvidia = false
+  if not out then
+    if tostring(code):find("not found", 1, true) then has_nvidia = false end
     return nil
   end
+  if code ~= 0 then return nil end
   local best
   for line in out:gmatch("[^\n]+") do
     best = hottest(best, tonumber(line))

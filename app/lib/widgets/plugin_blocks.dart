@@ -31,21 +31,30 @@ class SlotRender {
 }
 
 /// Fetches one slot's blocks and hands them to [builder]: again when plugins
-/// change, after a button, and every [_refresh] for blocks whose text comes
+/// change, after a button, and every [PluginSlot.refresh] for blocks whose text comes
 /// from Lua (blocks bound to a metric follow live data on their own).
 class PluginSlot extends StatefulWidget {
   final String slot;
   final String? vpsId;
   final String? tab;
   final Widget Function(BuildContext context, List<SlotRender> renders, VoidCallback reload) builder;
-  const PluginSlot({super.key, required this.slot, this.vpsId, this.tab, required this.builder});
+
+  /// How often text from Lua is fetched again; a setup screen waiting for a
+  /// plugin to connect asks more often.
+  final Duration refresh;
+  const PluginSlot(
+      {super.key,
+      required this.slot,
+      this.vpsId,
+      this.tab,
+      this.refresh = const Duration(seconds: 15),
+      required this.builder});
 
   @override
   State<PluginSlot> createState() => _PluginSlotState();
 }
 
 class _PluginSlotState extends State<PluginSlot> {
-  static const _refresh = Duration(seconds: 15);
   List<SlotRender> _renders = const [];
   int _revision = -1;
   Timer? _timer;
@@ -53,7 +62,7 @@ class _PluginSlotState extends State<PluginSlot> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(_refresh, (_) => _load());
+    _timer = Timer.periodic(widget.refresh, (_) => _load());
   }
 
   @override
@@ -284,10 +293,41 @@ class PluginBlocks extends StatelessWidget {
         );
       case 'input':
         return _PluginInput(
+          // Another field in the same place (the plugin swapped it) starts
+          // empty instead of keeping what was typed into this one.
+          key: ValueKey('${b['action']}|${b['label']}|${b['args']}|${b['secret']}'),
           label: '${b['label'] ?? ''}',
           hint: '${b['hint'] ?? ''}',
-          value: '${b['value'] ?? ''}',
-          onSubmit: (text) => _run(context, '${b['action'] ?? ''}', {'value': text}),
+          value: b['secret'] == true ? '' : '${b['value'] ?? ''}',
+          secret: b['secret'] == true,
+          onSubmit: (text) =>
+              _run(context, '${b['action'] ?? ''}', {...?(b['args'] as Map?)?.cast<String, dynamic>(), 'value': text}),
+        );
+      case 'checklist':
+        final options = [for (final o in (b['options'] as List? ?? const [])) '$o'];
+        final picked = {for (final v in (b['values'] as List? ?? const [])) '$v'};
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if ('${b['label'] ?? ''}'.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('${b['label']}', style: TextStyle(fontSize: 12, color: BeacleColors.textDim)),
+              ),
+            for (final o in options)
+              CheckboxListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(o, style: const TextStyle(fontSize: 12.5)),
+                value: picked.contains(o),
+                onChanged: (on) {
+                  final next = [for (final x in options) if (x == o ? on == true : picked.contains(x)) x];
+                  _run(context, '${b['action'] ?? ''}', {...?(b['args'] as Map?)?.cast<String, dynamic>(), 'values': next});
+                },
+              ),
+          ],
         );
       case 'row':
         // A row with cards in it is a row of tiles, one height like the
@@ -329,7 +369,18 @@ class PluginBlocks extends StatelessWidget {
     return snap?.metrics.plugins[_key(b['metric'])];
   }
 
-  Future<void> _run(BuildContext context, String action, Map<String, dynamic> args) async {
+  /// One plugin's actions run in the order they were made: a field committed
+  /// as focus moves to a button must reach the plugin before the button does.
+  static final Map<String, Future<void>> _queue = {};
+
+  Future<void> _run(BuildContext context, String action, Map<String, dynamic> args) {
+    final next = (_queue[render.plugin] ?? Future.value()).then((_) => _send(context, action, args));
+    _queue[render.plugin] = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _send(BuildContext context, String action, Map<String, dynamic> args) async {
+    if (!context.mounted) return;
     final state = context.read<AppState>();
     state.onUserAction();
     try {
@@ -393,8 +444,15 @@ Color _levelTone(double? v, Map<String, dynamic>? def) {
 
 class _PluginInput extends StatefulWidget {
   final String label, hint, value;
+  final bool secret;
   final void Function(String) onSubmit;
-  const _PluginInput({required this.label, required this.hint, required this.value, required this.onSubmit});
+  const _PluginInput(
+      {super.key,
+      required this.label,
+      required this.hint,
+      required this.value,
+      this.secret = false,
+      required this.onSubmit});
 
   @override
   State<_PluginInput> createState() => _PluginInputState();
@@ -402,18 +460,36 @@ class _PluginInput extends StatefulWidget {
 
 class _PluginInputState extends State<_PluginInput> {
   late final _c = TextEditingController(text: widget.value);
+  late final _focus = FocusNode()..addListener(_onFocus);
+  late String _sent = widget.value;
 
   @override
   void dispose() {
+    _focus.dispose();
     _c.dispose();
     super.dispose();
+  }
+
+  /// Leaving the field commits it too: on a setup screen people type and
+  /// then press the screen's button, not Enter.
+  void _onFocus() {
+    if (!_focus.hasFocus && _c.text != _sent) _submit(_c.text);
+  }
+
+  void _submit(String text) {
+    _sent = text;
+    widget.onSubmit(text);
   }
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: _c,
-      onSubmitted: widget.onSubmit,
+      focusNode: _focus,
+      obscureText: widget.secret,
+      autocorrect: !widget.secret,
+      enableSuggestions: !widget.secret,
+      onSubmitted: _submit,
       style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
         labelText: widget.label.isEmpty ? null : widget.label,
@@ -422,7 +498,7 @@ class _PluginInputState extends State<_PluginInput> {
         suffixIcon: IconButton(
           icon: const Icon(Icons.keyboard_return, size: 16),
           tooltip: context.l.t('save'),
-          onPressed: () => widget.onSubmit(_c.text),
+          onPressed: () => _submit(_c.text),
         ),
       ),
     );

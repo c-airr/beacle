@@ -1,0 +1,24 @@
+{
+  "id": "kuma",
+  "name": "Uptime Kuma",
+  "version": "1.0.0",
+  "permissions": {},
+  "metrics": {
+    "ms_*": { "label": "Response", "unit": " ms" }
+  },
+  "timeout": 20,
+  "config": [
+    { "key": "url", "label": "Uptime Kuma address", "type": "url",
+      "help": "Where your Uptime Kuma answers, e.g. http://192.168.1.10:3001." },
+    { "key": "source", "label": "Read from", "type": "select", "options": ["metrics", "status page"], "default": "metrics",
+      "help": "metrics: every monitor, with an API key. status page: the monitors on one public status page, no key." },
+    { "key": "api_key", "label": "API key", "type": "secret",
+      "help": "Uptime Kuma → Settings → API Keys. Only for \"metrics\"." },
+    { "key": "slug", "label": "Status page", "type": "text",
+      "help": "The status page's slug (the end of its address). Only for \"status page\"." },
+    { "key": "monitors", "label": "Monitors to watch", "type": "text",
+      "help": "One name per line. Empty: all of them." },
+    { "key": "every", "label": "Seconds between two reads", "type": "number", "default": 30 },
+    { "key": "alerts", "label": "Alert when a monitor is down", "type": "bool", "default": true }
+  ]
+}

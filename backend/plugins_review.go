@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -23,10 +24,27 @@ type permNote struct {
 var sensitiveDirs = []string{"/etc", "/root", "/home", "/opt", "/var", "/srv", "/boot", "/usr/local/etc"}
 
 // Programs that run whatever they are given: listing one in permissions.exec
-// is listing every command.
+// is listing every command. Besides shells and interpreters that is anything
+// that starts another program from its arguments (timeout, nice, find -exec),
+// takes a command in an option (git -c core.sshCommand, tar --to-command,
+// rsync -e, GNU sed's e), or runs one as root by design (a container with the
+// host's disk, a transient unit, a cron line).
 var anyCommand = []string{
-	"sh", "bash", "dash", "zsh", "ash", "ksh", "fish", "busybox", "env", "sudo", "su", "doas", "xargs",
-	"python", "python3", "perl", "ruby", "node", "php", "lua", "awk", "gawk", "find", "ssh",
+	"sh", "bash", "dash", "zsh", "ash", "ksh", "mksh", "csh", "tcsh", "fish", "busybox", "toybox",
+	"env", "sudo", "su", "doas", "pkexec", "runuser", "xargs", "parallel",
+	"awk", "gawk", "mawk", "nawk", "find", "sed", "ssh", "scp", "rsync", "git", "tar", "make", "vim", "vi", "nvim",
+	"expect", "gdb", "strace", "ltrace",
+	"timeout", "nice", "ionice", "nohup", "setsid", "stdbuf", "chrt", "taskset", "flock", "watch",
+	"chroot", "nsenter", "unshare", "screen", "tmux",
+	"docker", "podman", "nerdctl", "ctr", "kubectl", "systemd-run", "crontab", "at",
+}
+
+// Interpreters come versioned: python3.11, perl5.36, php8.2, lua5.4.
+var interpreterRe = regexp.MustCompile(`^(python|perl|ruby|php|lua|luajit|node|nodejs|deno|bun|tclsh|wish|pwsh|Rscript|julia|java|osascript)[0-9.]*$`)
+
+func runsAnything(program string) bool {
+	base := path.Base(program)
+	return slices.Contains(anyCommand, base) || interpreterRe.MatchString(base)
 }
 
 func coversSensitive(prefix string) bool {
@@ -70,7 +88,7 @@ func reviewPermissions(m plugin.Manifest, hasAgent, hasBackend bool) []permNote 
 
 	var shells, programs []string
 	for _, c := range p.Exec {
-		if slices.Contains(anyCommand, path.Base(c)) {
+		if runsAnything(c) {
 			shells = append(shells, c)
 		} else {
 			programs = append(programs, c)

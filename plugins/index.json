@@ -1,0 +1,40 @@
+{
+  "plugins": [
+    {
+      "id": "kuma",
+      "name": "Uptime Kuma",
+      "description": "Your Uptime Kuma's monitors in Beacle: a tab with each one's state and response time, alerts while one is down. Set up on its own screen: address, API key or status page, which monitors.",
+      "version": "1.0.0",
+      "path": "uptime-kuma",
+      "min_beacle": "2.2.6",
+      "tags": ["monitoring", "uptime"]
+    },
+    {
+      "id": "uptime",
+      "name": "Uptime",
+      "description": "Web pages checked from this computer, with response times, a switch to pause each and an alert when one stays down.",
+      "version": "1.1.1",
+      "path": "demo/uptime",
+      "min_beacle": "2.2.5",
+      "tags": ["monitoring", "uptime", "demo"]
+    },
+    {
+      "id": "temp",
+      "name": "Temp",
+      "description": "Temperatures in one tab: this computer (LibreHardwareMonitor), a board on your LAN and every server's CPU and GPU sensors.",
+      "version": "1.1.1",
+      "path": "demo/temp",
+      "min_beacle": "2.2.5",
+      "tags": ["hardware", "demo"]
+    },
+    {
+      "id": "neofetch",
+      "name": "Neofetch share",
+      "description": "Demo of the install dialog's red warning: shows neofetch on every server's page and can post it to a made-up address on your LAN.",
+      "version": "1.0.0",
+      "path": "demo/neofetch",
+      "min_beacle": "2.2.5",
+      "tags": ["demo"]
+    }
+  ]
+}

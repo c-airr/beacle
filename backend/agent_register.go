@@ -45,7 +45,16 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 		return nil, shared.RegisterResponse{}, fmt.Errorf("this server is connected over WireGuard")
 	}
 
-	pending := s.store.FindPendingByTailscale(tsName, host)
+	// Nor is what an agent says about itself: a server added in the panel and
+	// still waiting for its agent is matched by the address the socket comes
+	// from, or the name Tailscale gives that address. Only a process on this
+	// computer is taken at its word — it could drive the panel API anyway.
+	var pending *VPSEntry
+	if net.ParseIP(remoteIP).IsLoopback() {
+		pending = s.store.FindPendingByTailscale(tsName, host)
+	} else {
+		pending = s.store.FindPendingByTailscale(tailnetName(remoteIP), remoteIP)
+	}
 	reclaim := false
 	if pending == nil {
 		// Reclaim a server whose agent lost its token (reinstall, wiped
