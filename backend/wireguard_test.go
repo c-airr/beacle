@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -140,7 +142,7 @@ func TestWireGuardAgentRegistersThroughTunnel(t *testing.T) {
 	}
 }
 
-func TestWireGuardServerNotClaimableOverTailscale(t *testing.T) {
+func TestWireGuardServerOnlyClaimableByTokenOverTailscale(t *testing.T) {
 	srv := newWGTestServer(t)
 	entry, err := srv.wg.CreateServer("wg-box", "192.0.2.11:51931")
 	if err != nil {
@@ -148,8 +150,13 @@ func TestWireGuardServerNotClaimableOverTailscale(t *testing.T) {
 	}
 	ack := registerThroughTunnel(t, srv, entry, "")
 	tokenEntry := srv.store.FindByToken(ack.Token)
-	if _, _, err := srv.registerAgent(shared.RegisterRequest{VPSID: entry.VPS.ID}, "100.64.1.2", ack.Token, tokenEntry); err == nil {
-		t.Fatal("token accepted on the Tailscale listener for a WireGuard server")
+	// The token is the credential for the Tailscale fallback, and using it
+	// there must not turn the server into a Tailscale one.
+	if _, _, err := srv.registerAgent(shared.RegisterRequest{VPSID: entry.VPS.ID}, "100.64.1.2", ack.Token, tokenEntry); err != nil {
+		t.Fatalf("token refused on the Tailscale fallback: %v", err)
+	}
+	if got := srv.store.GetVPS(entry.VPS.ID); !got.VPS.IsWireGuard() || got.VPS.Host != "127.0.0.1" {
+		t.Fatalf("fallback register changed the server: transport %q host %q", got.VPS.Transport, got.VPS.Host)
 	}
 	if _, _, err := srv.registerAgent(shared.RegisterRequest{VPSID: entry.VPS.ID}, "100.64.1.2", "", nil); err == nil {
 		t.Fatal("VPS ID accepted on the Tailscale listener for a WireGuard server")
@@ -256,5 +263,36 @@ func TestTunnelListenerServesOnlyAgentSocket(t *testing.T) {
 		if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
 			t.Errorf("%s through the tunnel: %d, want 404", path, resp.StatusCode)
 		}
+	}
+}
+
+// A lost state.json must not strand WireGuard servers: the peers file brings
+// them back under their own IDs, and the peer key reconnects them.
+func TestWireGuardServersSurviveStateReset(t *testing.T) {
+	srv := newWGTestServer(t)
+	entry, _ := srv.wg.CreateServer("wg-box", "192.0.2.13:51931")
+	ack := registerThroughTunnel(t, srv, entry, "")
+	srv.store.Persist()
+
+	if err := os.Remove(filepath.Join(srv.dataDir, "state.json")); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(srv.dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := store.GetVPS(entry.VPS.ID)
+	if got == nil || got.VPS.WGPublicKey != entry.VPS.WGPublicKey || got.AgentToken != ack.Token || got.VPS.Name != "wg-box" {
+		t.Fatalf("restored entry: %+v", got)
+	}
+	if store.FindByTunnelIP(entry.VPS.WGTunnelIP) == nil {
+		t.Fatal("restored server not found by its tunnel address")
+	}
+
+	// Deleting a server on purpose must not bring it back.
+	store.DeleteVPS(entry.VPS.ID)
+	again, _ := NewStore(srv.dataDir)
+	if again.GetVPS(entry.VPS.ID) != nil {
+		t.Fatal("deleted server came back from the peers file")
 	}
 }

@@ -323,7 +323,7 @@ func (c *WSClient) session() (registered bool, err error) {
 
 	registered, err = c.runSession(ctx, false)
 	if err != nil && c.cfg.WGFallbackActive() {
-		log.Printf("wireguard: %v — trying Tailscale fallback until %s", err, c.cfg.FallbackUntil.UTC().Format(time.RFC3339))
+		log.Printf("wireguard: %v — trying the Tailscale fallback", err)
 		return c.runSession(ctx, true)
 	}
 	return registered, err

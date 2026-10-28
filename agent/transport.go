@@ -194,9 +194,20 @@ func applyJoin(cfg *Config, token string) error {
 	return nil
 }
 
-func (c *Config) WGFallbackActive() bool {
+// WGTrial is a switch to WireGuard that has not yet been heard through the
+// tunnel: until FallbackUntil the old panel URL is also the way back for good.
+func (c *Config) WGTrial() bool {
 	return c.IsWireGuard() && c.FallbackBackendURL != "" && !c.FallbackUntil.IsZero() &&
 		time.Now().Before(c.FallbackUntil)
+}
+
+// WGFallbackActive says whether a failed tunnel may be followed by the
+// Tailscale URL: during the trial, and after it, once the tunnel has proved
+// itself — WireGuard stays first, Tailscale is only the way round a dead
+// tunnel. A server without Tailscale has no URL here and never falls back.
+func (c *Config) WGFallbackActive() bool {
+	return c.IsWireGuard() && c.FallbackBackendURL != "" &&
+		(c.FallbackUntil.IsZero() || time.Now().Before(c.FallbackUntil))
 }
 
 // applySwitchToWireGuard moves a live Tailscale agent onto the tunnel while
@@ -241,7 +252,7 @@ func transportStatus(cfg *Config) shared.TransportStatus {
 		tr = shared.TransportTailscale
 	}
 	st := shared.TransportStatus{Transport: tr}
-	if cfg.WGFallbackActive() {
+	if cfg.WGTrial() {
 		st.Pending = shared.TransportWireGuard
 		st.FallbackUntil = cfg.FallbackUntil.UTC().Format(time.RFC3339)
 	}

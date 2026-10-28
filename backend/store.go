@@ -65,6 +65,7 @@ type Store struct {
 	state     persistedState
 	snapshots map[string]*shared.VPSSnapshot
 	dirty     atomic.Bool
+	lastPeers []byte // wg-peers.json as last written
 }
 
 func NewStore(dataDir string) (*Store, error) {
@@ -88,6 +89,7 @@ func NewStore(dataDir string) (*Store, error) {
 	if s.state.Links == nil {
 		s.state.Links = map[string]*shared.VPSLink{}
 	}
+	s.restoreWGPeers()
 	// No agent socket survives a backend restart, so the persisted status is
 	// meaningless here: trusting it would show a server as online with no
 	// snapshot behind it until the offline watcher caught up. Every non-pending
@@ -155,6 +157,7 @@ func (s *Store) writeLocked() {
 	if err := os.Rename(tmp, s.path); err != nil {
 		log.Printf("store: replace %s: %v", s.path, err)
 	}
+	s.writePeersLocked()
 }
 
 func newID() string {

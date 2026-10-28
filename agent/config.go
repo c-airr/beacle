@@ -9,7 +9,7 @@ import (
 	"beacle/shared"
 )
 
-const AgentVersion = "2.2.6"
+const AgentVersion = "2.2.7"
 
 // Config is written by the installer with just the backend URL. VPSID and
 // Token start empty - the agent auto-registers on first start and persists
@@ -32,8 +32,10 @@ type Config struct {
 	// tunnel described by WG.
 	Transport string    `json:"transport,omitempty"`
 	WG        *WGConfig `json:"wireguard,omitempty"`
-	// During a trial switch to WireGuard: where to go back to if the tunnel
-	// has not registered by FallbackUntil. Cleared once it has.
+	// The Tailscale panel URL of a server moved onto WireGuard: tried when the
+	// tunnel fails. While FallbackUntil is set the switch is a trial, and the
+	// agent reverts to this URL for good if the tunnel has not registered by
+	// then; confirmed, FallbackUntil is cleared and the URL stays.
 	FallbackBackendURL string    `json:"fallback_backend_url,omitempty"`
 	FallbackUntil      time.Time `json:"fallback_until,omitempty"`
 

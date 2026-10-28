@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.2.7 — 2026-10-28
+
+WireGuard servers no longer vanish with the panel's data, and a server moved
+off Tailscale keeps it as a way round a dead tunnel.
+
+### Fixed
+
+- **WireGuard servers disappeared when the panel's data was reset** — their
+  keys lived only in `state.json`, so after a reset the panel's tunnel had no
+  peers left and every WireGuard server stayed cut off for good (the Tailscale
+  ones were let back in). The panel now keeps the servers' tunnel keys, names
+  and tokens in `wg-peers.json` beside it and restores them on start; they
+  reconnect by their key, with their old history. A server you delete stays
+  deleted.
+- **A server switched from Tailscale to WireGuard dropped Tailscale the moment
+  the tunnel worked** — and with the tunnel down for any reason it had no way
+  to reach the panel. WireGuard is still tried first; the Tailscale address is
+  kept and used only while the tunnel fails. A server that never had Tailscale
+  has no fallback and behaves as before.
+- **The panel refused a WireGuard server that came in over Tailscale** even
+  with its right token. It now accepts the token, without changing the
+  server's transport or address.
+
 ## 2.2.6 — 2026-10-28
 
 ### Added

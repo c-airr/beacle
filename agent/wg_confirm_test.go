@@ -29,7 +29,19 @@ func TestAckOverFallbackDoesNotConfirmWireGuard(t *testing.T) {
 	}
 
 	r.ApplyRegisterAck(shared.RegisterResponse{VPSID: "v1"}, true)
-	if cfg.FallbackBackendURL != "" {
+	if cfg.WGTrial() || !cfg.FallbackUntil.IsZero() {
 		t.Fatal("an ack through the tunnel should confirm the switch")
+	}
+	// Confirmed, WireGuard stays first and Tailscale stays reachable, and the
+	// trial timer can no longer revert the agent.
+	if !cfg.WGFallbackActive() {
+		t.Fatal("a confirmed switch lost its Tailscale fallback")
+	}
+	if transportStatus(cfg).Pending != "" {
+		t.Fatal("a confirmed switch still reports pending")
+	}
+	transport.expireWireGuardTrial(cfg)
+	if !cfg.IsWireGuard() || cfg.BackendURL != "http://10.87.0.1:9930" {
+		t.Fatal("the expired trial timer reverted a confirmed switch")
 	}
 }

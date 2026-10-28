@@ -151,15 +151,15 @@ func (r *Reporter) ApplyRegisterAck(ack shared.RegisterResponse, viaTunnel bool)
 			c.Token = ack.Token
 			changed = true
 		}
-		if viaTunnel && c.IsWireGuard() && c.FallbackBackendURL != "" {
-			// The panel answered through the tunnel: the trial switch worked
-			// and there is nothing to fall back to any more. An ack over the
-			// Tailscale fallback proves nothing — treating it as success
-			// dropped the fallback and stranded the agent on a dead tunnel
-			// at the next panel restart.
-			c.FallbackBackendURL, c.FallbackUntil = "", time.Time{}
+		if viaTunnel && c.IsWireGuard() && !c.FallbackUntil.IsZero() {
+			// The panel answered through the tunnel: the trial switch worked.
+			// The Tailscale URL stays as a way round a dead tunnel, but the
+			// agent no longer reverts to it. An ack over that fallback proves
+			// nothing — treating it as success once stranded the agent on a
+			// dead tunnel at the next panel restart.
+			c.FallbackUntil = time.Time{}
 			changed = true
-			log.Printf("wireguard: switch confirmed, Tailscale fallback dropped")
+			log.Printf("wireguard: switch confirmed, Tailscale kept as fallback")
 		}
 		return changed
 	})

@@ -28,10 +28,11 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 
 	if tokenEntry != nil {
 		if tokenEntry.VPS.IsWireGuard() {
-			// Its token alone does not open it from the Tailscale side — the
-			// WireGuard key is the identity, and the switch-back path clears
-			// the transport before the agent dials here.
-			return nil, shared.RegisterResponse{}, fmt.Errorf("this server is connected over WireGuard")
+			// A WireGuard agent that came here is on its Tailscale fallback
+			// (the tunnel is down). Its token is the proof; the transport and
+			// the address the panel knows it by stay as they are.
+			updated := s.store.UpdateVPS(tokenEntry.VPS.ID, func(e *VPSEntry) { applyAgentOnline(e, req, "", "") })
+			return updated, ackFor(updated), nil
 		}
 		updated := s.store.UpdateVPS(tokenEntry.VPS.ID, applyOnline)
 		return updated, ackFor(updated), nil
