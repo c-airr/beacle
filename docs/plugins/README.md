@@ -456,13 +456,21 @@ in VS Code (the *Lua* extension by sumneko) and other editors. Put a
 | `beacle.http` | 10 s |
 | `beacle.store` | 64 KiB per plugin, per side (backend and each agent have their own) |
 | Package files | 1 MiB each |
+| Memory, one call | 32 MiB more than when the call began |
+| Memory kept between calls | 32 MiB of Lua values |
+| `string.rep`, `string.gsub`, `table.concat` | refuse a result over 32 MiB |
+| Values handed to the host (JSON, slot blocks) | 262,144 values, 16 MiB of strings |
 
 A call that runs past its time — an endless loop included — is stopped and
 counts as an error; the plugin stays usable.
 
-What the sandbox does **not** do: limit memory. A plugin that builds a
-gigabyte string can still hurt the agent. Install plugins you have read, as
-you would a script you run as root.
+A call that runs away with memory is stopped too. Twice in a row (once,
+when no other plugin was running at the time) stops the plugin, as does a
+plugin keeping more than its share between calls; its card says why. The
+check runs every few milliseconds, so a loop that doubles a string can
+still reach a few hundred MB before it is cut off. That is not the
+isolation of a separate process: install plugins you have read, as you
+would a script you run as root.
 
 Everything a plugin can do is reachable only from your own computer: the
 panel's API listens on loopback and refuses browsers, and an agent takes

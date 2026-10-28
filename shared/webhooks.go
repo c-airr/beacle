@@ -90,6 +90,10 @@ type WatchdogConfig struct {
 	PrimaryID string          `json:"primary_id"`
 	Webhooks  []WebhookTarget `json:"webhooks"`
 	Peers     []WatchdogPeer  `json:"peers"`
+	// PanelQuietMin, when set, is how long the panel may be unreachable
+	// before the watcher says so. Zero: never (the default — the panel is
+	// a desktop app, and a closed lid is no news).
+	PanelQuietMin int `json:"panel_quiet_min,omitempty"`
 }
 
 // WatchdogStatus is the panel-facing summary (counts, never secret URLs).

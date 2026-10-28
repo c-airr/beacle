@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.6 — 2026-10-28
 
 ### Added
 
@@ -16,6 +16,12 @@
   itself after an install from the Marketplace. New blocks and helpers for
   it: `ui.checklist`, `ui.input{ secret = true, args }` (also committed
   when leaving the field) and `beacle.base64`.
+- **A notice when the panel stops answering, if you want one** — Settings
+  → Notifications → *When the panel stops answering*: after 15 min, 1 h or
+  6 h without the panel, the watchers tell your webhooks, and again when
+  it is back. Off by default, for a panel on a laptop. Not sent while
+  another server still reaches the panel (then it is the watcher's own
+  tunnel), nor by a watcher that is cut off itself.
 - **Uptime Kuma plugin** — your Uptime Kuma's monitors in a tab, with
   response times, alerts while one is down and an Overview card. Reads
   `/metrics` with an API key or a public status page; set up on its own
@@ -36,12 +42,21 @@
   was told about a server going down. It now runs, probes a server's agent
   before SSH and ping, and does not blame the fleet when it is the one cut
   off. It no longer sends "Beacle backend offline" when the panel is
-  closed or this computer's internet drops.
+  closed or this computer's internet drops, unless you ask for it (above).
 - **A server waiting for its agent could be taken by another machine on
   the tailnet** — saying the server's name or IP in its register frame was
   enough to get its token and the commands meant for it. A waiting server
   is now matched by the address the agent connects from, or the name
   Tailscale gives that address.
+- **After the panel's data was reset, any machine on the tailnet could join
+  the fleet** — an agent with an ID and token the panel no longer knew was
+  adopted on its word, and could be elected a watcher and get the webhook
+  URLs. It now waits until you let it in: a banner lists the servers
+  asking, with the address and Tailscale name the panel checked itself.
+- **A plugin could take the agent or the panel down with memory** — a
+  string doubled in a loop, a table grown without end or one `string.rep`
+  call. A call that grows the heap past 32 MiB is stopped, a repeat stops
+  the plugin, and so does a plugin keeping more than 32 MiB between calls.
 - **The install dialog called some programs harmless that run anything**
   — `git`, `tar`, `sed`, `docker`, `systemd-run`, `timeout`, `nice` and
   the like take a command in their arguments, and `python3.11` slipped

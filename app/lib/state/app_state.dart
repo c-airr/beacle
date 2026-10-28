@@ -206,6 +206,25 @@ class AppState extends ChangeNotifier {
   bool internetUp = true;
   DateTime? internetDownSince;
 
+  /// Agents the registry no longer knows (state.json reset, restored
+  /// backup) asking to be let back in. Only `ip` and `tailnet_name` are
+  /// verified; the rest is what the agent says about itself.
+  List<Map<String, dynamic>> rejoin = [];
+
+  void _applyRejoin(Object? j) {
+    rejoin = ((j as List?) ?? []).whereType<Map<String, dynamic>>().toList();
+  }
+
+  Future<void> answerRejoin(String ip, bool letIn) async {
+    if (letIn) {
+      await api.post('/api/vps/rejoin/${Uri.encodeComponent(ip)}');
+    } else {
+      await api.delete('/api/vps/rejoin/${Uri.encodeComponent(ip)}');
+    }
+    rejoin = rejoin.where((r) => r['ip'] != ip).toList();
+    notifyListeners();
+  }
+
   void _applyLocalNet(Object? j) {
     if (j is! Map<String, dynamic>) return;
     internetUp = j['online'] != false;
@@ -435,6 +454,7 @@ class AppState extends ChangeNotifier {
       actions = ((o['actions'] as List?) ?? []).map((e) => ActionLog.fromJson(e)).toList().reversed.toList();
       links = ((o['links'] as List?) ?? []).map((e) => VpsLink.fromJson(e)).toList();
       _applyLocalNet(o['local_net']);
+      _applyRejoin(o['rejoin']);
       lastError = null;
       _sampleFleet(force: true);
     } catch (e) {
@@ -559,6 +579,9 @@ class AppState extends ChangeNotifier {
         break;
       case 'local_net':
         _applyLocalNet(payload);
+        break;
+      case 'rejoin':
+        _applyRejoin(payload);
         break;
       case 'plugins':
         unawaited(refreshPlugins());

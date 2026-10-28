@@ -131,3 +131,26 @@ func TestWebhookTargetsSurviveARestartAndReportSaveErrors(t *testing.T) {
 		t.Fatal("failed save reported as success")
 	}
 }
+
+func TestPanelQuietSettingSurvivesARestart(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := NewWebhookService(dir, store, nil, nil)
+	if w.PanelQuiet() != 0 {
+		t.Fatal("the panel-quiet notice must be off unless asked for")
+	}
+	for _, bad := range []int{-1, 1, 24*60 + 1} {
+		if err := w.SetPanelQuiet(bad); err == nil {
+			t.Errorf("%d minutes accepted", bad)
+		}
+	}
+	if err := w.SetPanelQuiet(60); err != nil {
+		t.Fatal(err)
+	}
+	if got := NewWebhookService(dir, store, nil, nil).PanelQuiet(); got != 60 {
+		t.Fatalf("after restart: %d", got)
+	}
+}

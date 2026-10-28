@@ -1151,6 +1151,43 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     }
   }
 
+  Future<void> _setPanelQuiet(int minutes) async {
+    setState(() => whStatus = null);
+    try {
+      context.read<AppState>().onUserAction();
+      await context.read<AppState>().api.setPanelQuiet(minutes);
+      await _loadWebhooks();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => whStatus = '$e');
+    }
+  }
+
+  /// Off by default: the panel is a desktop app, and a closed lid or the
+  /// home line dropping is no news. Someone running it on an always-on
+  /// machine wants to hear when it stops.
+  Widget _panelQuietChoice() {
+    final l = context.l;
+    final current = webhooks!.panelQuietMin;
+    final options = <String, String>{
+      '0': l.t('whPanelQuietNever'),
+      '15': l.f('whPanelQuietMin', {'n': 15}),
+      '60': l.f('whPanelQuietHours', {'n': 1}),
+      '360': l.f('whPanelQuietHours', {'n': 6}),
+    };
+    options.putIfAbsent('$current', () => l.f('whPanelQuietMin', {'n': current}));
+    return _choice(
+      label: l.t('whPanelQuiet'),
+      detail: l.t('whPanelQuietHint'),
+      value: '$current',
+      options: options,
+      onChanged: (v) {
+        final n = int.tryParse(v) ?? 0;
+        if (n != current) _setPanelQuiet(n);
+      },
+    );
+  }
+
   /// One sender seat: automatic or a chosen server, with who actually holds
   /// the seat right now underneath (a chosen server that is offline is
   /// stood in for by the automatic pick).
@@ -1250,6 +1287,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     other: webhooks!.pinnedPrimary,
                     current: webhooks!.secondary,
                     onChanged: (id) => _setSenders(webhooks!.pinnedPrimary, id)),
+                const SizedBox(height: 12),
+                _panelQuietChoice(),
               ],
             ],
           ),

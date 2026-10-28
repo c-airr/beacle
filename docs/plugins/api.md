@@ -571,6 +571,9 @@ other's variables. Reading another plugin's metrics goes through
 | `http` | 10 s |
 | `store` | 64 KiB of JSON per side |
 | Each package file | 1 MiB; an uploaded .zip up to 8 MiB |
+| Memory *2.2.6* | 32 MiB of growth per call, 32 MiB kept between calls; over it the call is stopped, and a repeat (or the state kept) stops the plugin |
+| `string.rep`, `string.gsub`, `table.concat` *2.2.6* | a result over 32 MiB is a Lua error |
+| A value handed to the host *2.2.6* | 262,144 values or 16 MiB of strings; past that, `nil` |
 
 ## Agents
 

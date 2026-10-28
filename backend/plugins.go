@@ -457,8 +457,10 @@ func (p *Plugins) startBackend(bp *backendPlugin) {
 	rt.Set("slot", func(L *lua.LState) int {
 		name := L.CheckString(1)
 		opts, _ := plugin.ToGo(L.OptTable(2, L.NewTable())).(map[string]any)
+		fn := L.CheckFunction(3)
+		rt.Keep(fn)
 		bp.mu.Lock()
-		bp.slots = append(bp.slots, pluginSlot{name: name, opts: opts, fn: L.CheckFunction(3)})
+		bp.slots = append(bp.slots, pluginSlot{name: name, opts: opts, fn: fn})
 		bp.mu.Unlock()
 		return 0
 	})
