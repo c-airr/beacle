@@ -40,6 +40,11 @@ type Runtime struct {
 	tasks    []task
 	stop     chan struct{}
 	closed   bool
+	// kept are Lua values the host holds outside the state (slot
+	// functions), counted with it by stateSize.
+	kept      []lua.LValue
+	memStrike int
+	sizedAt   time.Time
 
 	// Read from other goroutines while a call may hold mu for seconds.
 	dataMu   sync.Mutex
@@ -76,6 +81,7 @@ func New(m Manifest, storePath string) *Runtime {
 	for _, name := range []string{"dofile", "loadfile", "load", "loadstring", "require", "module", "_printregs", "collectgarbage"} {
 		L.SetGlobal(name, lua.LNil)
 	}
+	guardLibs(L)
 	r := &Runtime{
 		Manifest:  m,
 		L:         L,
@@ -123,6 +129,12 @@ func (r *Runtime) SetIn(table, name string, fn lua.LGFunction) {
 	t.RawSetString(name, r.L.NewFunction(fn))
 }
 
+// Keep tells the runtime the host holds v (a slot function), so what it
+// keeps alive counts towards the plugin's memory.
+func (r *Runtime) Keep(v lua.LValue) {
+	r.kept = append(r.kept, v)
+}
+
 // Load runs the plugin's top-level chunk (which registers tasks, handlers,
 // slots) and starts its tasks.
 func (r *Runtime) Load(src, chunk string) error {
@@ -149,11 +161,23 @@ func (r *Runtime) Load(src, chunk string) error {
 // Lua table outside the lock would race a running task. A Lua error,
 // including an interrupted endless loop, comes back as err with the plugin
 // still usable.
+//
+// A call that runs away with memory is cancelled (see memory.go). Twice in
+// a row, or once while it was the only plugin running so the blame is
+// certain, stops the plugin.
 func (r *Runtime) Call(fn *lua.LFunction, timeout time.Duration, args ...any) (any, error) {
+	ret, err, stop := r.call(fn, timeout, args)
+	if stop != nil {
+		r.fail(stop)
+	}
+	return ret, err
+}
+
+func (r *Runtime) call(fn *lua.LFunction, timeout time.Duration, args []any) (ret any, err, stop error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
-		return nil, errors.New("plugin stopped")
+		return nil, errors.New("plugin stopped"), nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -163,15 +187,44 @@ func (r *Runtime) Call(fn *lua.LFunction, timeout time.Duration, args ...any) (a
 	for i, a := range args {
 		largs[i] = FromGo(r.L, a)
 	}
-	if err := r.L.CallByParam(lua.P{Fn: fn, NRet: 1, Protect: true}, largs...); err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("timed out after %s", timeout)
+	mc := watch.enter(cancel)
+	callErr := r.L.CallByParam(lua.P{Fn: fn, NRet: 1, Protect: true}, largs...)
+	if over, alone := watch.leave(mc); over {
+		// Drop what the runaway call built before anything else allocates.
+		r.L.SetTop(0)
+		r.memStrike++
+		if alone {
+			r.memStrike++
 		}
-		return nil, luaErr(err)
+		err = errMemory{CallMemoryLimit}
+		if r.memStrike >= 2 {
+			return nil, err, err
+		}
+		return nil, err, nil
 	}
-	ret := ToGo(r.L.Get(-1))
+	if callErr != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("timed out after %s", timeout), nil
+		}
+		return nil, luaErr(callErr), nil
+	}
+	r.memStrike = 0
+	ret = ToGo(r.L.Get(-1))
 	r.L.Pop(1)
-	return ret, nil
+	if time.Since(r.sizedAt) >= sizeEvery {
+		r.sizedAt = time.Now()
+		roots := append([]lua.LValue{r.L.G.Global, r.L.G.Registry}, r.kept...)
+		for _, h := range r.handlers {
+			roots = append(roots, h)
+		}
+		for _, t := range r.tasks {
+			roots = append(roots, t.fn)
+		}
+		if n := stateSize(roots, RetainedMemoryLimit); n > RetainedMemoryLimit {
+			return ret, nil, fmt.Errorf("keeps more than %d MB in memory", RetainedMemoryLimit>>20)
+		}
+	}
+	return ret, nil, nil
 }
 
 // Handle calls a handler registered with beacle.on.

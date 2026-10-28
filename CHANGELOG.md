@@ -42,6 +42,15 @@
   enough to get its token and the commands meant for it. A waiting server
   is now matched by the address the agent connects from, or the name
   Tailscale gives that address.
+- **After the panel's data was reset, any machine on the tailnet could join
+  the fleet** — an agent with an ID and token the panel no longer knew was
+  adopted on its word, and could be elected a watcher and get the webhook
+  URLs. It now waits until you let it in: a banner lists the servers
+  asking, with the address and Tailscale name the panel checked itself.
+- **A plugin could take the agent or the panel down with memory** — a
+  string doubled in a loop, a table grown without end or one `string.rep`
+  call. A call that grows the heap past 32 MiB is stopped, a repeat stops
+  the plugin, and so does a plugin keeping more than 32 MiB between calls.
 - **The install dialog called some programs harmless that run anything**
   — `git`, `tar`, `sed`, `docker`, `systemd-run`, `timeout`, `nice` and
   the like take a command in their arguments, and `python3.11` slipped
