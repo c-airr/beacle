@@ -569,7 +569,25 @@ func (s *Server) handleGetWebhooks(w http.ResponseWriter, r *http.Request) {
 		"secondary":        secondary,
 		"pinned_primary":   pinP,
 		"pinned_secondary": pinS,
+		"panel_quiet_min":  s.webhooks.PanelQuiet(),
 	})
+}
+
+// handlePutPanelQuiet sets how long the panel may be unreachable before the
+// watchers tell the webhooks (0: never).
+func (s *Server) handlePutPanelQuiet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Minutes int `json:"minutes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	if err := s.webhooks.SetPanelQuiet(req.Minutes); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // handlePutWebhookSenders pins the primary/backup watcher ("" = automatic).
@@ -662,6 +680,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/webhooks", s.handleGetWebhooks)
 	mux.HandleFunc("PUT /api/webhooks", s.handlePutWebhooks)
 	mux.HandleFunc("PUT /api/webhooks/senders", s.handlePutWebhookSenders)
+	mux.HandleFunc("PUT /api/webhooks/panel-quiet", s.handlePutPanelQuiet)
 	mux.HandleFunc("POST /api/webhooks/test", s.handleTestWebhooks)
 	mux.HandleFunc("GET /api/actions", s.handleActions)
 	mux.HandleFunc("/api/links", s.handleLinks)

@@ -112,8 +112,15 @@ var livenessHTTP = &http.Client{Timeout: 4 * time.Second}
 // (older agent, firewall, dead process) is "not alive", so a verification
 // can only ever suppress an alert on positive proof.
 func agentAlive(peer shared.WatchdogPeer) bool {
+	_, ok := agentLiveness(peer)
+	return ok
+}
+
+// agentLiveness is the peer's answer, ok only from the right agent.
+func agentLiveness(peer shared.WatchdogPeer) (shared.AgentLiveness, bool) {
+	var live shared.AgentLiveness
 	if peer.Host == "" {
-		return false
+		return live, false
 	}
 	port := peer.AgentPort
 	if port == 0 {
@@ -122,15 +129,14 @@ func agentAlive(peer shared.WatchdogPeer) bool {
 	url := "http://" + net.JoinHostPort(peer.Host, strconv.Itoa(port)) + shared.AgentLivenessPath
 	resp, err := livenessHTTP.Get(url)
 	if err != nil {
-		return false
+		return live, false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return false
+		return live, false
 	}
-	var live shared.AgentLiveness
 	if err := json.NewDecoder(resp.Body).Decode(&live); err != nil {
-		return false
+		return live, false
 	}
-	return live.ID != "" && live.ID == peer.ID
+	return live, live.ID != "" && live.ID == peer.ID
 }

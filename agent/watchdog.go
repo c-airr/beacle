@@ -22,8 +22,10 @@ import (
 // is up the backend owns all alerting and the loop merely tracks state — a
 // notice is only ever sent by one side.
 //
-// The panel going quiet is not announced: it is a desktop app, and closing
-// the lid or the home line dropping is no news to the person it would page.
+// The panel going quiet is announced only when asked for in Settings →
+// Notifications, after the delay chosen there: it is a desktop app, and
+// closing the lid or the home line dropping is no news to most people it
+// would page. Someone running it on an always-on machine wants to know.
 //
 // Peers are probed over Tailscale: the agent's liveness route first, then TCP
 // to SSH, then ICMP ping, so a host with a closed SSH port still reads as up.
@@ -43,6 +45,10 @@ type watchdog struct {
 	announced map[string]bool // peer id -> down notice sent
 	// isolated is set while no peer answers this watcher (see cutOff).
 	isolated bool
+	// panelLost is when this watcher's tunnel to the panel went down;
+	// panelNoticed, that it said so (and owes a "back" notice).
+	panelLost    time.Time
+	panelNoticed bool
 }
 
 var wd = &watchdog{down: map[string]int{}, announced: map[string]bool{}}
@@ -117,6 +123,7 @@ func (w *watchdog) sendAll(msg shared.WebhookMessage) error {
 // Seams for tests: the network probes a verification runs, and delivery.
 var (
 	probeAgent  = agentAlive
+	probePanel  = panelSeenBy
 	probeHost   = peerUp
 	probePeer   = peerReachable
 	internetUp  = lineUp
@@ -315,9 +322,93 @@ func watchdogTickOnce(cfg *Config, tunnel tunnelState) {
 		// Track peers silently so a backend outage starts from warm state,
 		// but never announce while the backend owns alerting.
 		wd.probePeers(wc, false)
+		wd.panelBack()
 		return
 	}
 	wd.probePeers(wc, true)
+	wd.panelQuiet(wc)
+}
+
+// panelSeenBy reports whether the peer's own tunnel to the panel is up.
+func panelSeenBy(p shared.WatchdogPeer) bool {
+	live, ok := agentLiveness(p)
+	return ok && live.Backend
+}
+
+// panelQuiet says once that the panel is unreachable, if asked to and once
+// it has been for the chosen time. Not while this watcher is cut off itself,
+// and not while another server still reaches the panel: then it is this
+// watcher's tunnel that is down.
+func (w *watchdog) panelQuiet(wc shared.WatchdogConfig) {
+	now := time.Now()
+	w.mu.Lock()
+	if w.panelLost.IsZero() {
+		w.panelLost = now
+	}
+	quiet := now.Sub(w.panelLost)
+	skip := wc.PanelQuietMin <= 0 || w.panelNoticed || w.isolated || !w.allowedToSendLocked(wc) ||
+		quiet < time.Duration(wc.PanelQuietMin)*time.Minute
+	w.mu.Unlock()
+	if skip {
+		return
+	}
+	var others []shared.WatchdogPeer
+	for _, p := range wc.Peers {
+		if p.ID != wc.SelfID {
+			others = append(others, p)
+		}
+	}
+	seen := make([]bool, len(others))
+	var wg sync.WaitGroup
+	for i, p := range others {
+		wg.Go(func() { seen[i] = probePanel(p) })
+	}
+	wg.Wait()
+	for i, s := range seen {
+		if s {
+			log.Printf("watchdog: no tunnel to the panel, but %s has one — not announcing", others[i].Name)
+			return
+		}
+	}
+	err := w.sendAll(shared.WebhookMessage{
+		Title:    "[warning] Beacle panel is not answering",
+		Body:     fmt.Sprintf("No server has heard from the panel for %s: the computer it runs on is off or asleep, or lost its internet. The servers are still watched, by %s.", quiet.Round(time.Minute), w.selfName(wc)),
+		Severity: "warning",
+	})
+	if err != nil {
+		log.Printf("watchdog: panel notice failed: %v", err)
+		return
+	}
+	w.mu.Lock()
+	w.panelNoticed = true
+	w.mu.Unlock()
+}
+
+// panelBack follows a panel-unreachable notice with one saying it is back.
+func (w *watchdog) panelBack() {
+	w.mu.Lock()
+	lost, noticed := w.panelLost, w.panelNoticed
+	w.panelLost, w.panelNoticed = time.Time{}, false
+	w.mu.Unlock()
+	if !noticed {
+		return
+	}
+	if err := w.sendAll(shared.WebhookMessage{
+		Title:    "[info] Beacle panel is back",
+		Body:     fmt.Sprintf("The panel answers again after %s.", time.Since(lost).Round(time.Minute)),
+		Severity: "info",
+	}); err != nil {
+		log.Printf("watchdog: panel-back notice failed: %v", err)
+	}
+}
+
+func (w *watchdog) selfName(wc shared.WatchdogConfig) string {
+	for _, p := range wc.Peers {
+		if p.ID == wc.SelfID {
+			return p.Name
+		}
+	}
+	return "a watcher"
 }
 
 // allowedToSendLocked implements the primary/secondary rule: the secondary

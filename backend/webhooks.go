@@ -55,6 +55,9 @@ type WebhookService struct {
 	// Pinned watchers; blank means automatic.
 	pinPrimary   string
 	pinSecondary string
+	// panelQuietMin: tell the webhooks when the panel has been unreachable
+	// this long; 0 never.
+	panelQuietMin int
 
 	store    *Store
 	agentHub *AgentHub
@@ -79,22 +82,24 @@ func NewWebhookService(dataDir string, store *Store, hub *AgentHub, history *His
 			w.targets = saved.Targets
 			w.pinPrimary = saved.Primary
 			w.pinSecondary = saved.Secondary
+			w.panelQuietMin = saved.PanelQuietMin
 		}
 	}
 	return w
 }
 
 type webhooksFile struct {
-	Targets   []shared.WebhookTarget `json:"targets"`
-	Primary   string                 `json:"primary_id,omitempty"`
-	Secondary string                 `json:"secondary_id,omitempty"`
+	Targets       []shared.WebhookTarget `json:"targets"`
+	Primary       string                 `json:"primary_id,omitempty"`
+	Secondary     string                 `json:"secondary_id,omitempty"`
+	PanelQuietMin int                    `json:"panel_quiet_min,omitempty"`
 }
 
 // persistLocked writes through a temporary file: a write cut short must not
 // leave a truncated webhooks.json, which loads as no destinations at all.
 func (w *WebhookService) persistLocked() error {
 	data, err := json.MarshalIndent(webhooksFile{
-		Targets: w.targets, Primary: w.pinPrimary, Secondary: w.pinSecondary,
+		Targets: w.targets, Primary: w.pinPrimary, Secondary: w.pinSecondary, PanelQuietMin: w.panelQuietMin,
 	}, "", "  ")
 	if err != nil {
 		return err
@@ -147,6 +152,27 @@ func (w *WebhookService) Pins() (primary, secondary string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.pinPrimary, w.pinSecondary
+}
+
+// PanelQuiet is how long the panel may be unreachable before the watchers
+// say so; 0 never.
+func (w *WebhookService) PanelQuiet() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.panelQuietMin
+}
+
+// SetPanelQuiet sets it: 0, or 5 minutes to a day.
+func (w *WebhookService) SetPanelQuiet(min int) error {
+	if min != 0 && (min < 5 || min > 24*60) {
+		return fmt.Errorf("between 5 minutes and a day, or 0 for never")
+	}
+	w.mu.Lock()
+	w.panelQuietMin = min
+	err := w.persistLocked()
+	w.mu.Unlock()
+	go w.SyncWatchers()
+	return err
 }
 
 // SetPins pins either seat to a server, or back to automatic with "". The
@@ -362,6 +388,7 @@ func (w *WebhookService) SyncWatchers() {
 			wc.PrimaryID = primaryID
 			wc.Webhooks = targets
 			wc.Peers = peers
+			wc.PanelQuietMin = w.PanelQuiet()
 		}
 		body, _ := json.Marshal(wc)
 		_, code, err := w.agentHub.Request(v.ID, "POST", "/api/watchdog/config", body, watchdogPushBudget)

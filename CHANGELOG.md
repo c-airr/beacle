@@ -16,6 +16,12 @@
   itself after an install from the Marketplace. New blocks and helpers for
   it: `ui.checklist`, `ui.input{ secret = true, args }` (also committed
   when leaving the field) and `beacle.base64`.
+- **A notice when the panel stops answering, if you want one** — Settings
+  → Notifications → *When the panel stops answering*: after 15 min, 1 h or
+  6 h without the panel, the watchers tell your webhooks, and again when
+  it is back. Off by default, for a panel on a laptop. Not sent while
+  another server still reaches the panel (then it is the watcher's own
+  tunnel), nor by a watcher that is cut off itself.
 - **Uptime Kuma plugin** — your Uptime Kuma's monitors in a tab, with
   response times, alerts while one is down and an Overview card. Reads
   `/metrics` with an API key or a public status page; set up on its own
@@ -36,7 +42,7 @@
   was told about a server going down. It now runs, probes a server's agent
   before SSH and ping, and does not blame the fleet when it is the one cut
   off. It no longer sends "Beacle backend offline" when the panel is
-  closed or this computer's internet drops.
+  closed or this computer's internet drops, unless you ask for it (above).
 - **A server waiting for its agent could be taken by another machine on
   the tailnet** — saying the server's name or IP in its register frame was
   enough to get its token and the commands meant for it. A waiting server

@@ -713,8 +713,13 @@ class WebhooksConfig {
 
   /// Servers chosen by hand for each seat; empty means automatic.
   final String pinnedPrimary, pinnedSecondary;
+
+  /// Minutes the panel may be unreachable before the watchers say so; 0
+  /// never.
+  final int panelQuietMin;
   WebhooksConfig.fromJson(Map<String, dynamic> j)
       : targets = _list(j['targets'], WebhookTarget.fromJson),
+        panelQuietMin = (j['panel_quiet_min'] as num?)?.toInt() ?? 0,
         pinnedPrimary = _s(j['pinned_primary']),
         pinnedSecondary = _s(j['pinned_secondary']),
         primary = j['primary'] is Map<String, dynamic>

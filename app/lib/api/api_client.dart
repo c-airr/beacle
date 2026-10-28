@@ -171,6 +171,10 @@ class ApiClient {
       put('/api/webhooks/senders',
           body: {'primary_id': primaryId, 'secondary_id': secondaryId});
 
+  /// How long the panel may be unreachable before the watchers tell the
+  /// webhooks; 0 never.
+  Future<void> setPanelQuiet(int minutes) => put('/api/webhooks/panel-quiet', body: {'minutes': minutes});
+
   Future<String> testWebhooks() async =>
       ((await post('/api/webhooks/test')) as Map)['via'] as String? ?? '';
 
