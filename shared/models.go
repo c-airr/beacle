@@ -1214,6 +1214,7 @@ const (
 	WSActionLog  WSMessageType = "action"      // payload: ActionLog
 	WSLocalNet   WSMessageType = "local_net"   // payload: LocalNetStatus
 	WSPlugins    WSMessageType = "plugins"     // no payload: GET /api/plugins again
+	WSRejoin     WSMessageType = "rejoin"      // payload: agents waiting to be let back in
 )
 
 // LocalNetStatus is whether the computer running Beacle can reach the

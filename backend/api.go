@@ -31,6 +31,7 @@ type Server struct {
 	spikes    *Spikes
 	sshHosts  *SSHHosts
 	plugins   *Plugins
+	rejoins   rejoinQueue
 
 	uiPowerMu   sync.RWMutex
 	uiPowerMode shared.PowerMode
@@ -253,6 +254,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		"actions":   s.store.ListActions(),
 		"links":     s.store.ListLinks(),
 		"local_net": s.alerts.LocalNetStatus(),
+		"rejoin":    s.rejoins.list(),
 	})
 }
 
@@ -640,6 +642,9 @@ func (s *Server) Routes() http.Handler {
 
 	// ui
 	mux.HandleFunc("GET /api/vps", s.handleListVPS)
+	mux.HandleFunc("GET /api/vps/rejoin", s.handleListRejoin)
+	mux.HandleFunc("POST /api/vps/rejoin/{ip}", s.handleApproveRejoin)
+	mux.HandleFunc("DELETE /api/vps/rejoin/{ip}", s.handleRefuseRejoin)
 	mux.HandleFunc("/api/vps/{id}", s.handleVPSByID)
 	mux.HandleFunc("GET /api/install-command", s.handleInstallCommand)
 	mux.HandleFunc("GET /api/vps/{id}/history", s.handleVPSHistory)

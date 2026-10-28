@@ -16,6 +16,7 @@ import '../theme.dart';
 import '../update/app_updater.dart';
 import '../tool_window.dart';
 import '../user_config.dart';
+import '../widgets/rejoin_dialog.dart';
 import '../widgets/activity_scope.dart';
 import '../widgets/add_vps_dialog.dart';
 import '../widgets/wg_switch.dart';
@@ -351,6 +352,7 @@ class AppShellState extends State<AppShell> {
                           _buildTopBar(state),
                           if (state.connected && !state.internetUp) _buildNoInternetBanner(state),
                           if (state.availableUpdate != null) _buildUpdateBanner(state),
+                          if (state.rejoin.isNotEmpty && !state.viewerOnly) _buildRejoinBanner(state),
                           if (wgBanner != null) wgBanner,
                           Expanded(child: _content()),
                         ],
@@ -569,6 +571,44 @@ class AppShellState extends State<AppShell> {
                 s.raw[_wgBannerDismissKey] = true;
                 s.save();
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Agents the panel no longer knows, waiting to be let back in. Not
+  /// automatic: anyone on the tailnet can present a made-up server ID.
+  Widget _buildRejoinBanner(AppState state) {
+    final r = state.rejoin.first;
+    final name = '${r['tailnet_name'] ?? ''}'.isNotEmpty ? '${r['tailnet_name']}' : '${r['ip']}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.only(left: 16, right: 6),
+        decoration: BoxDecoration(
+          color: BeacleColors.warn.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BeacleColors.warn.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.how_to_reg_outlined, size: 16, color: BeacleColors.warn),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                state.rejoin.length == 1
+                    ? context.l.f('rejoinBannerOne', {'name': name})
+                    : context.l.f('rejoinBannerMany', {'n': state.rejoin.length}),
+                style: TextStyle(fontSize: 12.5, color: BeacleColors.text, height: 1.2),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton(
+              onPressed: () => showRejoinDialog(context),
+              child: Text(context.l.t('rejoinReview'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

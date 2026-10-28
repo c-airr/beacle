@@ -68,14 +68,25 @@ func (s *Server) registerAgent(req shared.RegisterRequest, remoteIP, rawToken st
 	if pending == nil && !known {
 		// The agent already holds credentials from an earlier registration but
 		// the registry no longer knows them (state.json reset / restored from a
-		// backup / panel reinstalled). Adopt it back under its own ID and token
-		// rather than leaving a healthy agent permanently rejected.
+		// backup / panel reinstalled). One on this computer is adopted back
+		// under its own ID and token; any other waits for the person at the
+		// panel to let it in (see rejoin.go).
 		if rawToken != "" || req.VPSID != "" {
-			entry := s.store.AdoptVPS(req.VPSID, rawToken, req.Hostname, host, tsName, req.AgentVersion)
-			entry = s.store.UpdateVPS(entry.VPS.ID, applyOnline)
-			log.Printf("adopted agent %s (%s) — was missing from registry", entry.VPS.Name, entry.VPS.ID)
-			s.logAction(entry.VPS, "vps_adopt", "Agent re-adopted with existing credentials", true)
-			return entry, ackFor(entry), nil
+			if net.ParseIP(remoteIP).IsLoopback() {
+				entry := s.store.AdoptVPS(req.VPSID, rawToken, req.Hostname, host, tsName, req.AgentVersion)
+				entry = s.store.UpdateVPS(entry.VPS.ID, applyOnline)
+				log.Printf("adopted agent %s (%s) — was missing from registry", entry.VPS.Name, entry.VPS.ID)
+				s.logAction(entry.VPS, "vps_adopt", "Agent re-adopted with existing credentials", true)
+				return entry, ackFor(entry), nil
+			}
+			if s.rejoins.knock(rejoinRequest{
+				IP: remoteIP, TailnetName: tailnetName(remoteIP), VPSID: req.VPSID,
+				Hostname: req.Hostname, AgentVersion: req.AgentVersion,
+			}, rawToken) {
+				log.Printf("agent at %s (%q) asks to rejoin — waiting for approval in the panel", remoteIP, req.Hostname)
+				s.broadcastRejoin()
+			}
+			return nil, shared.RegisterResponse{}, fmt.Errorf("this server is not in Beacle's list any more — let it back in from the panel")
 		}
 		return nil, shared.RegisterResponse{}, fmt.Errorf("no matching VPS — add this server in Beacle first")
 	}
