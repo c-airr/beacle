@@ -44,15 +44,16 @@
   .btn:hover { filter: brightness(1.1); }
 
   /* hero */
-  .hero { display: grid; grid-template-columns: 5fr 7fr; gap: 56px; align-items: center; padding-top: 88px; padding-bottom: 8px; position: relative; }
+  .hero { display: grid; gap: 48px; padding-top: 88px; padding-bottom: 8px; position: relative; }
   .hero::before { content: ''; position: absolute; inset: 0; z-index: -1;
     background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 40px 40px;
     -webkit-mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 70%); mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 70%); opacity: .6; }
   .hero > * { min-width: 0; }
+  .hero-top { display: grid; grid-template-columns: 7fr 5fr; column-gap: 56px; align-items: end; }
   .prompt { color: var(--dim); }
   .prompt::before { content: '$ '; color: var(--ok); }
-  .hero h1 { font-size: clamp(36px, 4.6vw, 56px); line-height: 1.05; letter-spacing: -.03em; margin: 18px 0 18px; font-weight: 700; }
-  .hero p { color: var(--dim); font-size: 18px; margin: 0 0 30px; }
+  .hero h1 { font-size: clamp(36px, 5.4vw, 64px); line-height: 1.05; letter-spacing: -.03em; margin: 18px 0 0; font-weight: 700; }
+  .hero p { color: var(--dim); font-size: 18px; margin: 0 0 24px; }
   .cta { display: flex; gap: 12px; flex-wrap: wrap; }
   .cta > .btn { height: 46px; padding: 0 20px; font-size: 14px; }
   .ver { color: var(--dim); font: 12px/1.9 var(--mono); margin-top: 18px; }
@@ -204,7 +205,7 @@
   @media (max-width: 900px) {
     nav .links { display: none; }
     .hint { display: none; }
-    .hero { grid-template-columns: 1fr; gap: 40px; }
+    .hero { gap: 40px; } .hero-top { grid-template-columns: 1fr; } .hero h1 { margin-bottom: 18px; }
     .how { grid-template-columns: 1fr; } .how .side2 { position: static; } .steps { display: none; }
     .dl { grid-template-columns: 1fr; }
     .scard h3 { font-size: 38px; }
@@ -231,9 +232,10 @@
 </nav>
 
 <header class="hero wrap">
-  <div>
+  <div class="hero-top"><div>
     <div class="mono prompt">beacle --fleet</div>
     <h1>Your whole VPS fleet in one window.</h1>
+  </div><div>
     <p>Docker, systemd, logs, alerts and a shell — without ten SSH tabs.</p>
     <div class="cta">
       <a class="btn light" id="dl-main" href="https://github.com/c-airr/beacle/releases/latest">Download for Windows</a>
@@ -243,7 +245,7 @@
       <a data-os="win" href="https://github.com/c-airr/beacle/releases/latest">Windows</a> ·
       <a data-os="linux" href="https://github.com/c-airr/beacle/releases/latest">Linux</a> ·
       <a data-os="mac" href="https://github.com/c-airr/beacle/releases/latest">macOS</a></div>
-  </div>
+  </div></div>
   <div>
     <div class="app-frame" id="frame">
       <img src="demo-poster.png" alt="Beacle overview screen" width="1280" height="800">
@@ -466,8 +468,6 @@ beacle.every(<span class="s">10</span>, <span class="kw">function</span>()
       <p>No. Beacle has its own WireGuard tunnel built in — nothing to install on the server but the agent, no account anywhere. A server that already has Tailscale keeps it as a fallback while the tunnel is down.</p></details>
     <details><summary>What do I have to open on the server?</summary>
       <p>One port: UDP <code>51931</code>. The agent opens it in ufw, firewalld or iptables by itself. A firewall at your provider (Oracle security list, AWS security group, Hetzner Cloud Firewall) you open by hand. Port 22 can stay closed.</p></details>
-    <details><summary>My server is at home, behind CG-NAT.</summary>
-      <p>The tunnel needs to reach the server's UDP port, so a box behind carrier NAT or behind the same router as your PC can't use it. The panel tells you that when you add the server instead of failing quietly.</p></details>
     <details><summary>What runs on my servers?</summary>
       <p>One agent, written in Go — Linux, amd64 or arm64. It reads Docker, systemd and the rest, and runs what you ask from the panel. Updated from the panel too.</p></details>
     <details><summary>How do updates work?</summary>
