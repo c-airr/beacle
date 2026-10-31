@@ -530,7 +530,7 @@ with `beacle.configure{ … }` — the plugin restarts with it.
 [`plugins/uptime-kuma`](../../plugins/uptime-kuma/backend.lua) is a whole
 example: an address and a key, *Connect*, then which monitors to watch.
 
-The Marketplace (Settings → Plugins → *Marketplace*) lists
+The Marketplace (its own tab in the sidebar) lists
 [`plugins/index.json`](../../plugins/index.json). To add a plugin there,
 put its folder under `plugins/` and an entry in the index with its `id`,
 `name`, `description`, `version` (both as in its manifest — a test checks),

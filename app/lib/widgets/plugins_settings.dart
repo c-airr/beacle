@@ -26,7 +26,6 @@ class PluginsSettings extends StatelessWidget {
         Text(l.t('plgIntro'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.5)),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          SmallButton(l.t('plgMarketplace'), icon: Icons.storefront_outlined, onPressed: () => _marketplace(context)),
           SmallButton(l.t('plgInstallZip'), icon: Icons.add, onPressed: () => _installZip(context)),
           SmallButton(l.t('plgLinkFolder'), icon: Icons.folder_open_outlined, onPressed: () => _linkFolder(context)),
         ]),
@@ -63,7 +62,7 @@ class PluginsSettings extends StatelessWidget {
     if (files.isEmpty || !context.mounted) return;
     final bytes = await File(files.first).readAsBytes();
     if (!context.mounted) return;
-    await _install(context, {'zip': base64Encode(bytes)});
+    await installPlugin(context, {'zip': base64Encode(bytes)});
   }
 
   Future<void> _linkFolder(BuildContext context) async {
@@ -89,92 +88,71 @@ class PluginsSettings extends StatelessWidget {
     );
     c.dispose();
     if (path == null || path.isEmpty || !context.mounted) return;
-    await _install(context, {'path': path});
+    await installPlugin(context, {'path': path});
   }
+}
 
-  /// The plugins in the Beacle repository, as of this build of the app.
-  Future<void> _marketplace(BuildContext context) async {
-    final state = context.read<AppState>();
-    final ref = appCommit.isNotEmpty ? appCommit : appVersion;
-    Map<String, dynamic> catalog;
-    try {
-      catalog = await state.api.get('/api/plugins/catalog?ref=${Uri.encodeQueryComponent(ref)}'
-          '&version=${Uri.encodeQueryComponent(appVersion)}') as Map<String, dynamic>;
-    } catch (e) {
-      if (context.mounted) showToast(context, context.l.f('plgCatalogError', {'error': '$e'}), error: true);
-      return;
-    }
+/// Shows what the package may do, then installs it on a yes.
+Future<void> installPlugin(BuildContext context, Map<String, dynamic> src) async {
+  final state = context.read<AppState>();
+  state.onUserAction();
+  try {
+    final info = await state.api.post('/api/plugins/inspect', body: src) as Map<String, dynamic>;
     if (!context.mounted) return;
-    final picked = await showDialog<String>(
+    final m = info['manifest'] as Map<String, dynamic>;
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => _MarketplaceDialog(plugins: [
-        for (final p in (catalog['plugins'] as List? ?? const [])) (p as Map).cast<String, dynamic>(),
-      ]),
-    );
-    if (picked == null || !context.mounted) return;
-    await _install(context, {'catalog': picked, 'ref': '${catalog['ref'] ?? ref}'});
-  }
-
-  /// Shows what the package may do, then installs it on a yes.
-  Future<void> _install(BuildContext context, Map<String, dynamic> src) async {
-    final state = context.read<AppState>();
-    state.onUserAction();
-    try {
-      final info = await state.api.post('/api/plugins/inspect', body: src) as Map<String, dynamic>;
-      if (!context.mounted) return;
-      final m = info['manifest'] as Map<String, dynamic>;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(ctx.l.f('plgConfirmTitle', {'name': m['name'], 'v': m['version']})),
-          content: SizedBox(
-            width: 460,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (info['installed_version'] != null)
-                  Text(ctx.l.f('plgUpgrade', {'v': info['installed_version']}), style: const TextStyle(fontSize: 12)),
-                if (info['new_permissions'] == true) ...[
-                  const SizedBox(height: 6),
-                  Text(ctx.l.t('plgNewPerms'), style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
-                ],
-                const SizedBox(height: 12),
-                Text(ctx.l.t('plgCanDo'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.l.f('plgConfirmTitle', {'name': m['name'], 'v': m['version']})),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (info['installed_version'] != null)
+                Text(ctx.l.f('plgUpgrade', {'v': info['installed_version']}), style: const TextStyle(fontSize: 12)),
+              if (info['new_permissions'] == true) ...[
                 const SizedBox(height: 6),
-                _Review(notes: (info['review'] as List?) ?? const []),
-                const SizedBox(height: 8),
-                Text(ctx.l.t('plgEnforced'), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-                if (_risky(info['review'])) ...[
-                  const SizedBox(height: 10),
-                  Text(ctx.l.t('plgTrustWarn'), style: TextStyle(fontSize: 12, color: BeacleColors.err)),
-                ],
+                Text(ctx.l.t('plgNewPerms'), style: TextStyle(fontSize: 12, color: BeacleColors.warn)),
               ],
-            ),
+              const SizedBox(height: 12),
+              Text(ctx.l.t('plgCanDo'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              _Review(notes: (info['review'] as List?) ?? const []),
+              const SizedBox(height: 8),
+              Text(ctx.l.t('plgEnforced'), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+              if (_risky(info['review'])) ...[
+                const SizedBox(height: 10),
+                Text(ctx.l.t('plgTrustWarn'), style: TextStyle(fontSize: 12, color: BeacleColors.err)),
+              ],
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => _showCode(ctx, '${m['name']}', (info['files'] as Map?)?.cast<String, dynamic>() ?? const {}),
-              child: Text(ctx.l.t('plgViewCode')),
-            ),
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.t('cancel'))),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(ctx.l.t('plgInstall'), style: _risky(info['review']) ? TextStyle(color: BeacleColors.err) : null),
-            ),
-          ],
         ),
-      );
-      if (ok != true || !context.mounted) return;
-      final done = await state.api.post('/api/plugins', body: src) as Map?;
-      await state.refreshPlugins();
-      if (!context.mounted) return;
-      showToast(context, context.l.f('plgInstalled', {'name': m['name']}));
-      // A plugin with its own setup screen is set up right away.
-      if (done?['setup'] == true) await openPluginSetup(context, '${m['id']}', '${m['name']}');
-    } catch (e) {
-      if (context.mounted) showToast(context, '$e', error: true);
-    }
+        actions: [
+          TextButton(
+            onPressed: () =>
+                _showCode(ctx, '${m['name']}', (info['files'] as Map?)?.cast<String, dynamic>() ?? const {}),
+            child: Text(ctx.l.t('plgViewCode')),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.t('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child:
+                Text(ctx.l.t('plgInstall'), style: _risky(info['review']) ? TextStyle(color: BeacleColors.err) : null),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final done = await state.api.post('/api/plugins', body: src) as Map?;
+    await state.refreshPlugins();
+    if (!context.mounted) return;
+    showToast(context, context.l.f('plgInstalled', {'name': m['name']}));
+    // A plugin with its own setup screen is set up right away.
+    if (done?['setup'] == true) await openPluginSetup(context, '${m['id']}', '${m['name']}');
+  } catch (e) {
+    if (context.mounted) showToast(context, '$e', error: true);
   }
 }
 
@@ -196,7 +174,8 @@ Future<void> _showCode(BuildContext context, String name, Map<String, dynamic> f
                   if ('${e.value ?? ''}'.isNotEmpty) ...[
                     Text(e.key, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    SelectableText('${e.value}', style: const TextStyle(fontSize: 11.5, fontFamily: 'Consolas', height: 1.35)),
+                    SelectableText('${e.value}',
+                        style: const TextStyle(fontSize: 11.5, fontFamily: 'Consolas', height: 1.35)),
                     const SizedBox(height: 16),
                   ],
               ],
@@ -217,8 +196,10 @@ class _Review extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final list = [for (final n in notes) if (n is Map) n.cast<String, dynamic>()]
-      ..sort((a, b) => (_order[a['level']] ?? 9).compareTo(_order[b['level']] ?? 9));
+    final list = [
+      for (final n in notes)
+        if (n is Map) n.cast<String, dynamic>()
+    ]..sort((a, b) => (_order[a['level']] ?? 9).compareTo(_order[b['level']] ?? 9));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -244,7 +225,9 @@ class _Review extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  context.l.f('plgNote_${n['kind']}', {'items': [for (final i in (n['items'] as List? ?? const [])) '$i'].join(', ')}),
+                  context.l.f('plgNote_${n['kind']}', {
+                    'items': [for (final i in (n['items'] as List? ?? const [])) '$i'].join(', ')
+                  }),
                   style: TextStyle(fontSize: 12, color: n['level'] == 'danger' ? BeacleColors.err : null),
                 ),
               ),
@@ -566,54 +549,93 @@ Future<void> openPluginSetup(BuildContext context, String id, String name) => sh
       ),
     );
 
-/// The catalog: a card per plugin with what it is and an install, update or
-/// "installed" button. Returns the id picked to install.
-class _MarketplaceDialog extends StatelessWidget {
-  final List<Map<String, dynamic>> plugins;
-  const _MarketplaceDialog({required this.plugins});
+/// The Marketplace tab: the plugins in the Beacle repository, as of this
+/// build of the app, a card each with an install, update or "installed" tag.
+class MarketplaceScreen extends StatefulWidget {
+  const MarketplaceScreen({super.key});
+
+  @override
+  State<MarketplaceScreen> createState() => _MarketplaceScreenState();
+}
+
+class _MarketplaceScreenState extends State<MarketplaceScreen> {
+  Map<String, dynamic>? _catalog;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final ref = appCommit.isNotEmpty ? appCommit : appVersion;
+    try {
+      final c = await context.read<AppState>().api.get('/api/plugins/catalog?ref=${Uri.encodeQueryComponent(ref)}'
+          '&version=${Uri.encodeQueryComponent(appVersion)}') as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _catalog = c;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = context.l.f('plgCatalogError', {'error': '$e'}));
+    }
+  }
+
+  Future<void> _pick(String id) async {
+    final ref = appCommit.isNotEmpty ? appCommit : appVersion;
+    await installPlugin(context, {'catalog': id, 'ref': '${_catalog?['ref'] ?? ref}'});
+    // The installed / update tags come from the backend.
+    if (mounted) await _load();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l = context.l;
-    return AlertDialog(
-      title: Text(l.t('plgMarketplace')),
-      content: SizedBox(
-        width: 620,
-        height: 460,
-        child: ListView(
-          children: [
-            Text(l.t('plgMarketplaceIntro'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.5)),
-            const SizedBox(height: 12),
-            for (final p in plugins)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: PanelCard(
-                  title: '${p['name']}  ${p['version']}',
-                  trailing: _action(context, p),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${p['description'] ?? ''}', style: const TextStyle(fontSize: 12.5, height: 1.4)),
-                      if ((p['tags'] as List?)?.isNotEmpty ?? false) ...[
-                        const SizedBox(height: 6),
-                        Text((p['tags'] as List).join(' · '),
-                            style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
-                      ],
-                    ],
-                  ),
-                ),
+    final plugins = [
+      for (final p in (_catalog?['plugins'] as List? ?? const [])) (p as Map).cast<String, dynamic>(),
+    ];
+    return SmoothListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text(l.t('plgMarketplaceIntro'), style: TextStyle(fontSize: 12, color: BeacleColors.textDim, height: 1.5)),
+        const SizedBox(height: 12),
+        if (_error != null) ...[
+          Text(_error!, style: TextStyle(fontSize: 12, color: BeacleColors.err)),
+          const SizedBox(height: 8),
+          Align(
+              alignment: Alignment.centerLeft,
+              child: SmallButton(l.t('refresh'), icon: Icons.refresh, onPressed: _load)),
+        ] else if (_catalog == null)
+          const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(strokeWidth: 2))),
+        for (final p in plugins)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: PanelCard(
+              title: '${p['name']}  ${p['version']}',
+              trailing: _action(context, p),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${p['description'] ?? ''}', style: const TextStyle(fontSize: 12.5, height: 1.4)),
+                  if ((p['tags'] as List?)?.isNotEmpty ?? false) ...[
+                    const SizedBox(height: 6),
+                    Text((p['tags'] as List).join(' · '), style: TextStyle(fontSize: 11, color: BeacleColors.textDim)),
+                  ],
+                ],
               ),
-          ],
-        ),
-      ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(l.t('close')))],
+            ),
+          ),
+      ],
     );
   }
 
   Widget _action(BuildContext context, Map<String, dynamic> p) {
     final l = context.l;
     if (p['compatible'] == false) {
-      return Text(l.f('plgNeedsBeacle', {'v': p['min_beacle']}), style: TextStyle(fontSize: 11, color: BeacleColors.warn));
+      return Text(l.f('plgNeedsBeacle', {'v': p['min_beacle']}),
+          style: TextStyle(fontSize: 11, color: BeacleColors.warn));
     }
     final installed = p['installed_version'];
     if (installed != null && p['update'] != true) {
@@ -622,7 +644,7 @@ class _MarketplaceDialog extends StatelessWidget {
     return SmallButton(
       installed != null ? l.f('plgUpdateTo', {'v': p['version']}) : l.t('plgInstall'),
       icon: installed != null ? Icons.upgrade : Icons.download_outlined,
-      onPressed: () => Navigator.pop(context, '${p['id']}'),
+      onPressed: () => _pick('${p['id']}'),
     );
   }
 }

@@ -22,6 +22,7 @@ import '../widgets/add_vps_dialog.dart';
 import '../widgets/wg_switch.dart';
 import '../widgets/alerts_panel.dart';
 import '../widgets/plugin_blocks.dart';
+import '../widgets/plugins_settings.dart';
 import '../window_control.dart';
 import 'alerts_screen.dart';
 import 'docker_screen.dart';
@@ -94,12 +95,24 @@ class AppShellState extends State<AppShell> {
     (Icons.folder_outlined, 'navFiles'),
   ];
 
-  /// Localization key of tab [i]: the main list first, then the tools.
+  /// Heads the plugins group, between the main list and the tools; the
+  /// plugins' own tabs follow it.
   @visibleForTesting
-  static String labelKey(int i) => i < items.length ? items[i].$2 : toolItems[i - items.length].$2;
+  static const marketplaceItem = (Icons.storefront_outlined, 'plgMarketplace');
 
-  /// Plugin tabs come after the tools, in the sidebar's main group.
-  int get _firstPlugin => items.length + toolItems.length;
+  /// Localization key of tab [i]: the main list first, then the tools, then
+  /// the Marketplace.
+  @visibleForTesting
+  static String labelKey(int i) => i < items.length
+      ? items[i].$2
+      : i < items.length + toolItems.length
+          ? toolItems[i - items.length].$2
+          : marketplaceItem.$2;
+
+  static final _tabMarketplace = items.length + toolItems.length;
+
+  /// Plugin tabs come after the Marketplace, in the sidebar's plugins group.
+  int get _firstPlugin => _tabMarketplace + 1;
 
   String _keyAt(int i) {
     if (i < _firstPlugin) return labelKey(i);
@@ -173,6 +186,7 @@ class AppShellState extends State<AppShell> {
   List<String> get _pageKeys => [
         for (final i in items) i.$2,
         for (final t in toolItems) t.$2,
+        marketplaceItem.$2,
         for (final p in context.read<AppState>().pluginTabs) p.key,
       ];
 
@@ -199,7 +213,7 @@ class AppShellState extends State<AppShell> {
     final state = context.read<AppState>();
     switch (t.kind) {
       case SearchKind.page:
-        if (t.tab < items.length || t.tab >= _firstPlugin) {
+        if (t.tab < items.length || t.tab >= _tabMarketplace) {
           _goToMain(t.tab);
         } else {
           openTool(t.tab - items.length);
@@ -397,6 +411,8 @@ class AppShellState extends State<AppShell> {
         // a tool lives in the split panel or its own window instead.
         for (var t = 0; t < toolItems.length; t++)
           _splitTool == t || _modeOf(t) == SshDisplayMode.separateWindow ? const SizedBox.shrink() : _toolWidget(t),
+        // Built only while open, so the catalog is fetched on each visit, not at start.
+        index == _tabMarketplace ? const MarketplaceScreen() : const SizedBox.shrink(),
         for (final tab in context.read<AppState>().pluginTabs) PluginTabScreen(key: ValueKey(tab.key), tab: tab),
       ],
     );
@@ -458,21 +474,35 @@ class AppShellState extends State<AppShell> {
           ),
           for (var i = 0; i < items.length; i++)
             if (!_hidden(state, items[i].$2))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                child: _NavItem(
+                  icon: items[i].$1,
+                  label: _label(context, i),
+                  selected: index == i,
+                  badge: i == _tabAlerts ? state.activeAlerts : 0,
+                  onTap: () {
+                    context.read<AppState>().bumpActivity();
+                    setState(() {
+                      if (i != _tabServers) focusedVpsId = null;
+                      index = i;
+                      _lastMain = i;
+                    });
+                  },
+                ),
+              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Divider(height: 1, color: BeacleColors.border.withValues(alpha: 0.8)),
+          ),
+          if (!_hidden(state, marketplaceItem.$2))
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
               child: _NavItem(
-                icon: items[i].$1,
-                label: _label(context, i),
-                selected: index == i,
-                badge: i == _tabAlerts ? state.activeAlerts : 0,
-                onTap: () {
-                  context.read<AppState>().bumpActivity();
-                  setState(() {
-                    if (i != _tabServers) focusedVpsId = null;
-                    index = i;
-                    _lastMain = i;
-                  });
-                },
+                icon: marketplaceItem.$1,
+                label: _label(context, _tabMarketplace),
+                selected: index == _tabMarketplace,
+                onTap: () => _goToMain(_tabMarketplace),
               ),
             ),
           for (var k = 0; k < state.pluginTabs.length; k++)
@@ -492,15 +522,15 @@ class AppShellState extends State<AppShell> {
           ),
           for (var t = 0; t < toolItems.length; t++)
             if (!_hidden(state, toolItems[t].$2))
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
-              child: _NavItem(
-                icon: toolItems[t].$1,
-                label: context.l.t(toolItems[t].$2),
-                selected: index == _firstTool + t || _splitTool == t,
-                onTap: () => openTool(t),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                child: _NavItem(
+                  icon: toolItems[t].$1,
+                  label: context.l.t(toolItems[t].$2),
+                  selected: index == _firstTool + t || _splitTool == t,
+                  onTap: () => openTool(t),
+                ),
               ),
-            ),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -608,7 +638,8 @@ class AppShellState extends State<AppShell> {
             ),
             TextButton(
               onPressed: () => showRejoinDialog(context),
-              child: Text(context.l.t('rejoinReview'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+              child: Text(context.l.t('rejoinReview'),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -621,9 +652,8 @@ class AppShellState extends State<AppShell> {
   /// those alerts until the line is back and the agents have reconnected.
   Widget _buildNoInternetBanner(AppState state) {
     final since = state.internetDownSince;
-    final hhmm = since == null
-        ? ''
-        : '${since.hour.toString().padLeft(2, '0')}:${since.minute.toString().padLeft(2, '0')}';
+    final hhmm =
+        since == null ? '' : '${since.hour.toString().padLeft(2, '0')}:${since.minute.toString().padLeft(2, '0')}';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
@@ -750,9 +780,8 @@ class AppShellState extends State<AppShell> {
                       color: BeacleColors.err,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child:
-                        Text('${state.activeAlerts}',
-                            style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white)),
+                    child: Text('${state.activeAlerts}',
+                        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
                 ),
             ],
@@ -853,7 +882,9 @@ class _AlertToast extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            alert.vpsName.isEmpty ? alertTypeLabel(context.l, alert.type) : '${alert.vpsName} · ${alertTypeLabel(context.l, alert.type)}',
+            alert.vpsName.isEmpty
+                ? alertTypeLabel(context.l, alert.type)
+                : '${alert.vpsName} · ${alertTypeLabel(context.l, alert.type)}',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
           ),
           const SizedBox(height: 4),

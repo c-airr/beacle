@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.8 — unreleased
+
+### Changed
+
+- **Marketplace has its own tab** — it moved out of Settings → Plugins into
+  the sidebar, heading a new plugins group between the main list and
+  SSH / Files. Tabs added by plugins (`nav.tab`) sit in that group under it.
+
 ## 2.2.7 — 2026-10-28
 
 WireGuard servers no longer vanish with the panel's data, and a server moved

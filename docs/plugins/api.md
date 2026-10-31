@@ -327,7 +327,7 @@ Hides a part of the panel. See [Hide ids](#hide-ids).
 
 | Slot | Place | `fn` receives | `fn` returns | `opts` |
 |---|---|---|---|---|
-| `nav.tab` | A page in the sidebar, under the main entries | — | list of blocks | `id` (required, unique in the plugin), `title`, `icon` |
+| `nav.tab` | A page in the sidebar, in the plugins group under the Marketplace | — | list of blocks | `id` (required, unique in the plugin), `title`, `icon` |
 | `server.section` | A card on every server's page, above History | `Server` | list of blocks, or `nil` | `title` |
 | `servers.column` | Beside each server in the Servers list, before its CPU % | `Server` | one block (keep it small: a `stat` with `label = ""`), or `nil` | `title` (its tooltip) |
 | `overview.card` | A card on the Overview, below *Needs attention* | — | list of blocks | `title` |

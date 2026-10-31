@@ -47,5 +47,7 @@ void main() {
       expect(AppShellState.labelKey(i), isNotEmpty);
     }
     expect(AppShellState.labelKey(AppShellState.items.length), 'navSsh');
+    // The Marketplace heads the plugins group, right after the tools.
+    expect(AppShellState.labelKey(total), AppShellState.marketplaceItem.$2);
   });
 }
